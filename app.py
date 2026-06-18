@@ -1,24 +1,76 @@
+import os
+import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-st.set_page_config(
-    page_title="Option Beacon",
-    layout="wide"
-)
+st.set_page_config(page_title="Option Beacon", layout="wide")
 
 st_autorefresh(interval=300000, key="option_beacon_refresh")
 
-eastern_time = datetime.now(ZoneInfo("America/New_York"))
+HISTORY_FILE = "signal_history.csv"
+
+
+def eastern_now():
+    return datetime.now(ZoneInfo("America/New_York"))
+
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        return pd.read_csv(HISTORY_FILE)
+    return pd.DataFrame(columns=[
+        "timestamp",
+        "symbol",
+        "signal",
+        "confidence",
+        "entry",
+        "stop",
+        "target",
+        "breakeven",
+        "price"
+    ])
+
+
+def save_signal(result):
+    if result["signal"] not in ["BUY CALL", "BUY PUT"]:
+        return
+
+    history = load_history()
+
+    new_row = {
+        "timestamp": eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET"),
+        "symbol": result["symbol"],
+        "signal": result["signal"],
+        "confidence": result["confidence"],
+        "entry": round(result["entry"], 2),
+        "stop": round(result["stop"], 2),
+        "target": round(result["target"], 2),
+        "breakeven": round(result["breakeven"], 2),
+        "price": round(result["price"], 2),
+    }
+
+    # Avoid duplicate saves on refresh
+    duplicate = (
+        (history["symbol"] == new_row["symbol"]) &
+        (history["signal"] == new_row["signal"]) &
+        (history["entry"] == new_row["entry"])
+    )
+
+    if len(history) > 0 and duplicate.any():
+        return
+
+    updated = pd.concat([history, pd.DataFrame([new_row])], ignore_index=True)
+    updated.to_csv(HISTORY_FILE, index=False)
+
 
 st.title("🚨 Option Beacon")
-st.subheader("SPY / QQQ Live Scanner")
+st.subheader("Real-Time Options Trade Intelligence")
 
 st.warning("Paper-trading dashboard only. Not financial advice.")
 
 st.caption(
-    f"Last refreshed: {eastern_time.strftime('%Y-%m-%d %I:%M:%S %p ET')}"
+    f"Last refreshed: {eastern_now().strftime('%Y-%m-%d %I:%M:%S %p ET')}"
 )
 
 try:
@@ -47,9 +99,11 @@ try:
 
         if signal == "BUY CALL":
             st.success("🟢 CALL SIGNAL")
+            save_signal(result)
 
         elif signal == "BUY PUT":
             st.error("🔴 PUT SIGNAL")
+            save_signal(result)
 
         elif signal == "MARKET CLOSED / WAIT":
             st.info("⚪ Market closed — waiting for next session.")
@@ -94,6 +148,19 @@ try:
                     st.write(f"- {reason}")
             else:
                 st.write("- No strong setup yet")
+
+    st.divider()
+    st.header("Recent Signals")
+
+    history = load_history()
+
+    if len(history) == 0:
+        st.info("No BUY signals logged yet.")
+    else:
+        st.dataframe(
+            history.tail(25).sort_index(ascending=False),
+            use_container_width=True
+        )
 
 except Exception as e:
     st.error("Scanner Error")
