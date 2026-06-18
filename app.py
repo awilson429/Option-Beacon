@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 st.set_page_config(page_title="Option Beacon", layout="wide")
 
-st_autorefresh(interval=300000, key="option_beacon_refresh")
+st_autorefresh(interval=60000, key="option_beacon_refresh")
 
 HISTORY_FILE = "signal_history.csv"
 
