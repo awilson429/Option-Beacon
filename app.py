@@ -25,9 +25,27 @@ if st.button("Scan Now"):
 
             st.header(symbol)
 
-            st.write(result)
+            signal = result["signal"]
+            price = result["price"]
 
-    except Exception as e:
+            col1, col2 = st.columns(2)
+
+            with col1:
+                    st.metric("Signal", signal)
+
+            with col2:
+                    st.metric("Price", f"${price:.2f}")
+
+            if signal == "CALL":
+                    st.success("🟢 CALL SIGNAL")
+
+            elif signal == "PUT":
+                    st.error("🔴 PUT SIGNAL")
+    
+            else:
+                    st.info("⚪ WAIT")
+
+            except Exception as e:
 
         st.error("Scanner Error")
         st.exception(e)
