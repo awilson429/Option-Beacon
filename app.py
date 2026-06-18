@@ -1,6 +1,7 @@
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 st.set_page_config(
     page_title="Option Beacon",
@@ -9,12 +10,16 @@ st.set_page_config(
 
 st_autorefresh(interval=300000, key="option_beacon_refresh")
 
+eastern_time = datetime.now(ZoneInfo("America/New_York"))
+
 st.title("🚨 Option Beacon")
 st.subheader("SPY / QQQ Live Scanner")
 
 st.warning("Paper-trading dashboard only. Not financial advice.")
 
-st.caption(f"Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.caption(
+    f"Last refreshed: {eastern_time.strftime('%Y-%m-%d %I:%M:%S %p ET')}"
+)
 
 try:
     from optionbeacon_live import generate_signal
