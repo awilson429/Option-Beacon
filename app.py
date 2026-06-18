@@ -65,7 +65,7 @@ def save_signal(result):
 
 
 st.title("🚨 Option Beacon")
-st.subheader("Real-Time Options Trade Intelligence")
+st.subheader("Real-Time Options Trade Indicators")
 
 st.warning("Paper-trading dashboard only. Not financial advice.")
 
