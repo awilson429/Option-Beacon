@@ -25,23 +25,17 @@ def eastern_now():
 def load_history():
     if os.path.exists(HISTORY_FILE):
         history = pd.read_csv(HISTORY_FILE, dtype=str)
-
         for col in COLUMNS:
             if col not in history.columns:
                 history[col] = ""
-
         return history[COLUMNS]
-
     return pd.DataFrame(columns=COLUMNS)
 
 
 def save_history(history):
-    history = history.copy()
-
     for col in COLUMNS:
         if col not in history.columns:
             history[col] = ""
-
     history[COLUMNS].to_csv(HISTORY_FILE, index=False)
 
 
@@ -51,15 +45,14 @@ def add_new_signal(result):
 
     history = load_history()
 
-    if len(history) > 0:
-        duplicate_open = history[
-            (history["symbol"] == result["symbol"]) &
-            (history["signal"] == result["signal"]) &
-            (history["status"] == "OPEN")
-        ]
+    duplicate_open = history[
+        (history["symbol"] == result["symbol"]) &
+        (history["signal"] == result["signal"]) &
+        (history["status"] == "OPEN")
+    ]
 
-        if len(duplicate_open) > 0:
-            return
+    if len(duplicate_open) > 0:
+        return
 
     new_row = {
         "timestamp": eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET"),
@@ -84,26 +77,20 @@ def add_new_signal(result):
 def update_open_signals(current_prices):
     history = load_history()
 
-    if len(history) == 0:
-        return history
-
     for i, row in history.iterrows():
         if row["status"] != "OPEN":
             continue
 
         symbol = row["symbol"]
-
         if symbol not in current_prices:
             continue
 
         current_price = float(current_prices[symbol])
-
         entry = float(row["entry"])
         stop = float(row["stop"])
         target = float(row["target"])
         breakeven = float(row["breakeven"])
         signal = row["signal"]
-
         breakeven_active = str(row["breakeven_active"]).lower() == "true"
 
         if signal == "BUY CALL":
@@ -165,8 +152,7 @@ def calculate_performance(history):
         return {
             "total": 0, "open": 0, "wins": 0, "losses": 0,
             "breakevens": 0, "win_rate": 0,
-            "total_pnl": 0, "profit_factor": 0,
-            "avg_win": 0, "avg_loss": 0
+            "total_pnl": 0, "profit_factor": 0
         }
 
     wins = len(history[history["status"] == "WIN"])
@@ -182,10 +168,7 @@ def calculate_performance(history):
 
     gross_wins = pnl_values[pnl_values > 0].sum()
     gross_losses = abs(pnl_values[pnl_values < 0].sum())
-
     profit_factor = gross_wins / gross_losses if gross_losses > 0 else 0
-    avg_win = pnl_values[pnl_values > 0].mean() if len(pnl_values[pnl_values > 0]) > 0 else 0
-    avg_loss = pnl_values[pnl_values < 0].mean() if len(pnl_values[pnl_values < 0]) > 0 else 0
 
     return {
         "total": len(history),
@@ -195,9 +178,7 @@ def calculate_performance(history):
         "breakevens": breakevens,
         "win_rate": win_rate,
         "total_pnl": pnl_values.sum(),
-        "profit_factor": profit_factor,
-        "avg_win": avg_win,
-        "avg_loss": avg_loss
+        "profit_factor": profit_factor
     }
 
 
@@ -213,19 +194,6 @@ def open_trade_pnl(row, current_price):
     return 0
 
 
-def signal_quality(result):
-    reasons = result.get("reasons", [])
-    reasons_text = " ".join(reasons).lower()
-
-    return {
-        "VWAP": "PASS" if "vwap" in reasons_text else "WAIT",
-        "EMA Trend": "PASS" if "ema" in reasons_text else "WAIT",
-        "RSI": "PASS" if "rsi" in reasons_text else "WAIT",
-        "Volume": "PASS" if "volume" in reasons_text else "WAIT",
-        "Breakout": "PASS" if "breakout" in reasons_text or "breakdown" in reasons_text else "WAIT",
-    }
-
-
 def status_badge(status):
     if status == "WIN":
         return "🟢 WIN"
@@ -238,10 +206,33 @@ def status_badge(status):
     return status
 
 
+def signal_label(signal):
+    if signal == "BUY CALL":
+        return "🟢 BUY CALL"
+    if signal == "BUY PUT":
+        return "🔴 BUY PUT"
+    if signal == "MARKET CLOSED / WAIT":
+        return "⚪ MARKET CLOSED"
+    return "⚪ WAIT"
+
+
+def quality_summary(result):
+    reasons = " ".join(result.get("reasons", [])).lower()
+
+    checks = {
+        "VWAP": "PASS" if "vwap" in reasons else "WAIT",
+        "EMA": "PASS" if "ema" in reasons else "WAIT",
+        "RSI": "PASS" if "rsi" in reasons else "WAIT",
+        "Volume": "PASS" if "volume" in reasons else "WAIT",
+        "Breakout": "PASS" if "breakout" in reasons or "breakdown" in reasons else "WAIT",
+    }
+
+    return checks
+
+
 st.title("🚨 Option Beacon")
-st.subheader("Real-Time Options Trade Intelligence")
-st.warning("Paper-trading dashboard only. Not financial advice.")
 st.caption(f"Last refreshed: {eastern_now().strftime('%Y-%m-%d %I:%M:%S %p ET')}")
+st.warning("Paper-trading dashboard only. Not financial advice.")
 
 try:
     from optionbeacon_live import generate_signal
@@ -263,27 +254,76 @@ try:
     history = update_open_signals(current_prices)
     stats = calculate_performance(history)
 
+    st.subheader("Current Scanner")
+
+    col_spy, col_qqq = st.columns(2)
+
+    for col, symbol in zip([col_spy, col_qqq], ["SPY", "QQQ"]):
+        result = latest_results.get(symbol)
+
+        with col:
+            st.container(border=True)
+            st.markdown(f"### {symbol}")
+
+            if result is None:
+                st.error("No data returned.")
+                continue
+
+            signal = result.get("signal", "UNKNOWN")
+            price = result.get("price", 0)
+
+            st.metric("Signal", signal_label(signal))
+            st.metric("Price", f"${price:.2f}")
+
+            if "confidence" in result:
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Confidence", f"{result['confidence']}%")
+                c2.metric("Call", result.get("call_score", ""))
+                c3.metric("Put", result.get("put_score", ""))
+
+            if signal in ["BUY CALL", "BUY PUT"]:
+                st.success("Trade setup active")
+
+                p1, p2, p3, p4 = st.columns(4)
+                p1.metric("Entry", f"${result['entry']:.2f}")
+                p2.metric("Stop", f"${result['stop']:.2f}")
+                p3.metric("Target", f"${result['target']:.2f}")
+                p4.metric("BE", f"${result['breakeven']:.2f}")
+
+            with st.expander("Signal Details"):
+                checks = quality_summary(result)
+
+                q1, q2, q3, q4, q5 = st.columns(5)
+                q1.metric("VWAP", checks["VWAP"])
+                q2.metric("EMA", checks["EMA"])
+                q3.metric("RSI", checks["RSI"])
+                q4.metric("Volume", checks["Volume"])
+                q5.metric("Breakout", checks["Breakout"])
+
+                st.markdown("**Reasons**")
+                if result.get("reasons"):
+                    for reason in result["reasons"]:
+                        st.write(f"- {reason}")
+                else:
+                    st.write("- No strong setup yet")
+
     st.divider()
-    st.header("Performance Dashboard")
+    st.subheader("Performance")
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Signals", stats["total"])
-    col2.metric("Open Trades", stats["open"])
-    col3.metric("Win Rate", f"{stats['win_rate']:.2f}%")
-    col4.metric("Profit Factor", f"{stats['profit_factor']:.2f}")
+    p1, p2, p3, p4 = st.columns(4)
+    p1.metric("Total Signals", stats["total"])
+    p2.metric("Open Trades", stats["open"])
+    p3.metric("Win Rate", f"{stats['win_rate']:.2f}%")
+    p4.metric("Profit Factor", f"{stats['profit_factor']:.2f}")
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Wins", stats["wins"])
-    col2.metric("Losses", stats["losses"])
-    col3.metric("Breakevens", stats["breakevens"])
-    col4.metric("Total P/L", f"{stats['total_pnl']:.3f}%")
-
-    col1, col2 = st.columns(2)
-    col1.metric("Average Win", f"{stats['avg_win']:.3f}%")
-    col2.metric("Average Loss", f"{stats['avg_loss']:.3f}%")
+    p5, p6, p7, p8 = st.columns(4)
+    p5.metric("Wins", stats["wins"])
+    p6.metric("Losses", stats["losses"])
+    p7.metric("Breakevens", stats["breakevens"])
+    p8.metric("Total P/L", f"{stats['total_pnl']:.3f}%")
 
     st.divider()
-    st.header("Open Trades")
+    st.subheader("Open Trades")
 
     open_trades = history[history["status"] == "OPEN"]
 
@@ -301,86 +341,21 @@ try:
                 live_pnl = round(open_trade_pnl(row, current_price), 3)
 
             rows.append({
-                "Timestamp": row["timestamp"],
+                "Time": row["timestamp"],
                 "Symbol": symbol,
                 "Signal": row["signal"],
                 "Entry": row["entry"],
                 "Current": round(current_price, 2) if current_price else "",
                 "Stop": row["stop"],
                 "Target": row["target"],
-                "Breakeven": row["breakeven"],
                 "Live P/L %": live_pnl,
                 "Status": status_badge(row["status"])
             })
 
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
     st.divider()
-    st.header("Current Scanner")
-
-    for symbol in ["SPY", "QQQ"]:
-        result = latest_results.get(symbol)
-
-        st.divider()
-        st.header(symbol)
-
-        if result is None:
-            st.error("No data returned.")
-            continue
-
-        signal = result.get("signal", "UNKNOWN")
-        price = result.get("price", 0)
-
-        col1, col2 = st.columns(2)
-        col1.metric("Signal", signal)
-        col2.metric("Price", f"${price:.2f}")
-
-        if signal == "BUY CALL":
-            st.success("🟢 CALL SIGNAL")
-        elif signal == "BUY PUT":
-            st.error("🔴 PUT SIGNAL")
-        elif signal == "MARKET CLOSED / WAIT":
-            st.info("⚪ Market closed — waiting for next session.")
-        else:
-            st.info("⚪ WAIT")
-
-        if "confidence" in result:
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Confidence", f"{result['confidence']}%")
-            col2.metric("CALL Score", result.get("call_score", ""))
-            col3.metric("PUT Score", result.get("put_score", ""))
-
-        st.subheader("Signal Quality")
-
-        quality = signal_quality(result)
-        q1, q2, q3, q4, q5 = st.columns(5)
-
-        q1.metric("VWAP", quality["VWAP"])
-        q2.metric("EMA Trend", quality["EMA Trend"])
-        q3.metric("RSI", quality["RSI"])
-        q4.metric("Volume", quality["Volume"])
-        q5.metric("Breakout", quality["Breakout"])
-
-        if signal in ["BUY CALL", "BUY PUT"]:
-            st.subheader("Trade Plan")
-
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Entry", f"${result['entry']:.2f}")
-            col2.metric("Stop", f"${result['stop']:.2f}")
-            col3.metric("Target", f"${result['target']:.2f}")
-            col4.metric("Breakeven", f"${result['breakeven']:.2f}")
-
-        if "reasons" in result:
-            st.subheader("Signal Reasons")
-
-            if result["reasons"]:
-                for reason in result["reasons"]:
-                    st.write(f"- {reason}")
-            else:
-                st.write("- No strong setup yet")
-
-    st.divider()
-    st.header("Signal History")
+    st.subheader("Signal History")
 
     if len(history) == 0:
         st.info("No BUY signals logged yet.")
@@ -390,7 +365,8 @@ try:
 
         st.dataframe(
             display_history.tail(50).sort_index(ascending=False),
-            use_container_width=True
+            use_container_width=True,
+            hide_index=True
         )
 
 except Exception as e:
