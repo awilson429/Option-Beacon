@@ -12,6 +12,7 @@ from optionbeacon_stats import calculate_performance, calculate_symbol_stats, op
 
 SYMBOLS = ["SPY", "QQQ"]
 BUY_SIGNALS = {"BUY CALL", "BUY PUT"}
+LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-381bdd4d9924/OptionBeaconLLC%20Logo%20V2.png"
 
 
 def is_market_open_now():
@@ -57,6 +58,14 @@ def signal_label(signal):
     return labels.get(signal, signal)
 
 
+def signal_class(signal):
+    if signal == "BUY CALL":
+        return "signal-call"
+    if signal == "BUY PUT":
+        return "signal-put"
+    return "signal-wait"
+
+
 def quality_summary(result):
     reasons = " ".join(result.get("reasons", [])).lower()
     return {
@@ -74,13 +83,230 @@ def configure_page():
     st.markdown(
         """
         <style>
-        .main { background-color: #050505; }
-        h1, h2, h3 { letter-spacing: 0; }
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Source+Sans+3:wght@400;600;700&display=swap');
+
+        :root {
+            --ob-bg: #050505;
+            --ob-panel: #101010;
+            --ob-panel-soft: #151515;
+            --ob-border: rgba(255, 255, 255, 0.12);
+            --ob-border-strong: rgba(255, 255, 255, 0.22);
+            --ob-text: #f7f7f2;
+            --ob-muted: #a9aaa5;
+            --ob-green: #2fd37a;
+            --ob-red: #ff5d5d;
+            --ob-gold: #d8b35a;
+        }
+
+        html, body, [data-testid="stAppViewContainer"] {
+            background:
+                radial-gradient(circle at top right, rgba(216, 179, 90, 0.10), transparent 28rem),
+                var(--ob-bg);
+            color: var(--ob-text);
+            font-family: 'Source Sans 3', sans-serif;
+        }
+
+        [data-testid="stHeader"] {
+            background: transparent;
+        }
+
+        .block-container {
+            max-width: 1240px;
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+
+        h1, h2, h3 {
+            letter-spacing: 0;
+        }
+
+        h1, .brand-title {
+            font-family: 'Playfair Display', Georgia, serif;
+        }
+
+        h2, h3 {
+            font-family: 'Source Sans 3', sans-serif;
+            font-weight: 700;
+        }
+
+        [data-testid="stMarkdownContainer"] p {
+            color: var(--ob-muted);
+        }
+
+        .brand-shell {
+            border: 1px solid var(--ob-border-strong);
+            border-radius: 8px;
+            padding: 1.15rem 1.25rem;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+            margin-bottom: 1rem;
+        }
+
+        .brand-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .brand-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            min-width: 0;
+        }
+
+        .brand-logo {
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+            background: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.20);
+            border-radius: 8px;
+            padding: 0.25rem;
+        }
+
+        .brand-title {
+            color: var(--ob-text);
+            font-size: clamp(2.1rem, 4vw, 4.2rem);
+            line-height: 0.95;
+            margin: 0;
+        }
+
+        .brand-subtitle {
+            color: var(--ob-muted);
+            font-size: 1rem;
+            margin-top: 0.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .status-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.55rem;
+            justify-content: flex-end;
+        }
+
+        .pill, .signal-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            border: 1px solid var(--ob-border-strong);
+            padding: 0.38rem 0.75rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--ob-text);
+            background: rgba(255, 255, 255, 0.04);
+            white-space: nowrap;
+        }
+
+        .pill-open {
+            border-color: rgba(47, 211, 122, 0.55);
+            color: var(--ob-green);
+        }
+
+        .pill-closed {
+            border-color: rgba(255, 255, 255, 0.18);
+            color: var(--ob-muted);
+        }
+
+        .pill-sms {
+            border-color: rgba(216, 179, 90, 0.55);
+            color: var(--ob-gold);
+        }
+
+        .signal-pill {
+            margin: 0.2rem 0 0.8rem;
+            width: 100%;
+            min-height: 2.45rem;
+            font-size: 1rem;
+        }
+
+        .signal-call {
+            border-color: rgba(47, 211, 122, 0.75);
+            color: var(--ob-green);
+            background: rgba(47, 211, 122, 0.09);
+        }
+
+        .signal-put {
+            border-color: rgba(255, 93, 93, 0.75);
+            color: var(--ob-red);
+            background: rgba(255, 93, 93, 0.09);
+        }
+
+        .signal-wait {
+            border-color: rgba(255, 255, 255, 0.18);
+            color: var(--ob-muted);
+        }
+
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            border-color: var(--ob-border);
+            border-radius: 8px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018));
+        }
+
         div[data-testid="stMetric"] {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid var(--ob-border);
             border-radius: 8px;
             padding: 0.75rem;
+        }
+
+        div[data-testid="stMetricValue"] {
+            color: var(--ob-text);
+            font-weight: 700;
+        }
+
+        div[data-testid="stMetricLabel"] {
+            color: var(--ob-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .stAlert {
+            border-radius: 8px;
+        }
+
+        [data-testid="stDataFrame"] {
+            border: 1px solid var(--ob-border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        hr {
+            border-color: rgba(255, 255, 255, 0.10);
+        }
+
+        .footer-line {
+            color: var(--ob-muted);
+            font-size: 0.9rem;
+            text-align: center;
+            padding: 1rem 0 0.4rem;
+        }
+
+        .footer-line a {
+            color: var(--ob-text);
+            text-decoration: none;
+            border-bottom: 1px solid var(--ob-border-strong);
+        }
+
+        @media (max-width: 760px) {
+            .brand-row {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .status-strip {
+                justify-content: flex-start;
+            }
+
+            .brand-logo {
+                width: 54px;
+                height: 54px;
+            }
         }
         </style>
         """,
@@ -89,12 +315,35 @@ def configure_page():
 
 
 def render_header():
-    st.title("Option Beacon")
-    st.subheader("Real-Time Options Trade Intelligence")
-
-    market_status = "Market Open" if is_market_open_now() else "Market Closed"
+    market_open = is_market_open_now()
+    market_status = "Market Open" if market_open else "Market Closed"
+    market_class = "pill-open" if market_open else "pill-closed"
     refreshed_at = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-    st.caption(f"{market_status} | Last refreshed: {refreshed_at} | Auto-refresh: 1 minute")
+    sms_status = "SMS On" if twilio_configured(st.secrets) else "SMS Off"
+
+    st.markdown(
+        f"""
+        <div class="brand-shell">
+            <div class="brand-row">
+                <div class="brand-left">
+                    <img class="brand-logo" src="{LOGO_URL}" alt="Option Beacon logo" />
+                    <div>
+                        <div class="brand-title">Option Beacon</div>
+                        <div class="brand-subtitle">SPY / QQQ Scanner</div>
+                    </div>
+                </div>
+                <div class="status-strip">
+                    <span class="pill {market_class}">{market_status}</span>
+                    <span class="pill">Refresh 1 min</span>
+                    <span class="pill pill-sms">{sms_status}</span>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.caption(f"Last refreshed: {refreshed_at}")
     st.warning("Paper-trading dashboard only. Not financial advice.")
 
     if not twilio_configured(st.secrets):
@@ -135,7 +384,10 @@ def render_signal_card(symbol, result):
         price = result.get("price", 0)
         confidence = result.get("confidence", 0)
 
-        st.metric("Signal", signal_label(signal))
+        st.markdown(
+            f'<div class="signal-pill {signal_class(signal)}">{signal_label(signal)}</div>',
+            unsafe_allow_html=True,
+        )
         st.metric("Price", f"${price:.2f}")
 
         if "confidence" in result:
@@ -169,7 +421,7 @@ def render_signal_card(symbol, result):
 
 
 def render_current_scanner(latest_results):
-    st.subheader("Current Scanner")
+    st.subheader("Scanner")
     columns = st.columns(len(SYMBOLS))
 
     for column, symbol in zip(columns, SYMBOLS):
@@ -271,7 +523,11 @@ def main():
     render_open_trades(history, current_prices)
     st.divider()
     render_signal_history(history)
-    st.caption("Option Beacon (c) 2026")
+    st.markdown(
+        '<div class="footer-line">Option Beacon LLC - '
+        '<a href="https://option-beacon.com" target="_blank">option-beacon.com</a></div>',
+        unsafe_allow_html=True,
+    )
 
 
 try:
