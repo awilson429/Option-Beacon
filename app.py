@@ -165,7 +165,8 @@ def calculate_performance(history):
         return {
             "total": 0, "open": 0, "wins": 0, "losses": 0,
             "breakevens": 0, "win_rate": 0,
-            "total_pnl": 0, "profit_factor": 0
+            "total_pnl": 0, "profit_factor": 0,
+            "avg_win": 0, "avg_loss": 0
         }
 
     wins = len(history[history["status"] == "WIN"])
@@ -183,6 +184,8 @@ def calculate_performance(history):
     gross_losses = abs(pnl_values[pnl_values < 0].sum())
 
     profit_factor = gross_wins / gross_losses if gross_losses > 0 else 0
+    avg_win = pnl_values[pnl_values > 0].mean() if len(pnl_values[pnl_values > 0]) > 0 else 0
+    avg_loss = pnl_values[pnl_values < 0].mean() if len(pnl_values[pnl_values < 0]) > 0 else 0
 
     return {
         "total": len(history),
@@ -192,7 +195,9 @@ def calculate_performance(history):
         "breakevens": breakevens,
         "win_rate": win_rate,
         "total_pnl": pnl_values.sum(),
-        "profit_factor": profit_factor
+        "profit_factor": profit_factor,
+        "avg_win": avg_win,
+        "avg_loss": avg_loss
     }
 
 
@@ -206,6 +211,31 @@ def open_trade_pnl(row, current_price):
         return ((entry - current_price) / entry) * 100
 
     return 0
+
+
+def signal_quality(result):
+    reasons = result.get("reasons", [])
+    reasons_text = " ".join(reasons).lower()
+
+    return {
+        "VWAP": "PASS" if "vwap" in reasons_text else "WAIT",
+        "EMA Trend": "PASS" if "ema" in reasons_text else "WAIT",
+        "RSI": "PASS" if "rsi" in reasons_text else "WAIT",
+        "Volume": "PASS" if "volume" in reasons_text else "WAIT",
+        "Breakout": "PASS" if "breakout" in reasons_text or "breakdown" in reasons_text else "WAIT",
+    }
+
+
+def status_badge(status):
+    if status == "WIN":
+        return "🟢 WIN"
+    if status == "LOSS":
+        return "🔴 LOSS"
+    if status == "BREAKEVEN":
+        return "🟡 BREAKEVEN"
+    if status == "OPEN":
+        return "🔵 OPEN"
+    return status
 
 
 st.title("🚨 Option Beacon")
@@ -234,7 +264,7 @@ try:
     stats = calculate_performance(history)
 
     st.divider()
-    st.header("Performance")
+    st.header("Performance Dashboard")
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total Signals", stats["total"])
@@ -247,6 +277,10 @@ try:
     col2.metric("Losses", stats["losses"])
     col3.metric("Breakevens", stats["breakevens"])
     col4.metric("Total P/L", f"{stats['total_pnl']:.3f}%")
+
+    col1, col2 = st.columns(2)
+    col1.metric("Average Win", f"{stats['avg_win']:.3f}%")
+    col2.metric("Average Loss", f"{stats['avg_loss']:.3f}%")
 
     st.divider()
     st.header("Open Trades")
@@ -276,7 +310,7 @@ try:
                 "Target": row["target"],
                 "Breakeven": row["breakeven"],
                 "Live P/L %": live_pnl,
-                "Status": row["status"]
+                "Status": status_badge(row["status"])
             })
 
         st.dataframe(pd.DataFrame(rows), use_container_width=True)
@@ -313,8 +347,19 @@ try:
         if "confidence" in result:
             col1, col2, col3 = st.columns(3)
             col1.metric("Confidence", f"{result['confidence']}%")
-            col2.metric("CALL Score", result["call_score"])
-            col3.metric("PUT Score", result["put_score"])
+            col2.metric("CALL Score", result.get("call_score", ""))
+            col3.metric("PUT Score", result.get("put_score", ""))
+
+        st.subheader("Signal Quality")
+
+        quality = signal_quality(result)
+        q1, q2, q3, q4, q5 = st.columns(5)
+
+        q1.metric("VWAP", quality["VWAP"])
+        q2.metric("EMA Trend", quality["EMA Trend"])
+        q3.metric("RSI", quality["RSI"])
+        q4.metric("Volume", quality["Volume"])
+        q5.metric("Breakout", quality["Breakout"])
 
         if signal in ["BUY CALL", "BUY PUT"]:
             st.subheader("Trade Plan")
@@ -326,7 +371,7 @@ try:
             col4.metric("Breakeven", f"${result['breakeven']:.2f}")
 
         if "reasons" in result:
-            st.subheader("Reasons")
+            st.subheader("Signal Reasons")
 
             if result["reasons"]:
                 for reason in result["reasons"]:
@@ -340,8 +385,11 @@ try:
     if len(history) == 0:
         st.info("No BUY signals logged yet.")
     else:
+        display_history = history.copy()
+        display_history["status"] = display_history["status"].apply(status_badge)
+
         st.dataframe(
-            history.tail(50).sort_index(ascending=False),
+            display_history.tail(50).sort_index(ascending=False),
             use_container_width=True
         )
 
