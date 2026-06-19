@@ -10,6 +10,13 @@ st_autorefresh(interval=60000, key="option_beacon_refresh")
 
 HISTORY_FILE = "signal_history.csv"
 
+COLUMNS = [
+    "timestamp", "symbol", "signal", "confidence",
+    "entry", "stop", "target", "breakeven",
+    "breakeven_active", "status",
+    "exit_price", "exit_time", "pnl_percent"
+]
+
 
 def eastern_now():
     return datetime.now(ZoneInfo("America/New_York"))
@@ -17,18 +24,25 @@ def eastern_now():
 
 def load_history():
     if os.path.exists(HISTORY_FILE):
-        return pd.read_csv(HISTORY_FILE)
+        history = pd.read_csv(HISTORY_FILE, dtype=str)
 
-    return pd.DataFrame(columns=[
-        "timestamp", "symbol", "signal", "confidence",
-        "entry", "stop", "target", "breakeven",
-        "breakeven_active", "status",
-        "exit_price", "exit_time", "pnl_percent"
-    ])
+        for col in COLUMNS:
+            if col not in history.columns:
+                history[col] = ""
+
+        return history[COLUMNS]
+
+    return pd.DataFrame(columns=COLUMNS)
 
 
 def save_history(history):
-    history.to_csv(HISTORY_FILE, index=False)
+    history = history.copy()
+
+    for col in COLUMNS:
+        if col not in history.columns:
+            history[col] = ""
+
+    history[COLUMNS].to_csv(HISTORY_FILE, index=False)
 
 
 def add_new_signal(result):
@@ -51,12 +65,12 @@ def add_new_signal(result):
         "timestamp": eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET"),
         "symbol": result["symbol"],
         "signal": result["signal"],
-        "confidence": result["confidence"],
-        "entry": round(result["entry"], 2),
-        "stop": round(result["stop"], 2),
-        "target": round(result["target"], 2),
-        "breakeven": round(result["breakeven"], 2),
-        "breakeven_active": False,
+        "confidence": str(result.get("confidence", "")),
+        "entry": str(round(result["entry"], 2)),
+        "stop": str(round(result["stop"], 2)),
+        "target": str(round(result["target"], 2)),
+        "breakeven": str(round(result["breakeven"], 2)),
+        "breakeven_active": "False",
         "status": "OPEN",
         "exit_price": "",
         "exit_time": "",
@@ -95,52 +109,52 @@ def update_open_signals(current_prices):
         if signal == "BUY CALL":
             if current_price >= breakeven:
                 breakeven_active = True
-                history.at[i, "breakeven_active"] = True
+                history.at[i, "breakeven_active"] = "True"
 
             if current_price >= target:
                 pnl = ((target - entry) / entry) * 100
                 history.at[i, "status"] = "WIN"
-                history.at[i, "exit_price"] = round(target, 2)
+                history.at[i, "exit_price"] = str(round(target, 2))
                 history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-                history.at[i, "pnl_percent"] = round(pnl, 3)
+                history.at[i, "pnl_percent"] = str(round(pnl, 3))
 
             elif breakeven_active and current_price <= entry:
                 history.at[i, "status"] = "BREAKEVEN"
-                history.at[i, "exit_price"] = round(entry, 2)
+                history.at[i, "exit_price"] = str(round(entry, 2))
                 history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-                history.at[i, "pnl_percent"] = 0.0
+                history.at[i, "pnl_percent"] = "0.0"
 
             elif current_price <= stop:
                 pnl = ((stop - entry) / entry) * 100
                 history.at[i, "status"] = "LOSS"
-                history.at[i, "exit_price"] = round(stop, 2)
+                history.at[i, "exit_price"] = str(round(stop, 2))
                 history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-                history.at[i, "pnl_percent"] = round(pnl, 3)
+                history.at[i, "pnl_percent"] = str(round(pnl, 3))
 
         elif signal == "BUY PUT":
             if current_price <= breakeven:
                 breakeven_active = True
-                history.at[i, "breakeven_active"] = True
+                history.at[i, "breakeven_active"] = "True"
 
             if current_price <= target:
                 pnl = ((entry - target) / entry) * 100
                 history.at[i, "status"] = "WIN"
-                history.at[i, "exit_price"] = round(target, 2)
+                history.at[i, "exit_price"] = str(round(target, 2))
                 history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-                history.at[i, "pnl_percent"] = round(pnl, 3)
+                history.at[i, "pnl_percent"] = str(round(pnl, 3))
 
             elif breakeven_active and current_price >= entry:
                 history.at[i, "status"] = "BREAKEVEN"
-                history.at[i, "exit_price"] = round(entry, 2)
+                history.at[i, "exit_price"] = str(round(entry, 2))
                 history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-                history.at[i, "pnl_percent"] = 0.0
+                history.at[i, "pnl_percent"] = "0.0"
 
             elif current_price >= stop:
                 pnl = ((entry - stop) / entry) * 100
                 history.at[i, "status"] = "LOSS"
-                history.at[i, "exit_price"] = round(stop, 2)
+                history.at[i, "exit_price"] = str(round(stop, 2))
                 history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-                history.at[i, "pnl_percent"] = round(pnl, 3)
+                history.at[i, "pnl_percent"] = str(round(pnl, 3))
 
     save_history(history)
     return history
@@ -154,8 +168,6 @@ def calculate_performance(history):
             "total_pnl": 0, "profit_factor": 0
         }
 
-    closed = history[history["status"].isin(["WIN", "LOSS", "BREAKEVEN"])]
-
     wins = len(history[history["status"] == "WIN"])
     losses = len(history[history["status"] == "LOSS"])
     breakevens = len(history[history["status"] == "BREAKEVEN"])
@@ -164,6 +176,7 @@ def calculate_performance(history):
     completed = wins + losses
     win_rate = (wins / completed * 100) if completed > 0 else 0
 
+    closed = history[history["status"].isin(["WIN", "LOSS", "BREAKEVEN"])]
     pnl_values = pd.to_numeric(closed["pnl_percent"], errors="coerce").fillna(0)
 
     gross_wins = pnl_values[pnl_values > 0].sum()
@@ -243,7 +256,7 @@ try:
     if len(open_trades) == 0:
         st.info("No open trades.")
     else:
-        display_rows = []
+        rows = []
 
         for _, row in open_trades.iterrows():
             symbol = row["symbol"]
@@ -253,7 +266,7 @@ try:
             if current_price:
                 live_pnl = round(open_trade_pnl(row, current_price), 3)
 
-            display_rows.append({
+            rows.append({
                 "Timestamp": row["timestamp"],
                 "Symbol": symbol,
                 "Signal": row["signal"],
@@ -266,7 +279,7 @@ try:
                 "Status": row["status"]
             })
 
-        st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(rows), use_container_width=True)
 
     st.divider()
     st.header("Current Scanner")
@@ -314,6 +327,7 @@ try:
 
         if "reasons" in result:
             st.subheader("Reasons")
+
             if result["reasons"]:
                 for reason in result["reasons"]:
                     st.write(f"- {reason}")
