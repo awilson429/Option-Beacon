@@ -17,8 +17,22 @@ LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-381bdd4d992
 
 def is_market_open_now():
     now = eastern_now()
-    current_time = now.time()
-    return now.weekday() < 5 and time(9, 30) <= current_time < time(16, 0)
+
+    try:
+        import pandas_market_calendars as mcal
+
+        nyse = mcal.get_calendar("NYSE")
+        schedule = nyse.schedule(start_date=now.date(), end_date=now.date())
+
+        if schedule.empty:
+            return False
+
+        market_open = schedule.iloc[0]["market_open"].tz_convert("America/New_York")
+        market_close = schedule.iloc[0]["market_close"].tz_convert("America/New_York")
+        return market_open <= pd.Timestamp(now) < market_close
+    except Exception:
+        current_time = now.time()
+        return now.weekday() < 5 and time(9, 30) <= current_time < time(16, 0)
 
 
 def setup_grade(confidence):
@@ -353,6 +367,7 @@ def render_header():
 def scan_symbols():
     current_prices = {}
     latest_results = {}
+    market_open = is_market_open_now()
 
     for symbol in SYMBOLS:
         result = generate_signal(symbol)
@@ -360,13 +375,17 @@ def scan_symbols():
         if result is None:
             continue
 
+        if not market_open:
+            result = {**result, "signal": "MARKET CLOSED / WAIT"}
+
         latest_results[symbol] = result
         current_prices[symbol] = result.get("price", 0)
 
-        added, row = add_new_signal(result)
-        if added and result["signal"] in BUY_SIGNALS:
-            sent, alert_status = send_trade_alert(result, st.secrets)
-            mark_alert_status(row, sent=sent, status=alert_status)
+        if market_open:
+            added, row = add_new_signal(result)
+            if added and result["signal"] in BUY_SIGNALS:
+                sent, alert_status = send_trade_alert(result, st.secrets)
+                mark_alert_status(row, sent=sent, status=alert_status)
 
     history = update_open_signals(current_prices)
     return latest_results, current_prices, history
