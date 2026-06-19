@@ -243,6 +243,21 @@ try:
     for symbol in ["SPY", "QQQ"]:
         result = generate_signal(symbol)
 
+    if symbol == "SPY":
+        result = {
+            "symbol": "SPY",
+            "signal": "BUY CALL",
+            "confidence": 95,
+            "entry": 100,
+            "stop": 99,
+            "target": 102,
+            "breakeven": 101,
+            "price": 100,
+            "call_score": 95,
+            "put_score": 20,
+            "reasons": ["TEST SIGNAL"]
+        }
+
         if result is None:
             continue
 
