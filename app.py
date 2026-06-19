@@ -10,7 +10,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Refresh every 1 minute
 st_autorefresh(interval=60000, key="option_beacon_refresh")
 
 HISTORY_FILE = "signal_history.csv"
@@ -46,18 +45,11 @@ def save_history(history):
 
 
 def add_new_signal(result):
-    """
-    Saves a new BUY CALL or BUY PUT signal.
-    Avoids saving duplicates if there is already an open trade
-    for the same symbol and signal.
-    """
-
     if result["signal"] not in ["BUY CALL", "BUY PUT"]:
         return
 
     history = load_history()
 
-    # Avoid duplicate open signals
     if len(history) > 0:
         duplicate_open = history[
             (history["symbol"] == result["symbol"]) &
@@ -89,11 +81,6 @@ def add_new_signal(result):
 
 
 def update_open_signals(current_prices):
-    """
-    Checks every OPEN trade and updates it to:
-    WIN, LOSS, BREAKEVEN, or keeps it OPEN.
-    """
-
     history = load_history()
 
     if len(history) == 0:
@@ -119,12 +106,10 @@ def update_open_signals(current_prices):
         breakeven_active = str(row["breakeven_active"]).lower() == "true"
 
         if signal == "BUY CALL":
-            # Activate breakeven once price reaches breakeven trigger
             if current_price >= breakeven:
                 breakeven_active = True
                 history.at[i, "breakeven_active"] = True
 
-            # WIN
             if current_price >= target:
                 pnl = ((target - entry) / entry) * 100
                 history.at[i, "status"] = "WIN"
@@ -132,14 +117,12 @@ def update_open_signals(current_prices):
                 history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
                 history.at[i, "pnl_percent"] = round(pnl, 3)
 
-            # BREAKEVEN
             elif breakeven_active and current_price <= entry:
                 history.at[i, "status"] = "BREAKEVEN"
                 history.at[i, "exit_price"] = round(entry, 2)
                 history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
                 history.at[i, "pnl_percent"] = 0.0
 
-            # LOSS
             elif current_price <= stop:
                 pnl = ((stop - entry) / entry) * 100
                 history.at[i, "status"] = "LOSS"
@@ -148,12 +131,10 @@ def update_open_signals(current_prices):
                 history.at[i, "pnl_percent"] = round(pnl, 3)
 
         elif signal == "BUY PUT":
-            # Activate breakeven once price reaches breakeven trigger
             if current_price <= breakeven:
                 breakeven_active = True
                 history.at[i, "breakeven_active"] = True
 
-            # WIN
             if current_price <= target:
                 pnl = ((entry - target) / entry) * 100
                 history.at[i, "status"] = "WIN"
@@ -161,14 +142,12 @@ def update_open_signals(current_prices):
                 history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
                 history.at[i, "pnl_percent"] = round(pnl, 3)
 
-            # BREAKEVEN
             elif breakeven_active and current_price >= entry:
                 history.at[i, "status"] = "BREAKEVEN"
                 history.at[i, "exit_price"] = round(entry, 2)
                 history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
                 history.at[i, "pnl_percent"] = 0.0
 
-            # LOSS
             elif current_price >= stop:
                 pnl = ((entry - stop) / entry) * 100
                 history.at[i, "status"] = "LOSS"
@@ -206,7 +185,6 @@ def calculate_performance(history):
     pnl_values = pd.to_numeric(closed["pnl_percent"], errors="coerce").fillna(0)
 
     total_pnl = pnl_values.sum()
-
     gross_wins = pnl_values[pnl_values > 0].sum()
     gross_losses = abs(pnl_values[pnl_values < 0].sum())
 
@@ -239,38 +217,35 @@ try:
     current_prices = {}
     latest_results = {}
 
-    # Run scanner
     for symbol in ["SPY", "QQQ"]:
         result = generate_signal(symbol)
-
-    if symbol == "SPY":
-        result = {
-            "symbol": "SPY",
-            "signal": "BUY CALL",
-            "confidence": 95,
-            "entry": 100,
-            "stop": 99,
-            "target": 102,
-            "breakeven": 101,
-            "price": 100,
-            "call_score": 95,
-            "put_score": 20,
-            "reasons": ["TEST SIGNAL"]
-        }
 
         if result is None:
             continue
 
+        # TEMPORARY TEST SIGNAL
+        # This forces one SPY BUY CALL so we can verify logging works.
+        if symbol == "SPY":
+            result = {
+                "symbol": "SPY",
+                "signal": "BUY CALL",
+                "confidence": 95,
+                "entry": 100.00,
+                "stop": 99.75,
+                "target": 100.50,
+                "breakeven": 100.40,
+                "price": 100.00,
+                "call_score": 95,
+                "put_score": 20,
+                "reasons": ["Temporary test signal"]
+            }
+
         latest_results[symbol] = result
         current_prices[symbol] = result.get("price", 0)
 
-        # Save new BUY signals only
         add_new_signal(result)
 
-    # Update open signals based on latest prices
     history = update_open_signals(current_prices)
-
-    # Performance stats
     stats = calculate_performance(history)
 
     st.divider()
@@ -290,7 +265,6 @@ try:
     col3.metric("Breakevens", stats["breakevens"])
     col4.metric("Total P/L", f"{stats['total_pnl']:.3f}%")
 
-    # Current scanner display
     st.divider()
     st.header("Current Scanner")
 
@@ -365,7 +339,6 @@ try:
             else:
                 st.write("- No strong setup yet")
 
-    # Signal history
     st.divider()
     st.header("Signal History")
 
