@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+
+.streamlit/secrets.toml
+.env
+.env.*
+
+signal_history.csv
+optionbeacon_live_signals.csv
+
+.DS_Store
+Thumbs.db

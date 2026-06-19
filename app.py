@@ -328,12 +328,55 @@ def configure_page():
     )
 
 
+def app_access_configured():
+    return bool(st.secrets.get("APP_ACCESS_CODE"))
+
+
+def require_app_access():
+    expected_code = st.secrets.get("APP_ACCESS_CODE")
+
+    if not expected_code:
+        return True
+
+    if st.session_state.get("app_access_granted"):
+        return True
+
+    st.markdown(
+        f"""
+        <div class="brand-shell">
+            <div class="brand-row">
+                <div class="brand-left">
+                    <img class="brand-logo" src="{LOGO_URL}" alt="Option Beacon logo" />
+                    <div>
+                        <div class="brand-title">Option Beacon</div>
+                        <div class="brand-subtitle">Private Scanner Access</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    entered_code = st.text_input("Access code", type="password")
+
+    if st.button("Enter", type="primary"):
+        if entered_code == expected_code:
+            st.session_state["app_access_granted"] = True
+            st.rerun()
+        else:
+            st.error("Invalid access code.")
+
+    st.stop()
+
+
 def render_header():
     market_open = is_market_open_now()
     market_status = "Market Open" if market_open else "Market Closed"
     market_class = "pill-open" if market_open else "pill-closed"
     refreshed_at = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
     sms_status = "SMS On" if twilio_configured(st.secrets) else "SMS Off"
+    access_status = "Private" if app_access_configured() else "Public"
 
     st.markdown(
         f"""
@@ -350,6 +393,7 @@ def render_header():
                     <span class="pill {market_class}">{market_status}</span>
                     <span class="pill">Refresh 1 min</span>
                     <span class="pill pill-sms">{sms_status}</span>
+                    <span class="pill">{access_status}</span>
                 </div>
             </div>
         </div>
@@ -529,6 +573,7 @@ def render_signal_history(history):
 
 def main():
     configure_page()
+    require_app_access()
     render_header()
 
     latest_results, current_prices, history = scan_symbols()
