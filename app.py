@@ -276,19 +276,20 @@ def configure_page():
 
         .section-title {
             color: var(--ob-text);
-            font-size: 1.65rem;
+            font-size: 2.25rem;
             font-weight: 700;
             letter-spacing: 0;
-            margin: 0.35rem 0 0.75rem;
+            line-height: 1.15;
+            margin: 0.35rem 0 1rem;
         }
 
         .section-subtitle {
             color: var(--ob-text);
-            font-size: 1.18rem;
+            font-size: 1.55rem;
             font-weight: 700;
-            letter-spacing: 0.04em;
-            margin: 0.85rem 0 0.65rem;
-            text-transform: uppercase;
+            letter-spacing: 0;
+            line-height: 1.2;
+            margin: 1rem 0 0.75rem;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"] {
