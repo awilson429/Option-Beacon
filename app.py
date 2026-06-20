@@ -295,17 +295,17 @@ def configure_page():
             align-items: center;
             background: rgba(255, 255, 255, 0.045);
             border: 1px solid var(--ob-border);
-            border-left: 4px solid var(--ob-gold);
+            border-left: 6px solid var(--ob-gold);
             border-radius: 8px;
             color: var(--ob-text);
             display: flex;
-            font-size: 1.25rem;
+            font-size: 1.55rem;
             font-weight: 700;
             justify-content: space-between;
             letter-spacing: 0;
             line-height: 1.2;
             margin: 1.2rem 0 0.8rem;
-            padding: 0.75rem 0.9rem;
+            padding: 0.9rem 1rem;
         }
 
         .section-count {
