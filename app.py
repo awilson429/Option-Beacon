@@ -274,6 +274,23 @@ def configure_page():
             color: var(--ob-muted);
         }
 
+        .section-title {
+            color: var(--ob-text);
+            font-size: 1.65rem;
+            font-weight: 700;
+            letter-spacing: 0;
+            margin: 0.35rem 0 0.75rem;
+        }
+
+        .section-subtitle {
+            color: var(--ob-text);
+            font-size: 1.18rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            margin: 0.85rem 0 0.65rem;
+            text-transform: uppercase;
+        }
+
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border-color: var(--ob-border);
             border-radius: 8px;
@@ -502,9 +519,9 @@ def render_signal_card(symbol, result):
 
 
 def render_current_scanner(latest_results):
-    st.subheader("Scanner")
+    st.markdown('<div class="section-title">Scanner</div>', unsafe_allow_html=True)
     for group_name, symbols in SYMBOL_GROUPS.items():
-        st.markdown(f"#### {group_name}")
+        st.markdown(f'<div class="section-subtitle">{group_name}</div>', unsafe_allow_html=True)
         for row_start in range(0, len(symbols), 2):
             columns = st.columns(2)
             for column, symbol in zip(columns, symbols[row_start:row_start + 2]):
