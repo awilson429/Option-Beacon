@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 
 ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
-STOCK_SYMBOLS = ["NVDA", "KEEL", "LAES", "AMD"]
+STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD", "KEEL", "LAES"]
 SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
 
 PERIOD = "5d"

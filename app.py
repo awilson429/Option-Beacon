@@ -11,7 +11,7 @@ from optionbeacon_stats import calculate_performance, calculate_symbol_stats, op
 
 
 ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
-STOCK_SYMBOLS = ["NVDA", "KEEL", "LAES", "AMD"]
+STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD", "KEEL", "LAES"]
 SYMBOL_GROUPS = {
     "ETF Scanner": ETF_SYMBOLS,
     "Single Stock Scanner": STOCK_SYMBOLS,
