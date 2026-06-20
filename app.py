@@ -280,16 +280,40 @@ def configure_page():
             font-weight: 700;
             letter-spacing: 0;
             line-height: 1.15;
-            margin: 0.35rem 0 1rem;
+            margin: 0.35rem 0 0.15rem;
+        }
+
+        .section-kicker {
+            color: var(--ob-muted);
+            font-size: 0.95rem;
+            letter-spacing: 0.04em;
+            margin: 0 0 1.1rem;
+            text-transform: uppercase;
         }
 
         .section-subtitle {
+            align-items: center;
+            background: rgba(255, 255, 255, 0.045);
+            border: 1px solid var(--ob-border);
+            border-left: 4px solid var(--ob-gold);
+            border-radius: 8px;
             color: var(--ob-text);
-            font-size: 1.75rem;
+            display: flex;
+            font-size: 1.25rem;
             font-weight: 700;
+            justify-content: space-between;
             letter-spacing: 0;
             line-height: 1.2;
-            margin: 1.15rem 0 0.75rem;
+            margin: 1.2rem 0 0.8rem;
+            padding: 0.75rem 0.9rem;
+        }
+
+        .section-count {
+            color: var(--ob-muted);
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"] {
@@ -521,8 +545,16 @@ def render_signal_card(symbol, result):
 
 def render_current_scanner(latest_results):
     st.markdown('<div class="section-title">Scanner</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-kicker">Real-time signal groups</div>',
+        unsafe_allow_html=True,
+    )
     for group_name, symbols in SYMBOL_GROUPS.items():
-        st.markdown(f'<div class="section-subtitle">{group_name}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="section-subtitle"><span>{group_name}</span>'
+            f'<span class="section-count">{len(symbols)} Symbols</span></div>',
+            unsafe_allow_html=True,
+        )
         for row_start in range(0, len(symbols), 2):
             columns = st.columns(2)
             for column, symbol in zip(columns, symbols[row_start:row_start + 2]):
