@@ -350,6 +350,54 @@ def configure_page():
             text-transform: uppercase;
         }
 
+        .content-section {
+            margin: 0.25rem 0 1rem;
+        }
+
+        .content-title {
+            color: var(--ob-text);
+            font-size: 1.75rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin: 0;
+        }
+
+        .content-kicker {
+            color: var(--ob-muted);
+            font-size: 0.9rem;
+            letter-spacing: 0.04em;
+            margin-top: 0.2rem;
+            text-transform: uppercase;
+        }
+
+        .notice {
+            border: 1px solid var(--ob-border);
+            border-radius: 8px;
+            color: var(--ob-muted);
+            font-size: 0.95rem;
+            margin: 0.75rem 0 1.25rem;
+            padding: 0.75rem 0.9rem;
+        }
+
+        .notice-warning {
+            background: rgba(216, 179, 90, 0.08);
+            border-color: rgba(216, 179, 90, 0.28);
+            color: #d9c385;
+        }
+
+        .notice-info {
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+        .empty-state {
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px dashed var(--ob-border-strong);
+            border-radius: 8px;
+            color: var(--ob-muted);
+            padding: 1rem;
+            text-align: center;
+        }
+
         .ticker-title {
             color: var(--ob-text);
             font-size: 1.28rem;
@@ -541,10 +589,28 @@ def render_header():
     )
 
     st.caption(f"Last refreshed: {refreshed_at}")
-    st.warning("Paper-trading dashboard only. Not financial advice.")
+    st.markdown(
+        '<div class="notice notice-warning">Paper-trading dashboard only. Not financial advice.</div>',
+        unsafe_allow_html=True,
+    )
 
     if not twilio_configured(st.secrets):
-        st.info("SMS alerts are off until Twilio secrets are added in Streamlit.")
+        st.markdown(
+            '<div class="notice notice-info">SMS alerts are off until Twilio secrets are added in Streamlit.</div>',
+            unsafe_allow_html=True,
+        )
+
+
+def render_section_header(title, kicker=None):
+    kicker_html = f'<div class="content-kicker">{kicker}</div>' if kicker else ""
+    st.markdown(
+        f'<div class="content-section"><div class="content-title">{title}</div>{kicker_html}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_empty_state(message):
+    st.markdown(f'<div class="empty-state">{message}</div>', unsafe_allow_html=True)
 
 
 def scan_symbols():
@@ -652,7 +718,7 @@ def render_current_scanner(latest_results):
 def render_performance(history):
     stats = calculate_performance(history)
 
-    st.subheader("Overall Performance")
+    render_section_header("Performance", "Overall signal journal")
     p1, p2, p3, p4 = st.columns(4)
     p1.metric("Total Signals", stats["total"])
     p2.metric("Open Trades", stats["open"])
@@ -665,7 +731,11 @@ def render_performance(history):
     p7.metric("Breakevens", stats["breakevens"])
     p8.metric("Total P/L", f"{stats['total_pnl']:.3f}%")
 
-    st.markdown("#### Group Performance")
+    st.markdown(
+        '<div class="section-subtitle"><span>Group Performance</span>'
+        '<span class="section-count">ETF vs Stock</span></div>',
+        unsafe_allow_html=True,
+    )
     group_columns = st.columns(2)
     for column, (label, symbols) in zip(group_columns, SYMBOL_GROUPS.items()):
         group_stats = calculate_performance(filter_history_by_symbols(history, symbols))
@@ -679,9 +749,13 @@ def render_performance(history):
 
 
 def render_symbol_stats(history):
-    st.subheader("Symbol Stats")
+    render_section_header("Symbol Stats", "Performance by ticker")
     for group_name, symbols in SYMBOL_GROUPS.items():
-        st.markdown(f"#### {group_name}")
+        st.markdown(
+            f'<div class="section-subtitle"><span>{group_name}</span>'
+            f'<span class="section-count">{len(symbols)} Symbols</span></div>',
+            unsafe_allow_html=True,
+        )
         for row_start in range(0, len(symbols), 2):
             columns = st.columns(2)
             for column, symbol in zip(columns, symbols[row_start:row_start + 2]):
@@ -696,11 +770,11 @@ def render_symbol_stats(history):
 
 
 def render_open_trades(history, current_prices):
-    st.subheader("Open Trades")
+    render_section_header("Open Trades", "Active paper setups")
     open_trades = history[history["status"] == "OPEN"]
 
     if len(open_trades) == 0:
-        st.info("No open trades.")
+        render_empty_state("No open trades.")
         return
 
     rows = []
@@ -728,10 +802,10 @@ def render_open_trades(history, current_prices):
 
 
 def render_signal_history(history):
-    st.subheader("Signal History")
+    render_section_header("Signal History", "Most recent logged buy signals")
 
     if len(history) == 0:
-        st.info("No BUY signals logged yet.")
+        render_empty_state("No BUY signals logged yet.")
         return
 
     display_history = history.copy()
