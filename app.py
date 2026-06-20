@@ -316,6 +316,14 @@ def configure_page():
             text-transform: uppercase;
         }
 
+        .ticker-title {
+            color: var(--ob-text);
+            font-size: 1.1rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin: 0 0 0.65rem;
+        }
+
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border-color: var(--ob-border);
             border-radius: 8px;
@@ -497,7 +505,7 @@ def scan_symbols():
 
 def render_signal_card(symbol, result):
     with st.container(border=True):
-        st.markdown(f"### {symbol}")
+        st.markdown(f'<div class="ticker-title">{symbol}</div>', unsafe_allow_html=True)
 
         if result is None:
             st.error("No data returned.")
