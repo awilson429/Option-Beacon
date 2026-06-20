@@ -491,6 +491,15 @@ def configure_page():
                 flex-direction: column;
             }
 
+            .brand-left {
+                gap: 1.25rem;
+            }
+
+            .brand-title {
+                font-size: clamp(1.35rem, 6vw, 2rem);
+                letter-spacing: 0.12em;
+            }
+
             .status-strip {
                 align-items: flex-start;
             }
