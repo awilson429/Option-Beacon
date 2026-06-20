@@ -200,6 +200,9 @@ def configure_page():
         }
 
         .brand-copy {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
             min-width: 0;
         }
 
@@ -214,7 +217,7 @@ def configure_page():
         .brand-subtitle {
             color: var(--ob-muted);
             font-size: clamp(0.78rem, 1.7vw, 1rem);
-            margin-top: 0.3rem;
+            margin-top: 0.45rem;
             text-transform: uppercase;
             letter-spacing: 0.08em;
             white-space: nowrap;
