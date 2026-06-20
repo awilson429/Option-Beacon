@@ -1,7 +1,7 @@
 import yfinance as yf
 import pandas as pd
 
-SYMBOLS = ["SPY", "QQQ"]
+SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
 
 PERIOD = "60d"
 INTERVAL = "5m"
@@ -313,7 +313,7 @@ def print_results(symbol, results):
 
 def main():
     print("\nOPTIONBEACON BACKTEST")
-    print("SPY / QQQ 5-Minute Strategy Test")
+    print("SPY / QQQ / IWM / DIA 5-Minute Strategy Test")
     print(f"Period: {PERIOD}")
     print(f"Interval: {INTERVAL}")
     print(f"Call Score Threshold: {CALL_SCORE_THRESHOLD}")

@@ -10,7 +10,7 @@ from optionbeacon_live import generate_signal
 from optionbeacon_stats import calculate_performance, calculate_symbol_stats, open_trade_pnl
 
 
-SYMBOLS = ["SPY", "QQQ"]
+SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
 BUY_SIGNALS = {"BUY CALL", "BUY PUT"}
 LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-381bdd4d9924/OptionBeaconLLC%20Logo%20V2.png"
 
@@ -386,7 +386,7 @@ def render_header():
                     <img class="brand-logo" src="{LOGO_URL}" alt="Option Beacon logo" />
                     <div>
                         <div class="brand-title">Option Beacon</div>
-                        <div class="brand-subtitle">SPY / QQQ Scanner</div>
+                        <div class="brand-subtitle">SPY / QQQ / IWM / DIA Scanner</div>
                     </div>
                 </div>
                 <div class="status-strip">
@@ -485,11 +485,11 @@ def render_signal_card(symbol, result):
 
 def render_current_scanner(latest_results):
     st.subheader("Scanner")
-    columns = st.columns(len(SYMBOLS))
-
-    for column, symbol in zip(columns, SYMBOLS):
-        with column:
-            render_signal_card(symbol, latest_results.get(symbol))
+    for row_start in range(0, len(SYMBOLS), 2):
+        columns = st.columns(2)
+        for column, symbol in zip(columns, SYMBOLS[row_start:row_start + 2]):
+            with column:
+                render_signal_card(symbol, latest_results.get(symbol))
 
 
 def render_performance(history):
@@ -511,17 +511,17 @@ def render_performance(history):
 
 def render_symbol_stats(history):
     st.subheader("Symbol Stats")
-    columns = st.columns(len(SYMBOLS))
-
-    for column, symbol in zip(columns, SYMBOLS):
-        symbol_stats = calculate_symbol_stats(history, symbol)
-        with column:
-            with st.container(border=True):
-                st.markdown(f"### {symbol}")
-                a, b, c = st.columns(3)
-                a.metric("Signals", symbol_stats["signals"])
-                b.metric("Win Rate", f"{symbol_stats['win_rate']:.2f}%")
-                c.metric("Profit Factor", f"{symbol_stats['profit_factor']:.2f}")
+    for row_start in range(0, len(SYMBOLS), 2):
+        columns = st.columns(2)
+        for column, symbol in zip(columns, SYMBOLS[row_start:row_start + 2]):
+            symbol_stats = calculate_symbol_stats(history, symbol)
+            with column:
+                with st.container(border=True):
+                    st.markdown(f"### {symbol}")
+                    a, b, c = st.columns(3)
+                    a.metric("Signals", symbol_stats["signals"])
+                    b.metric("Win Rate", f"{symbol_stats['win_rate']:.2f}%")
+                    c.metric("Profit Factor", f"{symbol_stats['profit_factor']:.2f}")
 
 
 def render_open_trades(history, current_prices):

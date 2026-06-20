@@ -3,7 +3,7 @@ import pandas as pd
 import time
 from datetime import datetime
 
-SYMBOLS = ["SPY", "QQQ"]
+SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
 
 PERIOD = "5d"
 INTERVAL = "5m"
@@ -251,7 +251,7 @@ def log_signal(result):
 
 def main():
     print("\nOPTIONBEACON LIVE SCANNER")
-    print("SPY / QQQ 5-Minute Live Signal Scanner")
+    print("SPY / QQQ / IWM / DIA 5-Minute Live Signal Scanner")
     print("Press CTRL + C to stop.")
 
     while True:
