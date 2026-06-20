@@ -285,11 +285,11 @@ def configure_page():
 
         .section-subtitle {
             color: var(--ob-text);
-            font-size: 1.55rem;
+            font-size: 1.75rem;
             font-weight: 700;
             letter-spacing: 0;
             line-height: 1.2;
-            margin: 1rem 0 0.75rem;
+            margin: 1.15rem 0 0.75rem;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"] {
