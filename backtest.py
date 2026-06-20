@@ -2,7 +2,7 @@ import yfinance as yf
 import pandas as pd
 
 ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
-STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
+STOCK_SYMBOLS = ["NVDA", "KEEL", "LAES", "AMD"]
 SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
 
 PERIOD = "60d"
