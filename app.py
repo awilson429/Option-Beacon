@@ -200,10 +200,12 @@ def configure_page():
         }
 
         .brand-copy {
+            align-items: center;
             display: flex;
             flex-direction: column;
             justify-content: center;
             min-width: 0;
+            text-align: center;
         }
 
         .brand-title {
@@ -225,6 +227,16 @@ def configure_page():
 
         .status-strip {
             display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+            align-items: flex-end;
+            justify-content: center;
+            flex: 0 0 auto;
+        }
+
+        .status-primary,
+        .status-secondary {
+            display: flex;
             flex-wrap: wrap;
             gap: 0.55rem;
             justify-content: flex-end;
@@ -244,6 +256,17 @@ def configure_page():
             color: var(--ob-text);
             background: rgba(255, 255, 255, 0.04);
             white-space: nowrap;
+        }
+
+        .pill-market {
+            font-size: 0.95rem;
+            min-width: 14.5rem;
+            padding: 0.52rem 1.15rem;
+        }
+
+        .pill-secondary {
+            font-size: 0.74rem;
+            padding: 0.3rem 0.65rem;
         }
 
         .pill-open {
@@ -417,7 +440,16 @@ def configure_page():
             }
 
             .status-strip {
+                align-items: flex-start;
+            }
+
+            .status-primary,
+            .status-secondary {
                 justify-content: flex-start;
+            }
+
+            .pill-market {
+                min-width: 0;
             }
 
             .brand-logo {
@@ -493,10 +525,14 @@ def render_header():
                     </div>
                 </div>
                 <div class="status-strip">
-                    <span class="pill {market_class}">{market_status}</span>
-                    <span class="pill">Refresh 1 min</span>
-                    <span class="pill pill-sms">{sms_status}</span>
-                    <span class="pill">{access_status}</span>
+                    <div class="status-primary">
+                        <span class="pill pill-market {market_class}">{market_status}</span>
+                    </div>
+                    <div class="status-secondary">
+                        <span class="pill pill-secondary">Refresh 1 min</span>
+                        <span class="pill pill-secondary pill-sms">{sms_status}</span>
+                        <span class="pill pill-secondary">{access_status}</span>
+                    </div>
                 </div>
             </div>
         </div>
