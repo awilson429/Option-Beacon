@@ -10,7 +10,13 @@ from optionbeacon_live import generate_signal
 from optionbeacon_stats import calculate_performance, calculate_symbol_stats, open_trade_pnl
 
 
-SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
+ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
+STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
+SYMBOL_GROUPS = {
+    "ETF Scanner": ETF_SYMBOLS,
+    "Single Stock Scanner": STOCK_SYMBOLS,
+}
+SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
 BUY_SIGNALS = {"BUY CALL", "BUY PUT"}
 LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-381bdd4d9924/OptionBeaconLLC%20Logo%20V2.png"
 
@@ -78,6 +84,18 @@ def signal_class(signal):
     if signal == "BUY PUT":
         return "signal-put"
     return "signal-wait"
+
+
+def symbol_category(symbol):
+    if symbol in ETF_SYMBOLS:
+        return "ETF"
+    if symbol in STOCK_SYMBOLS:
+        return "Stock"
+    return "Other"
+
+
+def filter_history_by_symbols(history, symbols):
+    return history[history["symbol"].isin(symbols)]
 
 
 def quality_summary(result):
@@ -386,7 +404,7 @@ def render_header():
                     <img class="brand-logo" src="{LOGO_URL}" alt="Option Beacon logo" />
                     <div>
                         <div class="brand-title">Option Beacon</div>
-                        <div class="brand-subtitle">SPY / QQQ / IWM / DIA Scanner</div>
+                        <div class="brand-subtitle">ETF + Single Stock Scanner</div>
                     </div>
                 </div>
                 <div class="status-strip">
@@ -485,17 +503,19 @@ def render_signal_card(symbol, result):
 
 def render_current_scanner(latest_results):
     st.subheader("Scanner")
-    for row_start in range(0, len(SYMBOLS), 2):
-        columns = st.columns(2)
-        for column, symbol in zip(columns, SYMBOLS[row_start:row_start + 2]):
-            with column:
-                render_signal_card(symbol, latest_results.get(symbol))
+    for group_name, symbols in SYMBOL_GROUPS.items():
+        st.markdown(f"#### {group_name}")
+        for row_start in range(0, len(symbols), 2):
+            columns = st.columns(2)
+            for column, symbol in zip(columns, symbols[row_start:row_start + 2]):
+                with column:
+                    render_signal_card(symbol, latest_results.get(symbol))
 
 
 def render_performance(history):
     stats = calculate_performance(history)
 
-    st.subheader("Performance")
+    st.subheader("Overall Performance")
     p1, p2, p3, p4 = st.columns(4)
     p1.metric("Total Signals", stats["total"])
     p2.metric("Open Trades", stats["open"])
@@ -508,20 +528,34 @@ def render_performance(history):
     p7.metric("Breakevens", stats["breakevens"])
     p8.metric("Total P/L", f"{stats['total_pnl']:.3f}%")
 
+    st.markdown("#### Group Performance")
+    group_columns = st.columns(2)
+    for column, (label, symbols) in zip(group_columns, SYMBOL_GROUPS.items()):
+        group_stats = calculate_performance(filter_history_by_symbols(history, symbols))
+        with column:
+            with st.container(border=True):
+                st.markdown(f"### {label}")
+                a, b, c = st.columns(3)
+                a.metric("Signals", group_stats["total"])
+                b.metric("Win Rate", f"{group_stats['win_rate']:.2f}%")
+                c.metric("Profit Factor", f"{group_stats['profit_factor']:.2f}")
+
 
 def render_symbol_stats(history):
     st.subheader("Symbol Stats")
-    for row_start in range(0, len(SYMBOLS), 2):
-        columns = st.columns(2)
-        for column, symbol in zip(columns, SYMBOLS[row_start:row_start + 2]):
-            symbol_stats = calculate_symbol_stats(history, symbol)
-            with column:
-                with st.container(border=True):
-                    st.markdown(f"### {symbol}")
-                    a, b, c = st.columns(3)
-                    a.metric("Signals", symbol_stats["signals"])
-                    b.metric("Win Rate", f"{symbol_stats['win_rate']:.2f}%")
-                    c.metric("Profit Factor", f"{symbol_stats['profit_factor']:.2f}")
+    for group_name, symbols in SYMBOL_GROUPS.items():
+        st.markdown(f"#### {group_name}")
+        for row_start in range(0, len(symbols), 2):
+            columns = st.columns(2)
+            for column, symbol in zip(columns, symbols[row_start:row_start + 2]):
+                symbol_stats = calculate_symbol_stats(history, symbol)
+                with column:
+                    with st.container(border=True):
+                        st.markdown(f"### {symbol}")
+                        a, b, c = st.columns(3)
+                        a.metric("Signals", symbol_stats["signals"])
+                        b.metric("Win Rate", f"{symbol_stats['win_rate']:.2f}%")
+                        c.metric("Profit Factor", f"{symbol_stats['profit_factor']:.2f}")
 
 
 def render_open_trades(history, current_prices):
@@ -541,6 +575,7 @@ def render_open_trades(history, current_prices):
         rows.append(
             {
                 "Time": row["timestamp"],
+                "Group": symbol_category(symbol),
                 "Symbol": symbol,
                 "Signal": row["signal"],
                 "Entry": row["entry"],
@@ -563,6 +598,7 @@ def render_signal_history(history):
         return
 
     display_history = history.copy()
+    display_history["group"] = display_history["symbol"].apply(symbol_category)
     display_history["status"] = display_history["status"].apply(status_badge)
     st.dataframe(
         display_history.tail(50).sort_index(ascending=False),

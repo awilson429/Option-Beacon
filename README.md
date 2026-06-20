@@ -1,6 +1,6 @@
 # Option Beacon
 
-Paper-trading Streamlit dashboard for SPY, QQQ, IWM, and DIA option signal scanning.
+Paper-trading Streamlit dashboard for ETF and single-stock option signal scanning.
 
 ## License and use
 

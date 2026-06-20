@@ -1,7 +1,9 @@
 import yfinance as yf
 import pandas as pd
 
-SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
+ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
+STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
+SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
 
 PERIOD = "60d"
 INTERVAL = "5m"
@@ -313,7 +315,7 @@ def print_results(symbol, results):
 
 def main():
     print("\nOPTIONBEACON BACKTEST")
-    print("SPY / QQQ / IWM / DIA 5-Minute Strategy Test")
+    print("ETF + Single Stock 5-Minute Strategy Test")
     print(f"Period: {PERIOD}")
     print(f"Interval: {INTERVAL}")
     print(f"Call Score Threshold: {CALL_SCORE_THRESHOLD}")

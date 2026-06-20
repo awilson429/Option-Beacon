@@ -3,7 +3,9 @@ import pandas as pd
 import time
 from datetime import datetime
 
-SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
+ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
+STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
+SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
 
 PERIOD = "5d"
 INTERVAL = "5m"
@@ -251,7 +253,7 @@ def log_signal(result):
 
 def main():
     print("\nOPTIONBEACON LIVE SCANNER")
-    print("SPY / QQQ / IWM / DIA 5-Minute Live Signal Scanner")
+    print("ETF + Single Stock 5-Minute Live Signal Scanner")
     print("Press CTRL + C to stop.")
 
     while True:
