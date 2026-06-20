@@ -185,16 +185,22 @@ def configure_page():
             align-items: center;
             gap: 1rem;
             min-width: 0;
+            flex: 1 1 auto;
         }
 
         .brand-logo {
-            width: 64px;
-            height: 64px;
+            width: 72px;
+            height: 72px;
             object-fit: contain;
             background: #ffffff;
             border: 1px solid rgba(255, 255, 255, 0.20);
             border-radius: 8px;
-            padding: 0.25rem;
+            padding: 0;
+            flex: 0 0 auto;
+        }
+
+        .brand-copy {
+            min-width: 0;
         }
 
         .brand-title {
@@ -206,10 +212,11 @@ def configure_page():
 
         .brand-subtitle {
             color: var(--ob-muted);
-            font-size: 1rem;
+            font-size: clamp(0.78rem, 1.7vw, 1rem);
             margin-top: 0.3rem;
             text-transform: uppercase;
             letter-spacing: 0.08em;
+            white-space: nowrap;
         }
 
         .status-strip {
@@ -410,8 +417,8 @@ def configure_page():
             }
 
             .brand-logo {
-                width: 54px;
-                height: 54px;
+                width: 62px;
+                height: 62px;
             }
         }
         </style>
@@ -439,7 +446,7 @@ def require_app_access():
             <div class="brand-row">
                 <div class="brand-left">
                     <img class="brand-logo" src="{LOGO_URL}" alt="Option Beacon logo" />
-                    <div>
+                    <div class="brand-copy">
                         <div class="brand-title">Option Beacon</div>
                         <div class="brand-subtitle">Private Scanner Access</div>
                     </div>
@@ -476,7 +483,7 @@ def render_header():
             <div class="brand-row">
                 <div class="brand-left">
                     <img class="brand-logo" src="{LOGO_URL}" alt="Option Beacon logo" />
-                    <div>
+                    <div class="brand-copy">
                         <div class="brand-title">Option Beacon</div>
                         <div class="brand-subtitle">ETF + Single Stock Scanner</div>
                     </div>
