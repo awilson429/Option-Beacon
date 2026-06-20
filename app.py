@@ -115,7 +115,7 @@ def configure_page():
     st.markdown(
         """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Source+Sans+3:wght@400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap');
 
         :root {
             --ob-bg: #050505;
@@ -153,7 +153,7 @@ def configure_page():
         }
 
         h1, .brand-title {
-            font-family: 'Playfair Display', Georgia, serif;
+            font-family: 'Orbitron', 'Source Sans 3', sans-serif;
         }
 
         h2, h3 {
@@ -210,11 +210,13 @@ def configure_page():
 
         .brand-title {
             color: var(--ob-text);
-            font-size: clamp(2rem, 3.7vw, 4.2rem);
-            font-family: 'Playfair Display', Georgia, serif;
-            font-weight: 900;
-            line-height: 0.95;
+            font-family: 'Orbitron', 'Source Sans 3', sans-serif;
+            font-size: clamp(1.65rem, 3vw, 3.4rem);
+            font-weight: 600;
+            letter-spacing: 0.18em;
+            line-height: 1;
             margin: 0;
+            text-transform: uppercase;
             white-space: nowrap;
         }
 
