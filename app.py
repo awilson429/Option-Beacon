@@ -324,6 +324,30 @@ def configure_page():
             margin: 0 0 0.65rem;
         }
 
+        .price-metric {
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid var(--ob-border);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            padding: 0.75rem;
+        }
+
+        .price-label {
+            color: var(--ob-muted);
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .price-value {
+            color: var(--ob-text);
+            font-size: 1.45rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-top: 0.15rem;
+        }
+
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border-color: var(--ob-border);
             border-radius: 8px;
@@ -519,7 +543,15 @@ def render_signal_card(symbol, result):
             f'<div class="signal-pill {signal_class(signal)}">{signal_label(signal)}</div>',
             unsafe_allow_html=True,
         )
-        st.metric("Price", f"${price:.2f}")
+        st.markdown(
+            f"""
+            <div class="price-metric">
+                <div class="price-label">Price</div>
+                <div class="price-value">${price:.2f}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         if "confidence" in result:
             c1, c2, c3, c4 = st.columns(4)
