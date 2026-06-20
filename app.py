@@ -318,7 +318,7 @@ def configure_page():
 
         .ticker-title {
             color: var(--ob-text);
-            font-size: 1.1rem;
+            font-size: 1.28rem;
             font-weight: 700;
             line-height: 1.2;
             margin: 0 0 0.65rem;
