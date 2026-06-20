@@ -211,6 +211,8 @@ def configure_page():
         .brand-title {
             color: var(--ob-text);
             font-size: clamp(2rem, 3.7vw, 4.2rem);
+            font-family: 'Playfair Display', Georgia, serif;
+            font-weight: 900;
             line-height: 0.95;
             margin: 0;
             white-space: nowrap;
