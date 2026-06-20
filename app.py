@@ -189,8 +189,8 @@ def configure_page():
         }
 
         .brand-logo {
-            width: 72px;
-            height: 72px;
+            width: 88px;
+            height: 88px;
             object-fit: contain;
             background: #ffffff;
             border: 1px solid rgba(255, 255, 255, 0.20);
@@ -205,9 +205,10 @@ def configure_page():
 
         .brand-title {
             color: var(--ob-text);
-            font-size: clamp(2.1rem, 4vw, 4.2rem);
+            font-size: clamp(2rem, 3.7vw, 4.2rem);
             line-height: 0.95;
             margin: 0;
+            white-space: nowrap;
         }
 
         .brand-subtitle {
@@ -417,8 +418,8 @@ def configure_page():
             }
 
             .brand-logo {
-                width: 62px;
-                height: 62px;
+                width: 72px;
+                height: 72px;
             }
         }
         </style>
