@@ -7,7 +7,7 @@ import pandas as pd
 
 HISTORY_FILE = "signal_history.csv"
 
-BUY_SIGNALS = {"BUY CALL", "BUY PUT"}
+BUY_SIGNALS = {"BUY CALL", "BUY PUT", "BULLISH SETUP", "BEARISH SETUP"}
 
 COLUMNS = [
     "timestamp",
@@ -127,7 +127,7 @@ def update_open_signals(current_prices):
 
         breakeven_active = str(row["breakeven_active"]).lower() == "true"
 
-        if signal == "BUY CALL":
+        if signal in ["BUY CALL", "BULLISH SETUP"]:
             if current_price >= breakeven:
                 breakeven_active = True
                 history.at[i, "breakeven_active"] = "True"
@@ -152,7 +152,7 @@ def update_open_signals(current_prices):
                 history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
                 history.at[i, "pnl_percent"] = str(round(pnl, 3))
 
-        elif signal == "BUY PUT":
+        elif signal in ["BUY PUT", "BEARISH SETUP"]:
             if current_price <= breakeven:
                 breakeven_active = True
                 history.at[i, "breakeven_active"] = "True"

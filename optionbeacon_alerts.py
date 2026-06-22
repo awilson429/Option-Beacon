@@ -11,12 +11,13 @@ def twilio_configured(secrets):
 
 
 def format_trade_alert(result):
+    direction = result.get("bias", result.get("signal", "Setup"))
     return (
-        f"Option Beacon: {result['symbol']} {result['signal']} "
+        f"Option Beacon: {result['symbol']} {direction} opportunity "
         f"at ${result['entry']:.2f}. "
         f"Stop ${result['stop']:.2f}, target ${result['target']:.2f}, "
         f"BE ${result['breakeven']:.2f}. "
-        f"Confidence {result.get('confidence', 'N/A')}%."
+        f"Score {result.get('confidence', 'N/A')}/100."
     )
 
 

@@ -24,6 +24,8 @@ CALL_SCORE_THRESHOLD = DEFAULT_CALL_SCORE_THRESHOLD
 PUT_SCORE_THRESHOLD = DEFAULT_PUT_SCORE_THRESHOLD
 
 MAX_HOLD_CANDLES = 48
+LONG_SIGNALS = {"BUY CALL", "BULLISH SETUP"}
+SHORT_SIGNALS = {"BUY PUT", "BEARISH SETUP"}
 
 
 def get_data(symbol):
@@ -38,6 +40,13 @@ def get_data(symbol):
 def add_indicators(df):
     df["EMA9"] = df["Close"].ewm(span=9, adjust=False).mean()
     df["EMA21"] = df["Close"].ewm(span=21, adjust=False).mean()
+    df["EMA20"] = df["Close"].ewm(span=20, adjust=False).mean()
+    df["EMA50"] = df["Close"].ewm(span=50, adjust=False).mean()
+    df["EMA200"] = df["Close"].ewm(span=200, adjust=False).mean()
+
+    df["MACD"] = df["Close"].ewm(span=12, adjust=False).mean() - df["Close"].ewm(span=26, adjust=False).mean()
+    df["MACD_SIGNAL"] = df["MACD"].ewm(span=9, adjust=False).mean()
+    df["MACD_HIST"] = df["MACD"] - df["MACD_SIGNAL"]
 
     delta = df["Close"].diff()
     gain = delta.where(delta > 0, 0).rolling(14).mean()
@@ -48,6 +57,13 @@ def add_indicators(df):
     typical_price = (df["High"] + df["Low"] + df["Close"]) / 3
     df["VWAP"] = (typical_price * df["Volume"]).cumsum() / df["Volume"].cumsum()
     df["AVG_VOLUME_20"] = df["Volume"].rolling(20).mean()
+
+    high_low = df["High"] - df["Low"]
+    high_close = (df["High"] - df["Close"].shift()).abs()
+    low_close = (df["Low"] - df["Close"].shift()).abs()
+    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    df["ATR"] = true_range.rolling(14).mean()
+    df["AVG_ATR_20"] = df["ATR"].rolling(20).mean()
 
     return df.dropna()
 
@@ -67,7 +83,7 @@ def score_candle(
         put_score_threshold=put_score_threshold,
     )
 
-    if result["signal"] == "MARKET CLOSED / WAIT":
+    if result["signal"] in ["MARKET CLOSED / WAIT", "WATCHLIST"]:
         return "WAIT", 0, result["price"]
 
     return result["signal"], result["confidence"], result["price"]
@@ -76,7 +92,7 @@ def score_candle(
 def grade_trade(df, entry_index, signal, entry_price):
     breakeven_active = False
 
-    if signal == "BUY CALL":
+    if signal in LONG_SIGNALS:
         stop = entry_price * (1 - STOP_PERCENT)
         target = entry_price * (1 + TARGET_PERCENT)
         breakeven_price = entry_price * (1 + BREAKEVEN_TRIGGER)
@@ -98,7 +114,7 @@ def grade_trade(df, entry_index, signal, entry_price):
             if high >= target:
                 return "WIN", target
 
-    if signal == "BUY PUT":
+    if signal in SHORT_SIGNALS:
         stop = entry_price * (1 + STOP_PERCENT)
         target = entry_price * (1 - TARGET_PERCENT)
         breakeven_price = entry_price * (1 - BREAKEVEN_TRIGGER)
@@ -147,7 +163,7 @@ def backtest_symbol(
         if signal != "WAIT":
             result, exit_price = grade_trade(df, i, signal, price)
 
-            if signal == "BUY CALL":
+            if signal in LONG_SIGNALS:
                 pnl_percent = ((exit_price - price) / price) * 100
                 direction = "LONG"
             else:

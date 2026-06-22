@@ -17,7 +17,7 @@ SYMBOL_GROUPS = {
     "Single Stock Scanner": STOCK_SYMBOLS,
 }
 SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
-BUY_SIGNALS = {"BUY CALL", "BUY PUT"}
+BUY_SIGNALS = {"BUY CALL", "BUY PUT", "BULLISH SETUP", "BEARISH SETUP"}
 LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-381bdd4d9924/OptionBeaconLLC%20Logo%20V2.png"
 
 
@@ -72,16 +72,20 @@ def signal_label(signal):
     labels = {
         "BUY CALL": "BUY CALL",
         "BUY PUT": "BUY PUT",
+        "BULLISH SETUP": "BULLISH SETUP",
+        "BEARISH SETUP": "BEARISH SETUP",
         "MARKET CLOSED / WAIT": "MARKET CLOSED",
-        "WAIT": "WAIT",
+        "WAIT": "WATCHLIST",
+        "WATCHLIST": "WATCHLIST",
+        "DATA UNAVAILABLE": "DATA UNAVAILABLE",
     }
     return labels.get(signal, signal)
 
 
 def signal_class(signal):
-    if signal == "BUY CALL":
+    if signal in ["BUY CALL", "BULLISH SETUP"]:
         return "signal-call"
-    if signal == "BUY PUT":
+    if signal in ["BUY PUT", "BEARISH SETUP"]:
         return "signal-put"
     return "signal-wait"
 
@@ -99,13 +103,22 @@ def filter_history_by_symbols(history, symbols):
 
 
 def quality_summary(result):
+    if any(key in result for key in ["trend_score", "momentum_score", "volume_score"]):
+        return {
+            "Trend": f"{result.get('trend_score', 0)}/25",
+            "Momentum": f"{result.get('momentum_score', 0)}/20",
+            "Volume": f"{result.get('volume_score', 0)}/20",
+            "Volatility": f"{result.get('volatility_score', 0)}/15",
+            "Price Action": f"{result.get('price_action_score', 0)}/20",
+        }
+
     reasons = " ".join(result.get("reasons", [])).lower()
     return {
-        "VWAP": "PASS" if "vwap" in reasons else "WAIT",
-        "EMA": "PASS" if "ema" in reasons else "WAIT",
-        "RSI": "PASS" if "rsi" in reasons else "WAIT",
+        "Trend": "PASS" if "ema" in reasons else "WAIT",
+        "Momentum": "PASS" if "rsi" in reasons else "WAIT",
         "Volume": "PASS" if "volume" in reasons else "WAIT",
-        "Breakout": "PASS" if "breakout" in reasons or "breakdown" in reasons else "WAIT",
+        "Volatility": "WAIT",
+        "Price Action": "PASS" if "breakout" in reasons or "breakdown" in reasons else "WAIT",
     }
 
 
@@ -685,6 +698,8 @@ def render_signal_card(symbol, result):
         signal = result.get("signal", "UNKNOWN")
         price = result.get("price")
         confidence = result.get("confidence", 0)
+        bias = result.get("bias", "Neutral")
+        quality = result.get("quality", setup_grade(confidence))
 
         st.markdown(
             f'<div class="signal-pill {signal_class(signal)}">{signal_label(signal)}</div>',
@@ -702,13 +717,15 @@ def render_signal_card(symbol, result):
 
         if "confidence" in result:
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Score", f"{confidence}%")
-            c2.metric("Grade", setup_grade(confidence))
-            c3.metric("Call", result.get("call_score", ""))
-            c4.metric("Put", result.get("put_score", ""))
+            c1.metric("Setup Score", f"{confidence}/100")
+            c2.metric("Bias", bias)
+            c3.metric("Bullish", result.get("bullish_score", result.get("call_score", "")))
+            c4.metric("Bearish", result.get("bearish_score", result.get("put_score", "")))
+
+            st.metric("Quality", quality)
 
         if signal in BUY_SIGNALS:
-            st.success("Trade setup active")
+            st.success("High-probability setup active")
             p1, p2, p3, p4 = st.columns(4)
             p1.metric("Entry", f"${result['entry']:.2f}")
             p2.metric("Stop", f"${result['stop']:.2f}")
@@ -718,11 +735,11 @@ def render_signal_card(symbol, result):
         with st.expander("Signal Details"):
             checks = quality_summary(result)
             q1, q2, q3, q4, q5 = st.columns(5)
-            q1.metric("VWAP", checks["VWAP"])
-            q2.metric("EMA", checks["EMA"])
-            q3.metric("RSI", checks["RSI"])
-            q4.metric("Volume", checks["Volume"])
-            q5.metric("Breakout", checks["Breakout"])
+            q1.metric("Trend", checks["Trend"])
+            q2.metric("Momentum", checks["Momentum"])
+            q3.metric("Volume", checks["Volume"])
+            q4.metric("Volatility", checks["Volatility"])
+            q5.metric("Price Action", checks["Price Action"])
 
             st.markdown("**Reasons**")
             reasons = result.get("reasons") or ["No strong setup yet"]
@@ -733,7 +750,7 @@ def render_signal_card(symbol, result):
 def render_current_scanner(latest_results):
     st.markdown('<div class="section-title">Scanner</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="section-kicker">Real-time signal groups</div>',
+        '<div class="section-kicker">Real-time opportunity groups</div>',
         unsafe_allow_html=True,
     )
     for group_name, symbols in SYMBOL_GROUPS.items():
@@ -752,7 +769,7 @@ def render_current_scanner(latest_results):
 def render_performance(history):
     stats = calculate_performance(history)
 
-    render_section_header("Performance", "Overall signal journal")
+    render_section_header("Performance", "Overall setup journal")
     p1, p2, p3, p4 = st.columns(4)
     p1.metric("Total Signals", stats["total"])
     p2.metric("Open Trades", stats["open"])
@@ -836,10 +853,10 @@ def render_open_trades(history, current_prices):
 
 
 def render_signal_history(history):
-    render_section_header("Signal History", "Most recent logged buy signals")
+    render_section_header("Setup History", "Most recent high-score setups")
 
     if len(history) == 0:
-        render_empty_state("No BUY signals logged yet.")
+        render_empty_state("No high-score setups logged yet.")
         return
 
     display_history = history.copy()

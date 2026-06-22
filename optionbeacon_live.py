@@ -37,6 +37,13 @@ def get_data(symbol):
 def add_indicators(df):
     df["EMA9"] = df["Close"].ewm(span=9, adjust=False).mean()
     df["EMA21"] = df["Close"].ewm(span=21, adjust=False).mean()
+    df["EMA20"] = df["Close"].ewm(span=20, adjust=False).mean()
+    df["EMA50"] = df["Close"].ewm(span=50, adjust=False).mean()
+    df["EMA200"] = df["Close"].ewm(span=200, adjust=False).mean()
+
+    df["MACD"] = df["Close"].ewm(span=12, adjust=False).mean() - df["Close"].ewm(span=26, adjust=False).mean()
+    df["MACD_SIGNAL"] = df["MACD"].ewm(span=9, adjust=False).mean()
+    df["MACD_HIST"] = df["MACD"] - df["MACD_SIGNAL"]
 
     delta = df["Close"].diff()
     gain = delta.where(delta > 0, 0).rolling(14).mean()
@@ -47,6 +54,13 @@ def add_indicators(df):
     typical_price = (df["High"] + df["Low"] + df["Close"]) / 3
     df["VWAP"] = (typical_price * df["Volume"]).cumsum() / df["Volume"].cumsum()
     df["AVG_VOLUME_20"] = df["Volume"].rolling(20).mean()
+
+    high_low = df["High"] - df["Low"]
+    high_close = (df["High"] - df["Close"].shift()).abs()
+    low_close = (df["Low"] - df["Close"].shift()).abs()
+    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    df["ATR"] = true_range.rolling(14).mean()
+    df["AVG_ATR_20"] = df["ATR"].rolling(20).mean()
 
     return df.dropna()
 
@@ -75,14 +89,15 @@ def print_signal(result):
 
     print(f"Confidence: {result['confidence']}%")
     print(f"Price: ${result['price']:.2f}")
-    print(f"CALL Score: {result['call_score']}")
-    print(f"PUT Score: {result['put_score']}")
+    print(f"Bullish Score: {result['bullish_score']}")
+    print(f"Bearish Score: {result['bearish_score']}")
     print(f"RSI: {result['rsi']:.2f}")
     print(f"VWAP: ${result['vwap']:.2f}")
-    print(f"EMA9: ${result['ema9']:.2f}")
-    print(f"EMA21: ${result['ema21']:.2f}")
+    print(f"EMA20: ${result['ema20']:.2f}")
+    print(f"EMA50: ${result['ema50']:.2f}")
+    print(f"EMA200: ${result['ema200']:.2f}")
 
-    if result["signal"] != "WAIT":
+    if result["signal"] not in ["WATCHLIST", "MARKET CLOSED / WAIT"]:
         print("\nTRADE PLAN")
         print(f"Entry: ${result['entry']:.2f}")
         print(f"Stop: ${result['stop']:.2f}")
@@ -101,7 +116,7 @@ def log_signal(result):
     if result is None:
         return
 
-    if result["signal"] in ["WAIT", "MARKET CLOSED / WAIT"]:
+    if result["signal"] in ["WATCHLIST", "MARKET CLOSED / WAIT"]:
         return
 
     row = {
@@ -118,8 +133,9 @@ def log_signal(result):
         "put_score": result["put_score"],
         "rsi": round(result["rsi"], 2),
         "vwap": round(result["vwap"], 2),
-        "ema9": round(result["ema9"], 2),
-        "ema21": round(result["ema21"], 2),
+        "ema20": round(result["ema20"], 2),
+        "ema50": round(result["ema50"], 2),
+        "ema200": round(result["ema200"], 2),
         "status": "OPEN",
     }
 
