@@ -1,6 +1,18 @@
 import yfinance as yf
 import pandas as pd
 
+from optionbeacon_strategy import (
+    BREAKEVEN_TRIGGER,
+    BREAKOUT_BUFFER_DOWN,
+    BREAKOUT_BUFFER_UP,
+    DEFAULT_CALL_SCORE_THRESHOLD,
+    DEFAULT_PUT_SCORE_THRESHOLD,
+    STOP_PERCENT,
+    TARGET_PERCENT,
+    VOLUME_MULTIPLIER,
+    score_candle as score_strategy_candle,
+)
+
 ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
 STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
 SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
@@ -8,21 +20,10 @@ SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
 PERIOD = "60d"
 INTERVAL = "5m"
 
-CALL_SCORE_THRESHOLD = 90
-PUT_SCORE_THRESHOLD = 75
+CALL_SCORE_THRESHOLD = DEFAULT_CALL_SCORE_THRESHOLD
+PUT_SCORE_THRESHOLD = DEFAULT_PUT_SCORE_THRESHOLD
 
 MAX_HOLD_CANDLES = 48
-
-STOP_PERCENT = 0.0025
-TARGET_PERCENT = 0.0050
-BREAKEVEN_TRIGGER = 0.0040
-
-BREAKOUT_BUFFER_UP = 1.0003
-BREAKOUT_BUFFER_DOWN = 0.9997
-
-VOLUME_MULTIPLIER = 1.40
-BREAKOUT_VOLUME_MULTIPLIER = 1.05
-EMA_GAP_MIN = 0.0003
 
 
 def get_data(symbol):
@@ -51,85 +52,25 @@ def add_indicators(df):
     return df.dropna()
 
 
-def is_trade_time(timestamp):
-    t = timestamp.time()
-
-    if t.hour < 9:
-        return False
-
-    if t.hour == 9 and t.minute < 45:
-        return False
-
-    if t.hour >= 15:
-        return False
-
-    return True
-
-
 def score_candle(
     df,
     i,
     call_score_threshold=CALL_SCORE_THRESHOLD,
     put_score_threshold=PUT_SCORE_THRESHOLD,
+    symbol="",
 ):
-    candle = df.iloc[i]
+    result = score_strategy_candle(
+        df,
+        i,
+        symbol,
+        call_score_threshold=call_score_threshold,
+        put_score_threshold=put_score_threshold,
+    )
 
-    if not is_trade_time(df.index[i]):
-        return "WAIT", 0, float(candle["Close"])
+    if result["signal"] == "MARKET CLOSED / WAIT":
+        return "WAIT", 0, result["price"]
 
-    previous_3 = df.iloc[i - 3:i]
-
-    price = float(candle["Close"])
-    volume = int(candle["Volume"])
-    avg_volume = float(candle["AVG_VOLUME_20"])
-
-    prior_15_high = float(previous_3["High"].max())
-    prior_15_low = float(previous_3["Low"].min())
-
-    call_score = 0
-    put_score = 0
-
-    if price > candle["VWAP"]:
-        call_score += 25
-    elif price < candle["VWAP"]:
-        put_score += 25
-
-    ema_gap = abs(candle["EMA9"] - candle["EMA21"]) / price
-
-    if candle["EMA9"] > candle["EMA21"] and ema_gap > EMA_GAP_MIN:
-        call_score += 25
-    elif candle["EMA9"] < candle["EMA21"] and ema_gap > EMA_GAP_MIN:
-        put_score += 25
-
-    if (
-        price > prior_15_high * BREAKOUT_BUFFER_UP
-        and volume > avg_volume * BREAKOUT_VOLUME_MULTIPLIER
-    ):
-        call_score += 20
-
-    if (
-        price < prior_15_low * BREAKOUT_BUFFER_DOWN
-        and volume > avg_volume * BREAKOUT_VOLUME_MULTIPLIER
-    ):
-        put_score += 20
-
-    if 52 <= candle["RSI"] <= 70:
-        call_score += 15
-
-    if candle["RSI"] < 50:
-        put_score += 15
-
-    if volume > avg_volume * VOLUME_MULTIPLIER:
-        call_score += 15
-        put_score += 15
-
-    if call_score >= call_score_threshold and call_score > put_score:
-        return "BUY CALL", call_score, price
-
-    if put_score >= put_score_threshold and put_score > call_score:
-        return "BUY PUT", put_score, price
-
-    return "WAIT", max(call_score, put_score), price
+    return result["signal"], result["confidence"], result["price"]
 
 
 def grade_trade(df, entry_index, signal, entry_price):
@@ -200,6 +141,7 @@ def backtest_symbol(
             i,
             call_score_threshold=call_score_threshold,
             put_score_threshold=put_score_threshold,
+            symbol=symbol,
         )
 
         if signal != "WAIT":
@@ -342,8 +284,6 @@ def main():
     print(f"Breakout Buffer Up: {BREAKOUT_BUFFER_UP}")
     print(f"Breakout Buffer Down: {BREAKOUT_BUFFER_DOWN}")
     print(f"Volume Multiplier: {VOLUME_MULTIPLIER}")
-    print(f"Breakout Volume Multiplier: {BREAKOUT_VOLUME_MULTIPLIER}")
-    print(f"EMA Gap Minimum: {EMA_GAP_MIN}")
     print(f"Breakeven Trigger: {BREAKEVEN_TRIGGER * 100:.2f}%")
 
     for symbol in SYMBOLS:
