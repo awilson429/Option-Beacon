@@ -66,7 +66,12 @@ def is_trade_time(timestamp):
     return True
 
 
-def score_candle(df, i):
+def score_candle(
+    df,
+    i,
+    call_score_threshold=CALL_SCORE_THRESHOLD,
+    put_score_threshold=PUT_SCORE_THRESHOLD,
+):
     candle = df.iloc[i]
 
     if not is_trade_time(df.index[i]):
@@ -118,10 +123,10 @@ def score_candle(df, i):
         call_score += 15
         put_score += 15
 
-    if call_score >= CALL_SCORE_THRESHOLD and call_score > put_score:
+    if call_score >= call_score_threshold and call_score > put_score:
         return "BUY CALL", call_score, price
 
-    if put_score >= PUT_SCORE_THRESHOLD and put_score > call_score:
+    if put_score >= put_score_threshold and put_score > call_score:
         return "BUY PUT", put_score, price
 
     return "WAIT", max(call_score, put_score), price
@@ -178,14 +183,24 @@ def grade_trade(df, entry_index, signal, entry_price):
     return "TIME EXIT", float(df.iloc[final_index]["Close"])
 
 
-def backtest_symbol(symbol):
-    df = add_indicators(get_data(symbol))
+def backtest_symbol(
+    symbol,
+    call_score_threshold=CALL_SCORE_THRESHOLD,
+    put_score_threshold=PUT_SCORE_THRESHOLD,
+    prepared_data=None,
+):
+    df = prepared_data if prepared_data is not None else add_indicators(get_data(symbol))
 
     trades = []
     i = 25
 
     while i < len(df):
-        signal, score, price = score_candle(df, i)
+        signal, score, price = score_candle(
+            df,
+            i,
+            call_score_threshold=call_score_threshold,
+            put_score_threshold=put_score_threshold,
+        )
 
         if signal != "WAIT":
             result, exit_price = grade_trade(df, i, signal, price)

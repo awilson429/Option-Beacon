@@ -30,3 +30,18 @@ APP_ACCESS_CODE = "choose-a-strong-private-code"
 ```
 
 If `APP_ACCESS_CODE` is missing, the app remains publicly viewable.
+
+## Threshold optimizer
+
+Run the optimizer locally to compare per-ticker call and put score thresholds before changing the live scanner:
+
+```bash
+python optimize_thresholds.py
+```
+
+It writes:
+
+- `threshold_optimizer_results.csv`
+- `threshold_recommendations.csv`
+
+These generated files are ignored by Git.

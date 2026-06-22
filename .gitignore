@@ -7,6 +7,8 @@ __pycache__/
 
 signal_history.csv
 optionbeacon_live_signals.csv
+threshold_optimizer_results.csv
+threshold_recommendations.csv
 
 .DS_Store
 Thumbs.db
