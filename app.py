@@ -626,22 +626,43 @@ def render_empty_state(message):
     st.markdown(f'<div class="empty-state">{message}</div>', unsafe_allow_html=True)
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_generate_signal(symbol):
+    try:
+        return generate_signal(symbol), ""
+    except Exception as exc:
+        return None, str(exc)
+
+
 def scan_symbols():
     current_prices = {}
     latest_results = {}
     market_open = is_market_open_now()
 
     for symbol in SYMBOLS:
-        result = generate_signal(symbol)
+        result, error = cached_generate_signal(symbol)
 
         if result is None:
+            if error:
+                latest_results[symbol] = {
+                    "symbol": symbol,
+                    "signal": "DATA UNAVAILABLE",
+                    "price": None,
+                    "confidence": 0,
+                    "call_score": "",
+                    "put_score": "",
+                    "reasons": [f"Data unavailable: {error}"],
+                }
             continue
 
         if not market_open:
             result = {**result, "signal": "MARKET CLOSED / WAIT"}
 
         latest_results[symbol] = result
-        current_prices[symbol] = result.get("price", 0)
+        price = result.get("price")
+
+        if price:
+            current_prices[symbol] = price
 
         if market_open:
             added, row = add_new_signal(result)
@@ -662,7 +683,7 @@ def render_signal_card(symbol, result):
             return
 
         signal = result.get("signal", "UNKNOWN")
-        price = result.get("price", 0)
+        price = result.get("price")
         confidence = result.get("confidence", 0)
 
         st.markdown(
@@ -673,7 +694,7 @@ def render_signal_card(symbol, result):
             f"""
             <div class="price-metric">
                 <div class="price-label">Price</div>
-                <div class="price-value">${price:.2f}</div>
+                <div class="price-value">{f"${price:.2f}" if price else "N/A"}</div>
             </div>
             """,
             unsafe_allow_html=True,

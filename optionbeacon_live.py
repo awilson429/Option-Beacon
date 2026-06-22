@@ -25,7 +25,17 @@ SCAN_SECONDS = 300  # 5 minutes
 
 
 def get_data(symbol):
-    df = yf.download(symbol, period=PERIOD, interval=INTERVAL, progress=False)
+    try:
+        df = yf.download(
+            symbol,
+            period=PERIOD,
+            interval=INTERVAL,
+            progress=False,
+            threads=False,
+            timeout=10,
+        )
+    except TypeError:
+        df = yf.download(symbol, period=PERIOD, interval=INTERVAL, progress=False)
 
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
