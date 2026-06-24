@@ -59,7 +59,7 @@ def scanner_unavailable(symbol, message):
 def main():
     if os.getenv("OPTION_BEACON_TEST_ALERT", "").lower() == "true":
         test_time = eastern_now().strftime("%I:%M %p ET")
-        sent, status = send_sms_message(f"Option Beacon test alert: SPY-Bullish @ {test_time}")
+        sent, status = send_sms_message(f"Option Beacon test alert: SPY-Bullish 92/100 @ {test_time}")
         print(f"Test alert: {status}")
         if not sent:
             raise RuntimeError(status)
