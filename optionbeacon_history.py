@@ -3,6 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from pandas.errors import EmptyDataError
 
 from optionbeacon_snapshot import REMOTE_DATA_BASE_URL
 
@@ -30,11 +31,14 @@ def eastern_now():
 
 def load_high_score_history():
     if os.path.exists(HIGH_SCORE_FILE):
-        history = pd.read_csv(HIGH_SCORE_FILE, dtype=str)
-        for col in HIGH_SCORE_COLUMNS:
-            if col not in history.columns:
-                history[col] = ""
-        return history[HIGH_SCORE_COLUMNS]
+        try:
+            history = pd.read_csv(HIGH_SCORE_FILE, dtype=str)
+            for col in HIGH_SCORE_COLUMNS:
+                if col not in history.columns:
+                    history[col] = ""
+            return history[HIGH_SCORE_COLUMNS]
+        except EmptyDataError:
+            return pd.DataFrame(columns=HIGH_SCORE_COLUMNS)
 
     try:
         history = pd.read_csv(REMOTE_HIGH_SCORE_URL, dtype=str)
@@ -42,7 +46,7 @@ def load_high_score_history():
             if col not in history.columns:
                 history[col] = ""
         return history[HIGH_SCORE_COLUMNS]
-    except Exception:
+    except (EmptyDataError, Exception):
         pass
 
     return pd.DataFrame(columns=HIGH_SCORE_COLUMNS)
