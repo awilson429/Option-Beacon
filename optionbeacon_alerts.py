@@ -13,9 +13,18 @@ def twilio_configured():
     return all(os.getenv(key) for key in REQUIRED_ENV_KEYS)
 
 
+def alert_phone_numbers():
+    raw_numbers = os.getenv("ALERT_TO_PHONE_NUMBER", "")
+    return [number.strip() for number in raw_numbers.split(",") if number.strip()]
+
+
 def send_sms_message(body):
     if not twilio_configured():
         return False, "Twilio environment variables not configured"
+
+    recipients = alert_phone_numbers()
+    if not recipients:
+        return False, "No alert phone numbers configured"
 
     try:
         from twilio.rest import Client
@@ -23,12 +32,17 @@ def send_sms_message(body):
         return False, "Twilio package not installed"
 
     client = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
-    message = client.messages.create(
-        body=body,
-        from_=os.getenv("TWILIO_PHONE_NUMBER"),
-        to=os.getenv("ALERT_TO_PHONE_NUMBER"),
-    )
-    return True, f"Sent {message.sid}"
+    sent_ids = []
+
+    for recipient in recipients:
+        message = client.messages.create(
+            body=body,
+            from_=os.getenv("TWILIO_PHONE_NUMBER"),
+            to=recipient,
+        )
+        sent_ids.append(message.sid)
+
+    return True, f"Sent {len(sent_ids)} message(s): {', '.join(sent_ids)}"
 
 
 def format_high_score_alert(row, previous_bias=None):

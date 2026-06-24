@@ -37,6 +37,12 @@ TWILIO_PHONE_NUMBER = "+15555550100"
 ALERT_TO_PHONE_NUMBER = "+15555550101"
 ```
 
+To alert multiple phones, separate the destination numbers with commas:
+
+```toml
+ALERT_TO_PHONE_NUMBER = "+15555550101,+15555550102"
+```
+
 Alerts are intentionally limited. A symbol can text when it first becomes a high-score reading, then again when its high-score bias flips between Bullish and Bearish.
 
 ## Threshold optimizer
