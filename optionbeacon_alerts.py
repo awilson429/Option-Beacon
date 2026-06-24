@@ -21,7 +21,7 @@ def format_trade_alert(result):
     )
 
 
-def send_trade_alert(result, secrets):
+def send_sms_message(body, secrets):
     if not twilio_configured(secrets):
         return False, "Twilio secrets not configured"
 
@@ -32,8 +32,16 @@ def send_trade_alert(result, secrets):
 
     client = Client(secrets["TWILIO_ACCOUNT_SID"], secrets["TWILIO_AUTH_TOKEN"])
     message = client.messages.create(
-        body=format_trade_alert(result),
+        body=body,
         from_=secrets["TWILIO_PHONE_NUMBER"],
         to=secrets["ALERT_TO_PHONE_NUMBER"],
     )
     return True, f"Sent {message.sid}"
+
+
+def send_trade_alert(result, secrets):
+    return send_sms_message(format_trade_alert(result), secrets)
+
+
+def send_test_alert(secrets):
+    return send_sms_message("Option Beacon SMS test: alerts are configured and ready.", secrets)

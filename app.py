@@ -1,10 +1,11 @@
 from datetime import time
+from html import escape
 
 import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from optionbeacon_alerts import send_trade_alert, twilio_configured
+from optionbeacon_alerts import send_test_alert, send_trade_alert, twilio_configured
 from optionbeacon_history import add_new_signal, eastern_now, mark_alert_status, update_open_signals
 from optionbeacon_live import generate_signal
 from optionbeacon_stats import calculate_performance, calculate_symbol_stats, open_trade_pnl
@@ -120,6 +121,41 @@ def quality_summary(result):
         "Volatility": "WAIT",
         "Price Action": "PASS" if "breakout" in reasons or "breakdown" in reasons else "WAIT",
     }
+
+
+def score_value(result, key):
+    try:
+        return int(result.get(key, 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def opportunity_rows(latest_results, direction, limit=3):
+    score_key = "bullish_score" if direction == "Bullish" else "bearish_score"
+    signal_name = "BULLISH SETUP" if direction == "Bullish" else "BEARISH SETUP"
+    rows = []
+
+    for symbol, result in latest_results.items():
+        if not result or result.get("signal") == "DATA UNAVAILABLE":
+            continue
+
+        score = score_value(result, score_key)
+        if score <= 0:
+            continue
+
+        rows.append(
+            {
+                "symbol": symbol,
+                "score": score,
+                "signal": result.get("signal", "WATCHLIST"),
+                "is_active": result.get("signal") == signal_name,
+                "price": result.get("price"),
+                "quality": result.get("quality", setup_grade(score)),
+                "reasons": result.get("reasons", []),
+            }
+        )
+
+    return sorted(rows, key=lambda row: (row["is_active"], row["score"]), reverse=True)[:limit]
 
 
 def configure_page():
@@ -447,6 +483,44 @@ def configure_page():
             margin-top: 0.15rem;
         }
 
+        .opportunity-row {
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: minmax(4rem, 0.8fr) minmax(5rem, 0.8fr) minmax(5rem, 0.8fr) 1fr;
+            padding: 0.75rem 0;
+        }
+
+        .opportunity-row:last-child {
+            border-bottom: 0;
+        }
+
+        .opportunity-symbol {
+            color: var(--ob-text);
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .opportunity-score {
+            color: var(--ob-gold);
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .opportunity-meta {
+            color: var(--ob-muted);
+            font-size: 0.88rem;
+        }
+
+        .opportunity-reason {
+            color: var(--ob-muted);
+            font-size: 0.92rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border-color: var(--ob-border);
             border-radius: 8px;
@@ -529,6 +603,14 @@ def configure_page():
             .brand-logo {
                 width: 72px;
                 height: 72px;
+            }
+
+            .opportunity-row {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .opportunity-reason {
+                grid-column: 1 / -1;
             }
         }
         </style>
@@ -685,6 +767,64 @@ def scan_symbols():
 
     history = update_open_signals(current_prices)
     return latest_results, current_prices, history
+
+
+def render_alert_test():
+    render_section_header("Alert Test", "Send one SMS to confirm Twilio")
+
+    if not twilio_configured(st.secrets):
+        render_empty_state("SMS alerts are off until Twilio secrets are added in Streamlit.")
+        return
+
+    with st.container(border=True):
+        st.write("Send a simple test text to the alert phone number.")
+        if st.button("Send SMS Test", type="primary", use_container_width=True):
+            sent, status = send_test_alert(st.secrets)
+            if sent:
+                st.success(status)
+            else:
+                st.error(status)
+
+
+def render_opportunity_list(title, rows):
+    with st.container(border=True):
+        st.markdown(f"### {title}")
+
+        if not rows:
+            render_empty_state("No scored opportunities yet.")
+            return
+
+        for row in rows:
+            price = row.get("price")
+            price_label = f"${price:.2f}" if price else "N/A"
+            status = escape("Active" if row["is_active"] else signal_label(row["signal"]))
+            reason = escape(row["reasons"][0] if row["reasons"] else "No strong reason yet")
+            symbol = escape(row["symbol"])
+            quality = escape(row["quality"])
+            st.markdown(
+                f"""
+                <div class="opportunity-row">
+                    <div class="opportunity-symbol">{symbol}</div>
+                    <div class="opportunity-score">{row["score"]}/100</div>
+                    <div class="opportunity-meta">{price_label}<br>{quality}</div>
+                    <div class="opportunity-reason">{status} - {reason}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def render_top_opportunities(latest_results):
+    render_section_header("Top Opportunities", "Highest-scoring bullish and bearish setups")
+    bullish_rows = opportunity_rows(latest_results, "Bullish")
+    bearish_rows = opportunity_rows(latest_results, "Bearish")
+    bullish_column, bearish_column = st.columns(2)
+
+    with bullish_column:
+        render_opportunity_list("Top Bullish", bullish_rows)
+
+    with bearish_column:
+        render_opportunity_list("Top Bearish", bearish_rows)
 
 
 def render_signal_card(symbol, result):
@@ -876,6 +1016,10 @@ def main():
 
     latest_results, current_prices, history = scan_symbols()
 
+    render_top_opportunities(latest_results)
+    st.divider()
+    render_alert_test()
+    st.divider()
     render_current_scanner(latest_results)
     st.divider()
     render_performance(history)
