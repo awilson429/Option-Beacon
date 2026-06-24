@@ -829,6 +829,37 @@ def render_top_opportunities(latest_results):
         render_opportunity_list("Top Bearish", bearish_rows)
 
 
+def render_score_guide():
+    render_section_header("Score Guide", "How to read bullish and bearish setup scores")
+    guide_rows = [
+        {
+            "Score Range": "90-100",
+            "Meaning": "High-probability setup",
+            "Action": "Alert-worthy. Review the setup, price levels, and risk before paper trading.",
+        },
+        {
+            "Score Range": "80-89",
+            "Meaning": "Strong watchlist candidate",
+            "Action": "Worth watching closely. Wait for confirmation or a stronger score before acting.",
+        },
+        {
+            "Score Range": "70-79",
+            "Meaning": "Developing setup",
+            "Action": "Early signal only. Monitor trend, volume, and price action.",
+        },
+        {
+            "Score Range": "Below 70",
+            "Meaning": "Weak or mixed setup",
+            "Action": "Usually no action. Conditions are not aligned enough.",
+        },
+    ]
+    st.dataframe(pd.DataFrame(guide_rows), use_container_width=True, hide_index=True)
+    st.markdown(
+        '<div class="notice notice-info">Bullish and bearish scores are decision-support signals, not automatic trade instructions. A higher score means more scanner conditions are aligned.</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_signal_card(symbol, result):
     with st.container(border=True):
         st.markdown(f'<div class="ticker-title">{symbol}</div>', unsafe_allow_html=True)
@@ -1019,6 +1050,8 @@ def main():
     latest_results, current_prices, history = scan_symbols()
 
     render_top_opportunities(latest_results)
+    st.divider()
+    render_score_guide()
     st.divider()
     render_alert_test()
     st.divider()
