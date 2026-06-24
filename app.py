@@ -5,8 +5,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from optionbeacon_alerts import send_test_alert, send_trade_alert, twilio_configured
-from optionbeacon_history import add_new_signal, eastern_now, mark_alert_status, update_open_signals
+from optionbeacon_history import add_new_signal, eastern_now, update_open_signals
 from optionbeacon_live import generate_signal
 from optionbeacon_stats import calculate_performance, calculate_symbol_stats, open_trade_pnl
 
@@ -330,11 +329,6 @@ def configure_page():
         .pill-closed {
             border-color: rgba(255, 255, 255, 0.18);
             color: var(--ob-muted);
-        }
-
-        .pill-sms {
-            border-color: rgba(216, 179, 90, 0.55);
-            color: var(--ob-gold);
         }
 
         .signal-pill {
@@ -666,7 +660,6 @@ def render_header():
     market_status = "Market Open" if market_open else "Market Closed"
     market_class = "pill-open" if market_open else "pill-closed"
     refreshed_at = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-    sms_status = "SMS On" if twilio_configured(st.secrets) else "SMS Off"
     access_status = "Private" if app_access_configured() else "Public"
 
     st.markdown(
@@ -686,7 +679,6 @@ def render_header():
                     </div>
                     <div class="status-secondary">
                         <span class="pill pill-secondary">Refresh 1 min</span>
-                        <span class="pill pill-secondary pill-sms">{sms_status}</span>
                         <span class="pill pill-secondary">{access_status}</span>
                     </div>
                 </div>
@@ -701,12 +693,6 @@ def render_header():
         '<div class="notice notice-warning">Paper-trading dashboard only. Not financial advice.</div>',
         unsafe_allow_html=True,
     )
-
-    if not twilio_configured(st.secrets):
-        st.markdown(
-            '<div class="notice notice-info">SMS alerts are off until Twilio secrets are added in Streamlit.</div>',
-            unsafe_allow_html=True,
-        )
 
 
 def render_section_header(title, kicker=None):
@@ -762,30 +748,10 @@ def scan_symbols():
             current_prices[symbol] = price
 
         if market_open:
-            added, row = add_new_signal(result)
-            if added and result["signal"] in BUY_SIGNALS:
-                sent, alert_status = send_trade_alert(result, st.secrets)
-                mark_alert_status(row, sent=sent, status=alert_status)
+            add_new_signal(result)
 
     history = update_open_signals(current_prices)
     return latest_results, current_prices, history
-
-
-def render_alert_test():
-    render_section_header("Alert Test", "Send one SMS to confirm Twilio")
-
-    if not twilio_configured(st.secrets):
-        render_empty_state("SMS alerts are off until Twilio secrets are added in Streamlit.")
-        return
-
-    with st.container(border=True):
-        st.write("Send a simple test text to the alert phone number.")
-        if st.button("Send SMS Test", type="primary", use_container_width=True):
-            sent, status = send_test_alert(st.secrets)
-            if sent:
-                st.success(status)
-            else:
-                st.error(status)
 
 
 def render_opportunity_list(title, rows):
@@ -1052,8 +1018,6 @@ def main():
     render_top_opportunities(latest_results)
     st.divider()
     render_score_guide()
-    st.divider()
-    render_alert_test()
     st.divider()
     render_current_scanner(latest_results)
     st.divider()

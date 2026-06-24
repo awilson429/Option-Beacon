@@ -23,8 +23,6 @@ COLUMNS = [
     "exit_price",
     "exit_time",
     "pnl_percent",
-    "alert_sent",
-    "alert_status",
 ]
 
 
@@ -79,31 +77,11 @@ def add_new_signal(result):
         "exit_price": "",
         "exit_time": "",
         "pnl_percent": "",
-        "alert_sent": "False",
-        "alert_status": "",
     }
 
     updated = pd.concat([history, pd.DataFrame([new_row])], ignore_index=True)
     save_history(updated)
     return True, new_row
-
-
-def mark_alert_status(row, sent, status):
-    history = load_history()
-
-    matches = (
-        (history["timestamp"] == row["timestamp"])
-        & (history["symbol"] == row["symbol"])
-        & (history["signal"] == row["signal"])
-        & (history["status"] == "OPEN")
-    )
-
-    if not matches.any():
-        return
-
-    history.loc[matches, "alert_sent"] = "True" if sent else "False"
-    history.loc[matches, "alert_status"] = status
-    save_history(history)
 
 
 def update_open_signals(current_prices):

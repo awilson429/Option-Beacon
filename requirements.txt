@@ -2,5 +2,4 @@ yfinance
 pandas
 streamlit
 streamlit-autorefresh
-twilio
 pandas-market-calendars
