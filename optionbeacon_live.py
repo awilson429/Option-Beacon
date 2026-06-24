@@ -11,27 +11,46 @@ SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
 
 PERIOD = "5d"
 INTERVAL = "5m"
+DATA_PERIODS = ["5d", "10d", "1mo"]
 
 SCAN_SECONDS = 300  # 5 minutes
 
 
-def get_data(symbol):
+def download_data(symbol, period):
     try:
-        df = yf.download(
+        return yf.download(
             symbol,
-            period=PERIOD,
+            period=period,
             interval=INTERVAL,
             progress=False,
             threads=False,
             timeout=10,
         )
     except TypeError:
-        df = yf.download(symbol, period=PERIOD, interval=INTERVAL, progress=False)
+        return yf.download(symbol, period=period, interval=INTERVAL, progress=False)
 
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
 
-    return df.dropna()
+def get_data(symbol):
+    last_error = None
+
+    for period in DATA_PERIODS:
+        try:
+            df = download_data(symbol, period)
+        except Exception as exc:
+            last_error = exc
+            continue
+
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        df = df.dropna()
+        if not df.empty:
+            return df
+
+    if last_error:
+        raise RuntimeError(f"market data request failed: {last_error}")
+
+    return pd.DataFrame()
 
 
 def add_indicators(df):
@@ -66,7 +85,12 @@ def add_indicators(df):
 
 
 def generate_signal(symbol):
-    df = add_indicators(get_data(symbol))
+    raw_data = get_data(symbol)
+
+    if raw_data.empty:
+        return None
+
+    df = add_indicators(raw_data)
 
     if len(df) < 30:
         return None

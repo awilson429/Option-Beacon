@@ -738,19 +738,21 @@ def scan_symbols():
         result, error = cached_generate_signal(symbol)
 
         if result is None:
-            if error:
-                latest_results[symbol] = {
-                    "symbol": symbol,
-                    "signal": "DATA UNAVAILABLE",
-                    "price": None,
-                    "confidence": 0,
-                    "call_score": "",
-                    "put_score": "",
-                    "reasons": [f"Data unavailable: {error}"],
-                }
+            reason = f"Data unavailable: {error}" if error else "Data unavailable: not enough recent 5-minute candles returned."
+            latest_results[symbol] = {
+                "symbol": symbol,
+                "signal": "DATA UNAVAILABLE",
+                "price": None,
+                "confidence": 0,
+                "bullish_score": 0,
+                "bearish_score": 0,
+                "call_score": "",
+                "put_score": "",
+                "reasons": [reason],
+            }
             continue
 
-        if not market_open:
+        if not market_open and result.get("signal") != "DATA UNAVAILABLE":
             result = {**result, "signal": "MARKET CLOSED / WAIT"}
 
         latest_results[symbol] = result
