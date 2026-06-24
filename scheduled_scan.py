@@ -1,8 +1,9 @@
+import os
 from datetime import time
 
 import pandas as pd
 
-from optionbeacon_alerts import send_high_score_alert, twilio_configured
+from optionbeacon_alerts import send_high_score_alert, send_sms_message, twilio_configured
 from optionbeacon_history import (
     add_high_score_snapshot,
     eastern_now,
@@ -56,6 +57,13 @@ def scanner_unavailable(symbol, message):
 
 
 def main():
+    if os.getenv("OPTION_BEACON_TEST_ALERT", "").lower() == "true":
+        sent, status = send_sms_message("Option Beacon test alert: SMS alerts are configured.")
+        print(f"Test alert: {status}")
+        if not sent:
+            raise RuntimeError(status)
+        return
+
     if not is_market_open_now():
         print("Market is closed. Skipping scheduled scan.")
         return
