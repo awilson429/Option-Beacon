@@ -24,7 +24,7 @@ The dashboard can read `latest_results.json` and `high_score_history.csv` when t
 
 The workflow is defined in `.github/workflows/scheduled-scan.yml` and runs every five minutes on weekdays during a broad market-hours UTC window. The Python script still checks the NYSE calendar before scanning, so holidays and closed-market periods are skipped.
 
-If GitHub branch protection blocks the workflow from committing scanner data, allow GitHub Actions to write scanner data or move the data store to a small database later.
+Scanner data is published to a separate `scanner-data` branch so the protected app code on `main` does not need automated data commits. If the repository is private and Streamlit cannot read raw files from that branch, move the data store to a small database later.
 
 ## Threshold optimizer
 

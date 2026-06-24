@@ -4,8 +4,11 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from optionbeacon_snapshot import REMOTE_DATA_BASE_URL
+
 
 HIGH_SCORE_FILE = "high_score_history.csv"
+REMOTE_HIGH_SCORE_URL = f"{REMOTE_DATA_BASE_URL}/{HIGH_SCORE_FILE}"
 
 HIGH_SCORE_THRESHOLD = 80
 
@@ -32,6 +35,15 @@ def load_high_score_history():
             if col not in history.columns:
                 history[col] = ""
         return history[HIGH_SCORE_COLUMNS]
+
+    try:
+        history = pd.read_csv(REMOTE_HIGH_SCORE_URL, dtype=str)
+        for col in HIGH_SCORE_COLUMNS:
+            if col not in history.columns:
+                history[col] = ""
+        return history[HIGH_SCORE_COLUMNS]
+    except Exception:
+        pass
 
     return pd.DataFrame(columns=HIGH_SCORE_COLUMNS)
 
