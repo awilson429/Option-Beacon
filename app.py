@@ -5,9 +5,8 @@ import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from optionbeacon_history import add_new_signal, eastern_now, update_open_signals
+from optionbeacon_history import add_high_score_snapshot, eastern_now, load_high_score_history
 from optionbeacon_live import generate_signal
-from optionbeacon_stats import calculate_performance, calculate_symbol_stats, open_trade_pnl
 
 
 ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
@@ -17,7 +16,6 @@ SYMBOL_GROUPS = {
     "Single Stock Scanner": STOCK_SYMBOLS,
 }
 SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
-BUY_SIGNALS = {"BUY CALL", "BUY PUT", "BULLISH SETUP", "BEARISH SETUP"}
 LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-381bdd4d9924/OptionBeaconLLC%20Logo%20V2.png"
 
 
@@ -58,16 +56,6 @@ def setup_grade(confidence):
     return "WAIT"
 
 
-def status_badge(status):
-    badges = {
-        "WIN": "WIN",
-        "LOSS": "LOSS",
-        "BREAKEVEN": "BREAKEVEN",
-        "OPEN": "OPEN",
-    }
-    return badges.get(status, status)
-
-
 def signal_label(signal):
     labels = {
         "BUY CALL": "BUY CALL",
@@ -88,18 +76,6 @@ def signal_class(signal):
     if signal in ["BUY PUT", "BEARISH SETUP"]:
         return "signal-put"
     return "signal-wait"
-
-
-def symbol_category(symbol):
-    if symbol in ETF_SYMBOLS:
-        return "ETF"
-    if symbol in STOCK_SYMBOLS:
-        return "Stock"
-    return "Other"
-
-
-def filter_history_by_symbols(history, symbols):
-    return history[history["symbol"].isin(symbols)]
 
 
 def quality_summary(result):
@@ -716,7 +692,6 @@ def cached_generate_signal(symbol):
 
 
 def scan_symbols():
-    current_prices = {}
     latest_results = {}
     market_open = is_market_open_now()
 
@@ -742,16 +717,12 @@ def scan_symbols():
             result = {**result, "signal": "MARKET CLOSED / WAIT"}
 
         latest_results[symbol] = result
-        price = result.get("price")
 
-        if price:
-            current_prices[symbol] = price
+        if market_open and result.get("signal") != "MARKET CLOSED / WAIT":
+            add_high_score_snapshot(result)
 
-        if market_open:
-            add_new_signal(result)
-
-    history = update_open_signals(current_prices)
-    return latest_results, current_prices, history
+    history = load_high_score_history()
+    return latest_results, history
 
 
 def render_opportunity_list(title, rows):
@@ -863,7 +834,7 @@ def render_signal_card(symbol, result):
 
             st.metric("Quality", quality)
 
-        if signal in BUY_SIGNALS:
+        if signal in ["BULLISH SETUP", "BEARISH SETUP"]:
             st.success("High-probability setup active")
             p1, p2, p3, p4 = st.columns(4)
             p1.metric("Entry", f"${result['entry']:.2f}")
@@ -905,102 +876,26 @@ def render_current_scanner(latest_results):
                     render_signal_card(symbol, latest_results.get(symbol))
 
 
-def render_performance(history):
-    stats = calculate_performance(history)
-
-    render_section_header("Performance", "Overall setup journal")
-    p1, p2, p3, p4 = st.columns(4)
-    p1.metric("Total Signals", stats["total"])
-    p2.metric("Open Trades", stats["open"])
-    p3.metric("Win Rate", f"{stats['win_rate']:.2f}%")
-    p4.metric("Profit Factor", f"{stats['profit_factor']:.2f}")
-
-    p5, p6, p7, p8 = st.columns(4)
-    p5.metric("Wins", stats["wins"])
-    p6.metric("Losses", stats["losses"])
-    p7.metric("Breakevens", stats["breakevens"])
-    p8.metric("Total P/L", f"{stats['total_pnl']:.3f}%")
-
-    st.markdown(
-        '<div class="section-subtitle"><span>Group Performance</span>'
-        '<span class="section-count">ETF vs Stock</span></div>',
-        unsafe_allow_html=True,
-    )
-    group_columns = st.columns(2)
-    for column, (label, symbols) in zip(group_columns, SYMBOL_GROUPS.items()):
-        group_stats = calculate_performance(filter_history_by_symbols(history, symbols))
-        with column:
-            with st.container(border=True):
-                st.markdown(f"### {label}")
-                a, b, c = st.columns(3)
-                a.metric("Signals", group_stats["total"])
-                b.metric("Win Rate", f"{group_stats['win_rate']:.2f}%")
-                c.metric("Profit Factor", f"{group_stats['profit_factor']:.2f}")
-
-
-def render_symbol_stats(history):
-    render_section_header("Symbol Stats", "Performance by ticker")
-    for group_name, symbols in SYMBOL_GROUPS.items():
-        st.markdown(
-            f'<div class="section-subtitle"><span>{group_name}</span>'
-            f'<span class="section-count">{len(symbols)} Symbols</span></div>',
-            unsafe_allow_html=True,
-        )
-        for row_start in range(0, len(symbols), 2):
-            columns = st.columns(2)
-            for column, symbol in zip(columns, symbols[row_start:row_start + 2]):
-                symbol_stats = calculate_symbol_stats(history, symbol)
-                with column:
-                    with st.container(border=True):
-                        st.markdown(f"### {symbol}")
-                        a, b, c = st.columns(3)
-                        a.metric("Signals", symbol_stats["signals"])
-                        b.metric("Win Rate", f"{symbol_stats['win_rate']:.2f}%")
-                        c.metric("Profit Factor", f"{symbol_stats['profit_factor']:.2f}")
-
-
-def render_open_trades(history, current_prices):
-    render_section_header("Open Trades", "Active paper setups")
-    open_trades = history[history["status"] == "OPEN"]
-
-    if len(open_trades) == 0:
-        render_empty_state("No open trades.")
-        return
-
-    rows = []
-    for _, row in open_trades.iterrows():
-        symbol = row["symbol"]
-        current_price = current_prices.get(symbol)
-        live_pnl = round(open_trade_pnl(row, current_price), 3) if current_price else ""
-
-        rows.append(
-            {
-                "Time": row["timestamp"],
-                "Group": symbol_category(symbol),
-                "Symbol": symbol,
-                "Signal": row["signal"],
-                "Entry": row["entry"],
-                "Current": round(current_price, 2) if current_price else "",
-                "Stop": row["stop"],
-                "Target": row["target"],
-                "Live P/L %": live_pnl,
-                "Status": status_badge(row["status"]),
-            }
-        )
-
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-
-def render_signal_history(history):
-    render_section_header("Setup History", "Most recent high-score setups")
+def render_recent_high_scores(history):
+    render_section_header("Recent High Scores", "Neutral log of scores at 80 or higher")
 
     if len(history) == 0:
-        render_empty_state("No high-score setups logged yet.")
+        render_empty_state("No high-score scanner readings logged yet.")
         return
 
     display_history = history.copy()
-    display_history["group"] = display_history["symbol"].apply(symbol_category)
-    display_history["status"] = display_history["status"].apply(status_badge)
+    display_history = display_history.rename(
+        columns={
+            "timestamp": "Time",
+            "symbol": "Symbol",
+            "bias": "Bias",
+            "score": "Score",
+            "signal": "State",
+            "price": "Price",
+            "quality": "Quality",
+            "reason": "Primary Reason",
+        }
+    )
     st.dataframe(
         display_history.tail(50).sort_index(ascending=False),
         use_container_width=True,
@@ -1013,7 +908,7 @@ def main():
     require_app_access()
     render_header()
 
-    latest_results, current_prices, history = scan_symbols()
+    latest_results, high_score_history = scan_symbols()
 
     render_top_opportunities(latest_results)
     st.divider()
@@ -1021,13 +916,7 @@ def main():
     st.divider()
     render_current_scanner(latest_results)
     st.divider()
-    render_performance(history)
-    st.divider()
-    render_symbol_stats(history)
-    st.divider()
-    render_open_trades(history, current_prices)
-    st.divider()
-    render_signal_history(history)
+    render_recent_high_scores(high_score_history)
     st.markdown(
         '<div class="footer-line">Option Beacon LLC - '
         '<a href="https://option-beacon.com" target="_blank">option-beacon.com</a></div>',

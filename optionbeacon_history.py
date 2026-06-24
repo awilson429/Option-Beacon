@@ -5,24 +5,19 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 
-HISTORY_FILE = "signal_history.csv"
+HIGH_SCORE_FILE = "high_score_history.csv"
 
-BUY_SIGNALS = {"BUY CALL", "BUY PUT", "BULLISH SETUP", "BEARISH SETUP"}
+HIGH_SCORE_THRESHOLD = 80
 
-COLUMNS = [
+HIGH_SCORE_COLUMNS = [
     "timestamp",
     "symbol",
+    "bias",
+    "score",
     "signal",
-    "confidence",
-    "entry",
-    "stop",
-    "target",
-    "breakeven",
-    "breakeven_active",
-    "status",
-    "exit_price",
-    "exit_time",
-    "pnl_percent",
+    "price",
+    "quality",
+    "reason",
 ]
 
 
@@ -30,130 +25,53 @@ def eastern_now():
     return datetime.now(ZoneInfo("America/New_York"))
 
 
-def load_history():
-    if os.path.exists(HISTORY_FILE):
-        history = pd.read_csv(HISTORY_FILE, dtype=str)
-        for col in COLUMNS:
+def load_high_score_history():
+    if os.path.exists(HIGH_SCORE_FILE):
+        history = pd.read_csv(HIGH_SCORE_FILE, dtype=str)
+        for col in HIGH_SCORE_COLUMNS:
             if col not in history.columns:
                 history[col] = ""
-        return history[COLUMNS]
+        return history[HIGH_SCORE_COLUMNS]
 
-    return pd.DataFrame(columns=COLUMNS)
+    return pd.DataFrame(columns=HIGH_SCORE_COLUMNS)
 
 
-def save_history(history):
-    for col in COLUMNS:
+def save_high_score_history(history):
+    for col in HIGH_SCORE_COLUMNS:
         if col not in history.columns:
             history[col] = ""
-    history[COLUMNS].to_csv(HISTORY_FILE, index=False)
+    history[HIGH_SCORE_COLUMNS].tail(250).to_csv(HIGH_SCORE_FILE, index=False)
 
 
-def add_new_signal(result):
-    if result["signal"] not in BUY_SIGNALS:
+def add_high_score_snapshot(result):
+    score = int(result.get("confidence", 0) or 0)
+    if score < HIGH_SCORE_THRESHOLD:
         return False, None
 
-    history = load_history()
+    history = load_high_score_history()
+    now_label = eastern_now().strftime("%Y-%m-%d %I:%M %p ET")
+    reason = result.get("reasons", [""])[0] if result.get("reasons") else ""
 
-    duplicate_open = history[
-        (history["symbol"] == result["symbol"])
-        & (history["signal"] == result["signal"])
-        & (history["status"] == "OPEN")
+    duplicate_recent = history[
+        (history["timestamp"] == now_label)
+        & (history["symbol"] == result["symbol"])
+        & (history["bias"] == result.get("bias", "Neutral"))
     ]
 
-    if len(duplicate_open) > 0:
+    if len(duplicate_recent) > 0:
         return False, None
 
     new_row = {
-        "timestamp": eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET"),
+        "timestamp": now_label,
         "symbol": result["symbol"],
-        "signal": result["signal"],
-        "confidence": str(result.get("confidence", "")),
-        "entry": str(round(result["entry"], 2)),
-        "stop": str(round(result["stop"], 2)),
-        "target": str(round(result["target"], 2)),
-        "breakeven": str(round(result["breakeven"], 2)),
-        "breakeven_active": "False",
-        "status": "OPEN",
-        "exit_price": "",
-        "exit_time": "",
-        "pnl_percent": "",
+        "bias": result.get("bias", "Neutral"),
+        "score": str(score),
+        "signal": result.get("signal", "WATCHLIST"),
+        "price": str(round(result["price"], 2)) if result.get("price") else "",
+        "quality": result.get("quality", ""),
+        "reason": reason,
     }
 
     updated = pd.concat([history, pd.DataFrame([new_row])], ignore_index=True)
-    save_history(updated)
+    save_high_score_history(updated)
     return True, new_row
-
-
-def update_open_signals(current_prices):
-    history = load_history()
-
-    for i, row in history.iterrows():
-        if row["status"] != "OPEN":
-            continue
-
-        symbol = row["symbol"]
-
-        if symbol not in current_prices:
-            continue
-
-        current_price = float(current_prices[symbol])
-        entry = float(row["entry"])
-        stop = float(row["stop"])
-        target = float(row["target"])
-        breakeven = float(row["breakeven"])
-        signal = row["signal"]
-
-        breakeven_active = str(row["breakeven_active"]).lower() == "true"
-
-        if signal in ["BUY CALL", "BULLISH SETUP"]:
-            if current_price >= breakeven:
-                breakeven_active = True
-                history.at[i, "breakeven_active"] = "True"
-
-            if current_price >= target:
-                pnl = ((target - entry) / entry) * 100
-                history.at[i, "status"] = "WIN"
-                history.at[i, "exit_price"] = str(round(target, 2))
-                history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-                history.at[i, "pnl_percent"] = str(round(pnl, 3))
-
-            elif breakeven_active and current_price <= entry:
-                history.at[i, "status"] = "BREAKEVEN"
-                history.at[i, "exit_price"] = str(round(entry, 2))
-                history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-                history.at[i, "pnl_percent"] = "0.0"
-
-            elif current_price <= stop:
-                pnl = ((stop - entry) / entry) * 100
-                history.at[i, "status"] = "LOSS"
-                history.at[i, "exit_price"] = str(round(stop, 2))
-                history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-                history.at[i, "pnl_percent"] = str(round(pnl, 3))
-
-        elif signal in ["BUY PUT", "BEARISH SETUP"]:
-            if current_price <= breakeven:
-                breakeven_active = True
-                history.at[i, "breakeven_active"] = "True"
-
-            if current_price <= target:
-                pnl = ((entry - target) / entry) * 100
-                history.at[i, "status"] = "WIN"
-                history.at[i, "exit_price"] = str(round(target, 2))
-                history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-                history.at[i, "pnl_percent"] = str(round(pnl, 3))
-
-            elif breakeven_active and current_price >= entry:
-                history.at[i, "status"] = "BREAKEVEN"
-                history.at[i, "exit_price"] = str(round(entry, 2))
-                history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-                history.at[i, "pnl_percent"] = "0.0"
-
-            elif current_price >= stop:
-                pnl = ((entry - stop) / entry) * 100
-                history.at[i, "status"] = "LOSS"
-                history.at[i, "exit_price"] = str(round(stop, 2))
-                history.at[i, "exit_time"] = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-                history.at[i, "pnl_percent"] = str(round(pnl, 3))
-
-    save_history(history)
-    return history
