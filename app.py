@@ -7,6 +7,7 @@ from streamlit_autorefresh import st_autorefresh
 
 from optionbeacon_history import add_high_score_snapshot, eastern_now, load_high_score_history
 from optionbeacon_live import generate_signal
+from optionbeacon_snapshot import load_latest_results
 
 
 ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
@@ -692,6 +693,10 @@ def cached_generate_signal(symbol):
 
 
 def scan_symbols():
+    snapshot_results, snapshot_time = load_latest_results()
+    if snapshot_results:
+        return snapshot_results, load_high_score_history(), snapshot_time
+
     latest_results = {}
     market_open = is_market_open_now()
 
@@ -722,7 +727,7 @@ def scan_symbols():
             add_high_score_snapshot(result)
 
     history = load_high_score_history()
-    return latest_results, history
+    return latest_results, history, None
 
 
 def render_opportunity_list(title, rows):
@@ -903,12 +908,21 @@ def render_recent_high_scores(history):
     )
 
 
+def render_data_source(snapshot_time):
+    if snapshot_time is None:
+        st.caption("Data source: live app scan")
+        return
+
+    st.caption(f"Data source: scheduled scanner snapshot from {snapshot_time.strftime('%Y-%m-%d %I:%M %p ET')}")
+
+
 def main():
     configure_page()
     require_app_access()
     render_header()
 
-    latest_results, high_score_history = scan_symbols()
+    latest_results, high_score_history, snapshot_time = scan_symbols()
+    render_data_source(snapshot_time)
 
     render_top_opportunities(latest_results)
     st.divider()

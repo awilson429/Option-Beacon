@@ -1,0 +1,43 @@
+name: Scheduled Scanner
+
+on:
+  schedule:
+    - cron: "*/5 13-22 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: option-beacon-scheduled-scan
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run scanner
+        run: python scheduled_scan.py
+
+      - name: Commit scanner data
+        run: |
+          if [[ -n "$(git status --porcelain latest_results.json high_score_history.csv)" ]]; then
+            git config user.name "option-beacon-scanner"
+            git config user.email "actions@github.com"
+            git add latest_results.json high_score_history.csv
+            git commit -m "Update scheduled scanner data"
+            git push
+          else
+            echo "No scanner data changes to commit."
+          fi
