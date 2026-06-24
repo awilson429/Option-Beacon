@@ -926,11 +926,11 @@ def main():
 
     render_top_opportunities(latest_results)
     st.divider()
+    render_recent_high_scores(high_score_history)
+    st.divider()
     render_score_guide()
     st.divider()
     render_current_scanner(latest_results)
-    st.divider()
-    render_recent_high_scores(high_score_history)
     st.markdown(
         '<div class="footer-line">Option Beacon LLC - '
         '<a href="https://option-beacon.com" target="_blank">option-beacon.com</a></div>',

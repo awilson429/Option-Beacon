@@ -2,7 +2,13 @@ from datetime import time
 
 import pandas as pd
 
-from optionbeacon_history import add_high_score_snapshot, eastern_now
+from optionbeacon_alerts import send_high_score_alert, twilio_configured
+from optionbeacon_history import (
+    add_high_score_snapshot,
+    eastern_now,
+    load_high_score_history,
+    previous_symbol_bias,
+)
 from optionbeacon_live import SYMBOLS, generate_signal
 from optionbeacon_snapshot import save_latest_results
 
@@ -55,6 +61,8 @@ def main():
         return
 
     latest_results = {}
+    high_score_history = load_high_score_history()
+    alerts_enabled = twilio_configured()
 
     for symbol in SYMBOLS:
         try:
@@ -72,7 +80,18 @@ def main():
         latest_results[symbol] = result
 
         if result.get("signal") != "DATA UNAVAILABLE":
-            add_high_score_snapshot(result)
+            previous_bias = previous_symbol_bias(high_score_history, symbol)
+            added, row = add_high_score_snapshot(result)
+
+            if added:
+                high_score_history = load_high_score_history()
+
+                should_alert = previous_bias is None or previous_bias != row["bias"]
+                if alerts_enabled and should_alert:
+                    sent, status = send_high_score_alert(row, previous_bias=previous_bias)
+                    print(f"{symbol} alert: {status}")
+                elif should_alert:
+                    print(f"{symbol} alert skipped: Twilio not configured")
 
     save_latest_results(latest_results)
     print(f"Saved scheduled scan for {len(latest_results)} symbols.")

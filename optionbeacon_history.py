@@ -55,6 +55,17 @@ def save_high_score_history(history):
     history[HIGH_SCORE_COLUMNS].tail(250).to_csv(HIGH_SCORE_FILE, index=False)
 
 
+def previous_symbol_bias(history, symbol):
+    if history.empty:
+        return None
+
+    symbol_rows = history[history["symbol"] == symbol]
+    if symbol_rows.empty:
+        return None
+
+    return symbol_rows.iloc[-1].get("bias") or None
+
+
 def add_high_score_snapshot(result):
     score = int(result.get("confidence", 0) or 0)
     if score < HIGH_SCORE_THRESHOLD:

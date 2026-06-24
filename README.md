@@ -26,6 +26,19 @@ The workflow is defined in `.github/workflows/scheduled-scan.yml` and runs every
 
 Scanner data is published to a separate `scanner-data` branch so the protected app code on `main` does not need automated data commits. If the repository is private and Streamlit cannot read raw files from that branch, move the data store to a small database later.
 
+## Scheduled SMS alerts
+
+The scheduled scanner can send Twilio SMS alerts for new high-score symbols and bias reversals. Add these as GitHub Actions repository secrets, not committed files:
+
+```toml
+TWILIO_ACCOUNT_SID = "your-account-sid"
+TWILIO_AUTH_TOKEN = "your-auth-token"
+TWILIO_PHONE_NUMBER = "+15555550100"
+ALERT_TO_PHONE_NUMBER = "+15555550101"
+```
+
+Alerts are intentionally limited. A symbol can text when it first becomes a high-score reading, then again when its high-score bias flips between Bullish and Bearish.
+
 ## Threshold optimizer
 
 Run the optimizer locally to compare per-ticker call and put score thresholds before changing the live scanner:
