@@ -64,6 +64,7 @@ def signal_label(signal):
         "BULLISH SETUP": "BULLISH SETUP",
         "BEARISH SETUP": "BEARISH SETUP",
         "MARKET CLOSED / WAIT": "MARKET CLOSED",
+        "WAITING FOR CANDLE": "WAITING FOR CANDLE",
         "WAIT": "WATCHLIST",
         "WATCHLIST": "WATCHLIST",
         "DATA UNAVAILABLE": "DATA UNAVAILABLE",
@@ -740,13 +741,25 @@ def cached_generate_signal(symbol):
         return None, str(exc)
 
 
+def normalize_market_signal(result, market_open):
+    if result.get("signal") == "MARKET CLOSED / WAIT" and market_open:
+        return {**result, "signal": "WAITING FOR CANDLE"}
+    if not market_open and result.get("signal") != "DATA UNAVAILABLE":
+        return {**result, "signal": "MARKET CLOSED / WAIT"}
+    return result
+
+
 def scan_symbols():
+    market_open = is_market_open_now()
     snapshot_results, snapshot_time = load_latest_results()
     if snapshot_results:
+        snapshot_results = {
+            symbol: normalize_market_signal(result, market_open)
+            for symbol, result in snapshot_results.items()
+        }
         return snapshot_results, load_high_score_history(), snapshot_time
 
     latest_results = {}
-    market_open = is_market_open_now()
 
     for symbol in SYMBOLS:
         result, error = cached_generate_signal(symbol)
@@ -766,8 +779,7 @@ def scan_symbols():
             }
             continue
 
-        if not market_open and result.get("signal") != "DATA UNAVAILABLE":
-            result = {**result, "signal": "MARKET CLOSED / WAIT"}
+        result = normalize_market_signal(result, market_open)
 
         latest_results[symbol] = result
 
