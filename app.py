@@ -261,7 +261,7 @@ def configure_page():
             align-items: center;
             background: rgba(255, 255, 255, 0.035);
             border: 1px solid var(--ob-border);
-            border-radius: 999px;
+            border-radius: 8px;
             display: flex;
             justify-content: center;
             margin: 0 0 1rem;
@@ -595,10 +595,6 @@ def configure_page():
 
             .status-strip {
                 align-items: center;
-            }
-
-            .status-shell {
-                border-radius: 8px;
             }
 
             .status-primary,
