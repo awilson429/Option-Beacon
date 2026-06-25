@@ -134,6 +134,36 @@ def opportunity_rows(latest_results, direction, limit=3):
     return sorted(rows, key=lambda row: (row["is_active"], row["score"]), reverse=True)[:limit]
 
 
+def data_freshness(snapshot_time):
+    if snapshot_time is None:
+        return "Live", "Live app scan", "pill-open"
+
+    age_minutes = (pd.Timestamp.now(tz="America/New_York") - snapshot_time).total_seconds() / 60
+
+    if age_minutes <= 7:
+        return "Fresh", f"{int(age_minutes)} min old", "pill-open"
+    if age_minutes <= 15:
+        return "Aging", f"{int(age_minutes)} min old", "pill-aging"
+    return "Stale", f"{int(age_minutes)} min old", "pill-stale"
+
+
+def top_summary(latest_results, direction):
+    rows = opportunity_rows(latest_results, direction, limit=1)
+    if not rows:
+        return "None", "No score"
+
+    row = rows[0]
+    return row["symbol"], f'{row["score"]}/100'
+
+
+def bias_style(value):
+    if value == "Bullish":
+        return "color: #2fd37a; font-weight: 700;"
+    if value == "Bearish":
+        return "color: #ff5d5d; font-weight: 700;"
+    return ""
+
+
 def configure_page():
     st.set_page_config(page_title="Option Beacon", layout="wide")
     st_autorefresh(interval=60000, key="option_beacon_refresh")
@@ -306,6 +336,16 @@ def configure_page():
         .pill-closed {
             border-color: rgba(255, 255, 255, 0.18);
             color: var(--ob-muted);
+        }
+
+        .pill-aging {
+            border-color: rgba(216, 179, 90, 0.55);
+            color: var(--ob-gold);
+        }
+
+        .pill-stale {
+            border-color: rgba(255, 93, 93, 0.65);
+            color: var(--ob-red);
         }
 
         .signal-pill {
@@ -492,6 +532,42 @@ def configure_page():
             white-space: nowrap;
         }
 
+        .summary-grid {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            margin: 0.75rem 0 1.15rem;
+        }
+
+        .summary-item {
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid var(--ob-border);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+
+        .summary-label {
+            color: var(--ob-muted);
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .summary-value {
+            color: var(--ob-text);
+            font-size: 1.08rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-top: 0.2rem;
+        }
+
+        .summary-subvalue {
+            color: var(--ob-muted);
+            font-size: 0.84rem;
+            margin-top: 0.15rem;
+        }
+
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border-color: var(--ob-border);
             border-radius: 8px;
@@ -582,6 +658,10 @@ def configure_page():
 
             .opportunity-reason {
                 grid-column: 1 / -1;
+            }
+
+            .summary-grid {
+                grid-template-columns: 1fr 1fr;
             }
         }
         </style>
@@ -901,19 +981,45 @@ def render_recent_high_scores(history):
             "reason": "Primary Reason",
         }
     )
-    st.dataframe(
-        display_history.tail(50).sort_index(ascending=False),
-        use_container_width=True,
-        hide_index=True,
+    display_history = display_history.tail(20).sort_index(ascending=False)
+    styled_history = display_history.style.applymap(bias_style, subset=["Bias"])
+    st.dataframe(styled_history, use_container_width=True, hide_index=True)
+
+
+def render_market_summary(latest_results, snapshot_time):
+    freshness, freshness_detail, freshness_class = data_freshness(snapshot_time)
+    source = "Scheduled scanner" if snapshot_time is not None else "Live app scan"
+    source_detail = snapshot_time.strftime("%I:%M %p ET") if snapshot_time is not None else eastern_now().strftime("%I:%M %p ET")
+    top_bullish, bullish_score = top_summary(latest_results, "Bullish")
+    top_bearish, bearish_score = top_summary(latest_results, "Bearish")
+
+    st.markdown(
+        f"""
+        <div class="summary-grid">
+            <div class="summary-item">
+                <div class="summary-label">Data</div>
+                <div class="summary-value"><span class="pill pill-secondary {freshness_class}">{freshness}</span></div>
+                <div class="summary-subvalue">{freshness_detail}</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Source</div>
+                <div class="summary-value">{source}</div>
+                <div class="summary-subvalue">{source_detail}</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Top Bullish</div>
+                <div class="summary-value">{top_bullish}</div>
+                <div class="summary-subvalue">{bullish_score}</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Top Bearish</div>
+                <div class="summary-value">{top_bearish}</div>
+                <div class="summary-subvalue">{bearish_score}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-
-
-def render_data_source(snapshot_time):
-    if snapshot_time is None:
-        st.caption("Data source: live app scan")
-        return
-
-    st.caption(f"Data source: scheduled scanner snapshot from {snapshot_time.strftime('%Y-%m-%d %I:%M %p ET')}")
 
 
 def main():
@@ -922,7 +1028,7 @@ def main():
     render_header()
 
     latest_results, high_score_history, snapshot_time = scan_symbols()
-    render_data_source(snapshot_time)
+    render_market_summary(latest_results, snapshot_time)
 
     render_top_opportunities(latest_results)
     st.divider()
