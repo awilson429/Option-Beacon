@@ -502,6 +502,15 @@ def configure_page():
             padding: 0.75rem 0;
         }
 
+        .opportunity-heading {
+            background: transparent;
+            border: 0;
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+            padding: 0;
+        }
+
         .opportunity-row:last-child {
             border-bottom: 0;
         }
@@ -770,7 +779,11 @@ def scan_symbols():
 
 def render_opportunity_list(title, rows):
     with st.container(border=True):
-        st.markdown(f"### {title}")
+        title_class = "signal-call" if "Bullish" in title else "signal-put" if "Bearish" in title else ""
+        st.markdown(
+            f'<div class="opportunity-heading {title_class}">{title}</div>',
+            unsafe_allow_html=True,
+        )
 
         if not rows:
             render_empty_state("No scored opportunities yet.")
