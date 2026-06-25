@@ -318,6 +318,7 @@ def configure_page():
         }
 
         .status-strip .pill {
+            min-height: 2.25rem;
             min-width: 8.25rem;
             padding: 0.3rem 0.65rem;
         }
