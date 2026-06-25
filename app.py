@@ -671,7 +671,7 @@ def render_header():
                     <div class="status-secondary">
                         <span class="pill pill-secondary pill-stack">
                             <span>Refresh 1 min</span>
-                            <span class="pill-subtext">{refreshed_at}</span>
+                            <span class="pill-subtext">Last refreshed {refreshed_at}</span>
                         </span>
                         <span class="pill pill-secondary">{access_status}</span>
                     </div>
