@@ -195,7 +195,7 @@ def configure_page():
             border-radius: 8px;
             padding: 1.15rem 1.25rem;
             background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
-            margin-bottom: 1rem;
+            margin-bottom: 0.55rem;
         }
 
         .brand-row {
@@ -255,6 +255,17 @@ def configure_page():
             text-transform: uppercase;
             letter-spacing: 0.08em;
             white-space: nowrap;
+        }
+
+        .status-shell {
+            align-items: center;
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid var(--ob-border);
+            border-radius: 999px;
+            display: flex;
+            justify-content: center;
+            margin: 0 0 1rem;
+            padding: 0.45rem;
         }
 
         .status-strip {
@@ -586,6 +597,10 @@ def configure_page():
                 align-items: center;
             }
 
+            .status-shell {
+                border-radius: 8px;
+            }
+
             .status-primary,
             .status-secondary {
                 justify-content: center;
@@ -674,24 +689,25 @@ def render_header():
                         <div class="brand-subtitle">ETF + Single Stock Scanner</div>
                     </div>
                 </div>
-                <div class="status-strip">
-                    <div class="status-primary">
-                        <span class="pill pill-market {market_class}">{market_status}</span>
-                    </div>
-                    <div class="status-secondary">
-                        <span class="pill pill-secondary pill-stack">
-                            <span>Refresh 1 min</span>
-                            <span class="pill-subtext">Last refreshed {refreshed_at}</span>
-                        </span>
-                        <span class="pill pill-secondary">{access_status}</span>
-                    </div>
+            </div>
+        </div>
+        <div class="status-shell">
+            <div class="status-strip">
+                <div class="status-primary">
+                    <span class="pill pill-market {market_class}">{market_status}</span>
+                </div>
+                <div class="status-secondary">
+                    <span class="pill pill-secondary pill-stack">
+                        <span>Refresh 1 min</span>
+                        <span class="pill-subtext">Last refreshed {refreshed_at}</span>
+                    </span>
+                    <span class="pill pill-secondary">{access_status}</span>
                 </div>
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-
 
 
 def render_section_header(title, kicker=None):
