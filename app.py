@@ -309,13 +309,16 @@ def configure_page():
         }
 
         .pill-market {
-            font-size: 0.95rem;
-            min-width: 14.5rem;
-            padding: 0.52rem 1.15rem;
+            font-size: 0.74rem;
         }
 
         .pill-secondary {
             font-size: 0.74rem;
+            padding: 0.3rem 0.65rem;
+        }
+
+        .status-strip .pill {
+            min-width: 8.25rem;
             padding: 0.3rem 0.65rem;
         }
 
