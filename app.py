@@ -298,6 +298,20 @@ def configure_page():
             padding: 0.3rem 0.65rem;
         }
 
+        .pill-stack {
+            flex-direction: column;
+            gap: 0.05rem;
+            line-height: 1.05;
+        }
+
+        .pill-subtext {
+            color: var(--ob-muted);
+            font-size: 0.64rem;
+            font-weight: 600;
+            letter-spacing: 0;
+            text-transform: none;
+        }
+
         .pill-open {
             border-color: rgba(47, 211, 122, 0.55);
             color: var(--ob-green);
@@ -655,7 +669,10 @@ def render_header():
                         <span class="pill pill-market {market_class}">{market_status}</span>
                     </div>
                     <div class="status-secondary">
-                        <span class="pill pill-secondary">Refresh 1 min</span>
+                        <span class="pill pill-secondary pill-stack">
+                            <span>Refresh 1 min</span>
+                            <span class="pill-subtext">{refreshed_at}</span>
+                        </span>
                         <span class="pill pill-secondary">{access_status}</span>
                     </div>
                 </div>
@@ -665,11 +682,6 @@ def render_header():
         unsafe_allow_html=True,
     )
 
-    st.caption(f"Last refreshed: {refreshed_at}")
-    st.markdown(
-        '<div class="notice notice-warning">Paper-trading dashboard only. Not financial advice.</div>',
-        unsafe_allow_html=True,
-    )
 
 
 def render_section_header(title, kicker=None):
@@ -931,6 +943,10 @@ def main():
     render_score_guide()
     st.divider()
     render_current_scanner(latest_results)
+    st.markdown(
+        '<div class="notice notice-warning">Paper-trading dashboard only. Not financial advice.</div>',
+        unsafe_allow_html=True,
+    )
     st.markdown(
         '<div class="footer-line">Option Beacon LLC - '
         '<a href="https://option-beacon.com" target="_blank">option-beacon.com</a></div>',
