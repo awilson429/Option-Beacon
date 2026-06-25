@@ -505,8 +505,9 @@ def configure_page():
         .opportunity-heading {
             background: transparent;
             border: 0;
-            font-size: 1.2rem;
+            font-size: 1.75rem;
             font-weight: 700;
+            line-height: 1.2;
             margin-bottom: 0.25rem;
             padding: 0;
         }
