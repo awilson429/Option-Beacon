@@ -920,21 +920,12 @@ def render_recent_high_scores(history):
     )
 
 
-def render_data_source(snapshot_time):
-    if snapshot_time is None:
-        st.caption("Data source: live app scan")
-        return
-
-    st.caption(f"Data source: scheduled scanner snapshot from {snapshot_time.strftime('%Y-%m-%d %I:%M %p ET')}")
-
-
 def main():
     configure_page()
     require_app_access()
     render_header()
 
-    latest_results, high_score_history, snapshot_time = scan_symbols()
-    render_data_source(snapshot_time)
+    latest_results, high_score_history, _ = scan_symbols()
 
     render_top_opportunities(latest_results)
     st.divider()
