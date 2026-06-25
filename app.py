@@ -254,21 +254,13 @@ def configure_page():
             white-space: nowrap;
         }
 
-        .status-strip {
-            display: flex;
-            flex-direction: column;
-            gap: 0.55rem;
-            align-items: flex-end;
-            justify-content: center;
-            flex: 0 0 auto;
-        }
-
-        .status-primary,
-        .status-secondary {
+        .status-row {
             display: flex;
             flex-wrap: wrap;
             gap: 0.55rem;
             justify-content: flex-end;
+            align-items: stretch;
+            flex: 0 0 auto;
         }
 
         .pill, .signal-pill {
@@ -288,14 +280,17 @@ def configure_page():
         }
 
         .pill-market {
-            font-size: 0.95rem;
-            min-width: 14.5rem;
-            padding: 0.52rem 1.15rem;
+            font-size: 0.82rem;
         }
 
         .pill-secondary {
             font-size: 0.74rem;
-            padding: 0.3rem 0.65rem;
+        }
+
+        .status-pill {
+            min-height: 3.05rem;
+            min-width: 9.5rem;
+            padding: 0.42rem 0.8rem;
         }
 
         .pill-stack {
@@ -572,17 +567,13 @@ def configure_page():
                 letter-spacing: 0.12em;
             }
 
-            .status-strip {
-                align-items: flex-start;
-            }
-
-            .status-primary,
-            .status-secondary {
+            .status-row {
                 justify-content: flex-start;
             }
 
-            .pill-market {
+            .status-pill {
                 min-width: 0;
+                flex: 1 1 9rem;
             }
 
             .brand-logo {
@@ -664,17 +655,13 @@ def render_header():
                         <div class="brand-subtitle">ETF + Single Stock Scanner</div>
                     </div>
                 </div>
-                <div class="status-strip">
-                    <div class="status-primary">
-                        <span class="pill pill-market {market_class}">{market_status}</span>
-                    </div>
-                    <div class="status-secondary">
-                        <span class="pill pill-secondary pill-stack">
-                            <span>Refresh 1 min</span>
-                            <span class="pill-subtext">Last refreshed {refreshed_at}</span>
-                        </span>
-                        <span class="pill pill-secondary">{access_status}</span>
-                    </div>
+                <div class="status-row">
+                    <span class="pill pill-market status-pill {market_class}">{market_status}</span>
+                    <span class="pill pill-secondary pill-stack status-pill">
+                        <span>Refresh 1 min</span>
+                        <span class="pill-subtext">Last refreshed {refreshed_at}</span>
+                    </span>
+                    <span class="pill pill-secondary status-pill">{access_status}</span>
                 </div>
             </div>
         </div>
