@@ -217,8 +217,8 @@ def configure_page():
         }
 
         .brand-logo {
-            width: 88px;
-            height: 88px;
+            width: 104px;
+            height: 104px;
             object-fit: contain;
             background: #ffffff;
             border: 1px solid rgba(255, 255, 255, 0.20);
@@ -239,7 +239,7 @@ def configure_page():
         .brand-title {
             color: var(--ob-text);
             font-family: 'Orbitron', 'Source Sans 3', sans-serif;
-            font-size: clamp(1.65rem, 3vw, 3.4rem);
+            font-size: clamp(1.85rem, 3.35vw, 3.75rem);
             font-weight: 600;
             letter-spacing: 0.18em;
             line-height: 1;
@@ -607,8 +607,8 @@ def configure_page():
             }
 
             .brand-logo {
-                width: 72px;
-                height: 72px;
+                width: 84px;
+                height: 84px;
             }
 
             .opportunity-row {
