@@ -201,6 +201,7 @@ def configure_page():
         .brand-row {
             display: flex;
             align-items: center;
+            flex-direction: column;
             justify-content: space-between;
             gap: 1rem;
         }
@@ -209,8 +210,10 @@ def configure_page():
             display: flex;
             align-items: center;
             gap: 1rem;
+            justify-content: center;
             min-width: 0;
             flex: 1 1 auto;
+            width: 100%;
         }
 
         .brand-logo {
@@ -256,11 +259,12 @@ def configure_page():
 
         .status-strip {
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
+            flex-wrap: wrap;
             gap: 0.55rem;
-            align-items: flex-end;
+            align-items: center;
             justify-content: center;
-            flex: 0 0 auto;
+            width: 100%;
         }
 
         .status-primary,
@@ -268,7 +272,13 @@ def configure_page():
             display: flex;
             flex-wrap: wrap;
             gap: 0.55rem;
-            justify-content: flex-end;
+            justify-content: center;
+            align-items: stretch;
+        }
+
+        .status-secondary {
+            align-items: stretch;
+            justify-content: center;
         }
 
         .pill, .signal-pill {
@@ -559,7 +569,7 @@ def configure_page():
 
         @media (max-width: 760px) {
             .brand-row {
-                align-items: flex-start;
+                align-items: center;
                 flex-direction: column;
             }
 
@@ -573,12 +583,12 @@ def configure_page():
             }
 
             .status-strip {
-                align-items: flex-start;
+                align-items: center;
             }
 
             .status-primary,
             .status-secondary {
-                justify-content: flex-start;
+                justify-content: center;
             }
 
             .pill-market {
