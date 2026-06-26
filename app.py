@@ -5,7 +5,12 @@ import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from optionbeacon_history import add_high_score_snapshot, eastern_now, load_high_score_history
+from optionbeacon_history import (
+    HIGH_SCORE_THRESHOLD,
+    add_high_score_snapshot,
+    eastern_now,
+    load_high_score_history,
+)
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
 
@@ -967,13 +972,26 @@ def render_current_scanner(latest_results):
 
 
 def render_recent_high_scores(history):
-    render_section_header("Recent High Scores", "Neutral log of scores at 80 or higher")
+    render_section_header(
+        "Recent High Scores", f"Neutral log of scores at {HIGH_SCORE_THRESHOLD} or higher"
+    )
 
     if len(history) == 0:
         render_empty_state("No high-score scanner readings logged yet.")
         return
 
     display_history = history.copy()
+    display_history["score_value"] = pd.to_numeric(
+        display_history["score"], errors="coerce"
+    ).fillna(0)
+    display_history = display_history[
+        display_history["score_value"] >= HIGH_SCORE_THRESHOLD
+    ].drop(columns=["score_value"])
+
+    if len(display_history) == 0:
+        render_empty_state("No high-score scanner readings logged yet.")
+        return
+
     display_history = display_history.rename(
         columns={
             "timestamp": "Time",

@@ -11,7 +11,7 @@ from optionbeacon_snapshot import REMOTE_DATA_BASE_URL
 HIGH_SCORE_FILE = "high_score_history.csv"
 REMOTE_HIGH_SCORE_URL = f"{REMOTE_DATA_BASE_URL}/{HIGH_SCORE_FILE}"
 
-HIGH_SCORE_THRESHOLD = 80
+HIGH_SCORE_THRESHOLD = 85
 
 HIGH_SCORE_COLUMNS = [
     "timestamp",
