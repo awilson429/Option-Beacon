@@ -604,8 +604,8 @@ def configure_page():
             }
 
             .brand-title {
-                font-size: clamp(1.35rem, 6vw, 2rem);
-                letter-spacing: 0.12em;
+                font-size: clamp(1.15rem, 5.2vw, 1.8rem);
+                letter-spacing: 0.08em;
             }
 
             .status-strip {
@@ -632,6 +632,27 @@ def configure_page():
 
             .opportunity-reason {
                 grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 390px) {
+            .brand-left {
+                gap: 0.75rem;
+            }
+
+            .brand-title {
+                font-size: clamp(1rem, 4.8vw, 1.45rem);
+                letter-spacing: 0.05em;
+            }
+
+            .brand-subtitle {
+                font-size: 0.68rem;
+                letter-spacing: 0.04em;
+            }
+
+            .brand-logo {
+                width: 72px;
+                height: 72px;
             }
         }
         </style>
