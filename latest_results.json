@@ -1,0 +1,53 @@
+{
+  "updated_at": "2026-07-01T15:19:45.985270-04:00",
+  "results": {
+    "SPY": {
+      "symbol": "SPY",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 747.3599853515625,
+      "timestamp": "2026-07-01 19:19:44"
+    },
+    "QQQ": {
+      "symbol": "QQQ",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 727.8200073242188,
+      "timestamp": "2026-07-01 19:19:44"
+    },
+    "IWM": {
+      "symbol": "IWM",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 300.57000732421875,
+      "timestamp": "2026-07-01 19:19:44"
+    },
+    "DIA": {
+      "symbol": "DIA",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 523.0900268554688,
+      "timestamp": "2026-07-01 19:19:45"
+    },
+    "NVDA": {
+      "symbol": "NVDA",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 199.50999450683594,
+      "timestamp": "2026-07-01 19:19:45"
+    },
+    "TSLA": {
+      "symbol": "TSLA",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 426.2699890136719,
+      "timestamp": "2026-07-01 19:19:45"
+    },
+    "AAPL": {
+      "symbol": "AAPL",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 294.5400085449219,
+      "timestamp": "2026-07-01 19:19:45"
+    },
+    "AMD": {
+      "symbol": "AMD",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 549.2050170898438,
+      "timestamp": "2026-07-01 19:19:45"
+    }
+  }
+}
