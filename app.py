@@ -544,6 +544,50 @@ def configure_page():
             white-space: nowrap;
         }
 
+        .market-snapshot {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            margin-bottom: 0.9rem;
+        }
+
+        .snapshot-item {
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid var(--ob-border);
+            border-radius: 8px;
+            min-height: 5rem;
+            padding: 0.75rem;
+        }
+
+        .snapshot-label {
+            color: var(--ob-muted);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            line-height: 1.1;
+            text-transform: uppercase;
+        }
+
+        .snapshot-value {
+            color: var(--ob-text);
+            font-size: 1.05rem;
+            font-weight: 700;
+            line-height: 1.15;
+            margin-top: 0.35rem;
+        }
+
+        .snapshot-value.good {
+            color: var(--ob-green);
+        }
+
+        .snapshot-value.bad {
+            color: var(--ob-red);
+        }
+
+        .snapshot-value.neutral {
+            color: var(--ob-gold);
+        }
+
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border-color: var(--ob-border);
             border-radius: 8px;
@@ -635,6 +679,10 @@ def configure_page():
             .opportunity-reason {
                 grid-column: 1 / -1;
             }
+
+            .market-snapshot {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
         }
 
         @media (max-width: 390px) {
@@ -655,6 +703,10 @@ def configure_page():
             .brand-logo {
                 width: 72px;
                 height: 72px;
+            }
+
+            .market-snapshot {
+                grid-template-columns: 1fr;
             }
         }
         </style>
@@ -866,14 +918,39 @@ def render_market_overview(latest_results):
         refreshed_at,
     )
 
-    render_section_header("Market Overview", "Current scanner context across tracked tickers")
-    columns = st.columns(4)
-    overview_items = list(overview.items())
-    for index, (label, value) in enumerate(overview_items):
-        columns[index % 4].metric(label, value)
+    def value_class(value):
+        value = str(value).lower()
+        if any(word in value for word in ["bullish", "risk-on", "active"]):
+            return "good"
+        if any(word in value for word in ["bearish", "risk-off", "closed"]):
+            return "bad"
+        return "neutral"
+
+    snapshot_items = [
+        ("Market Mood", overview["Market Regime"]),
+        ("SPY", overview["SPY Trend"]),
+        ("QQQ", overview["QQQ Trend"]),
+        ("Scanner", overview["Scanner Status"]),
+        ("Breadth", overview["Breadth"]),
+        ("Strongest", overview["Strongest"]),
+        ("Weakest", overview["Weakest"]),
+        ("Updated", overview["Last Refresh"]),
+    ]
+
+    render_section_header("Market Snapshot", "Simple read on current conditions")
+    snapshot_html = "".join(
+        f"""
+        <div class="snapshot-item">
+            <div class="snapshot-label">{escape(label)}</div>
+            <div class="snapshot-value {value_class(value)}">{escape(str(value))}</div>
+        </div>
+        """
+        for label, value in snapshot_items
+    )
+    st.markdown(f'<div class="market-snapshot">{snapshot_html}</div>', unsafe_allow_html=True)
 
     st.markdown(
-        '<div class="notice notice-info">Market regime helps frame scanner readings. It is context, not a stand-alone trade signal.</div>',
+        '<div class="notice notice-info">Use this as background context. Top Opportunities still carries the main scanner ranking.</div>',
         unsafe_allow_html=True,
     )
 
@@ -1066,17 +1143,28 @@ def main():
 
     latest_results, high_score_history, _ = scan_symbols()
 
-    render_market_overview(latest_results)
-    st.divider()
     render_top_opportunities(latest_results)
     st.divider()
-    render_trending_options(latest_results)
-    st.divider()
-    render_recent_high_scores(high_score_history)
-    st.divider()
-    render_score_guide()
-    st.divider()
-    render_current_scanner(latest_results)
+
+    market_tab, trending_tab, scanner_tab, history_tab, guide_tab = st.tabs(
+        ["Market", "Trending", "Scanner", "History", "Guide"]
+    )
+
+    with market_tab:
+        render_market_overview(latest_results)
+
+    with trending_tab:
+        render_trending_options(latest_results)
+
+    with scanner_tab:
+        render_current_scanner(latest_results)
+
+    with history_tab:
+        render_recent_high_scores(high_score_history)
+
+    with guide_tab:
+        render_score_guide()
+
     st.markdown(
         '<div class="notice notice-warning">Paper-trading dashboard only. Not financial advice.</div>',
         unsafe_allow_html=True,
