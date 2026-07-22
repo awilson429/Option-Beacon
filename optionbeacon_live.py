@@ -10,6 +10,7 @@ from finnhub_universe import (
     flatten_symbol_groups,
 )
 from optionbeacon_strategy import score_candle
+from trade_planning import enrich_with_trade_plan
 
 ETF_SYMBOLS = DEFAULT_ETF_SYMBOLS
 STOCK_SYMBOLS = DEFAULT_STOCK_SYMBOLS
@@ -103,6 +104,7 @@ def generate_signal(symbol):
 
     i = len(df) - 1
     result = score_candle(df, i, symbol)
+    result = enrich_with_trade_plan(result)
     result["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return result
 

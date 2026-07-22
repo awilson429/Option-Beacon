@@ -131,6 +131,8 @@ def opportunity_rows(latest_results, direction, limit=3):
                 "is_active": result.get("signal") == signal_name,
                 "price": result.get("price"),
                 "quality": result.get("quality", setup_grade(score)),
+                "setup_stage": result.get("setup_stage", ""),
+                "what_next": result.get("what_next", ""),
                 "reasons": result.get("reasons", []),
             }
         )
@@ -849,13 +851,15 @@ def render_opportunity_list(title, rows):
             reason = escape(row["reasons"][0] if row["reasons"] else "No strong reason yet")
             symbol = escape(row["symbol"])
             quality = escape(row["quality"])
+            stage = escape(row.get("setup_stage") or "Setup")
+            what_next = escape(row.get("what_next") or status)
             st.markdown(
                 f"""
                 <div class="opportunity-row">
                     <div class="opportunity-symbol">{symbol}</div>
                     <div class="opportunity-score">{row["score"]}/100</div>
-                    <div class="opportunity-meta">{price_label}<br>{quality}</div>
-                    <div class="opportunity-reason">{status} - {reason}</div>
+                    <div class="opportunity-meta">{price_label}<br>{quality}<br>{stage}</div>
+                    <div class="opportunity-reason">{what_next} - {reason}</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -919,6 +923,11 @@ def render_signal_card(symbol, result):
         confidence = result.get("confidence", 0)
         bias = result.get("bias", "Neutral")
         quality = result.get("quality", setup_grade(confidence))
+        setup_stage = result.get("setup_stage", "Developing")
+        entry_timing = result.get("entry_timing", "Wait")
+        what_next = result.get("what_next", "Wait.")
+        what_next_reason = result.get("what_next_reason", "No actionable setup yet.")
+        trade_plan = result.get("trade_plan", {}) or {}
 
         st.markdown(
             f'<div class="signal-pill {signal_class(signal)}">{signal_label(signal)}</div>',
@@ -938,10 +947,16 @@ def render_signal_card(symbol, result):
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Setup Score", f"{confidence}/100")
             c2.metric("Bias", bias)
-            c3.metric("Bullish", result.get("bullish_score", result.get("call_score", "")))
-            c4.metric("Bearish", result.get("bearish_score", result.get("put_score", "")))
+            c3.metric("Stage", setup_stage)
+            c4.metric("Timing", entry_timing)
 
             st.metric("Quality", quality)
+
+            st.markdown(
+                f'<div class="notice notice-info"><strong>What should I do next?</strong><br>'
+                f'{escape(what_next)} {escape(what_next_reason)}</div>',
+                unsafe_allow_html=True,
+            )
 
         if signal in ["BULLISH SETUP", "BEARISH SETUP"]:
             st.success("High-probability setup active")
@@ -950,6 +965,22 @@ def render_signal_card(symbol, result):
             p2.metric("Stop", f"${result['stop']:.2f}")
             p3.metric("Target", f"${result['target']:.2f}")
             p4.metric("BE", f"${result['breakeven']:.2f}")
+
+        if trade_plan:
+            with st.expander("Trade Plan"):
+                t1, t2, t3, t4 = st.columns(4)
+                t1.metric("Entry Zone", f"${trade_plan['entry_zone_low']:.2f}-${trade_plan['entry_zone_high']:.2f}")
+                t2.metric("Trigger", f"${trade_plan['trigger_price']:.2f}")
+                t3.metric("Invalidation", f"${trade_plan['invalidation_level']:.2f}")
+                t4.metric("Max Entry", f"${trade_plan['max_entry_price']:.2f}")
+
+                t5, t6, t7, t8 = st.columns(4)
+                t5.metric("Target 1", f"${trade_plan['target_1']:.2f}")
+                t6.metric("Target 2", f"${trade_plan['target_2']:.2f}")
+                t7.metric("Target 3", f"${trade_plan['target_3']:.2f}")
+                t8.metric("Risk/Reward", f"{trade_plan['risk_reward']}:1" if trade_plan.get("risk_reward") else "N/A")
+
+                st.write(trade_plan.get("contract_guidance", "Use liquid contracts with tight spreads."))
 
         with st.expander("Signal Details"):
             checks = quality_summary(result)

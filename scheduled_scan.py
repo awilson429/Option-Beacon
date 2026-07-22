@@ -53,6 +53,11 @@ def scanner_unavailable(symbol, message):
         "confidence": 0,
         "bullish_score": 0,
         "bearish_score": 0,
+        "setup_stage": "Unavailable",
+        "entry_timing": "Wait",
+        "what_next": "Wait.",
+        "what_next_reason": message,
+        "trade_plan": {},
         "reasons": [message],
     }
 
