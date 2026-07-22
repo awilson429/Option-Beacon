@@ -350,60 +350,6 @@ def configure_page():
             color: var(--ob-muted);
         }
 
-        [data-testid="stTabs"] {
-            margin-top: 0.25rem;
-        }
-
-        [data-testid="stTabs"] [role="tablist"] {
-            align-items: stretch;
-            background: rgba(255, 255, 255, 0.035);
-            border: 1px solid var(--ob-border);
-            border-radius: 8px;
-            display: flex;
-            gap: 0.55rem;
-            justify-content: center;
-            padding: 0.45rem;
-            width: 100%;
-        }
-
-        [data-testid="stTabs"] [role="tab"] {
-            align-items: center;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid var(--ob-border-strong);
-            border-radius: 999px;
-            color: var(--ob-muted);
-            display: flex;
-            flex: 1 1 0;
-            font-size: 0.82rem;
-            font-weight: 700;
-            justify-content: center;
-            letter-spacing: 0.04em;
-            min-height: 2.25rem;
-            min-width: 0;
-            padding: 0.3rem 0.65rem;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
-
-        [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
-            border-color: rgba(216, 179, 90, 0.65);
-            color: var(--ob-text);
-            background: rgba(216, 179, 90, 0.10);
-        }
-
-        [data-testid="stTabs"] [role="tab"] p {
-            color: inherit;
-            font-size: inherit;
-            font-weight: inherit;
-            letter-spacing: inherit;
-            margin: 0;
-            text-transform: inherit;
-        }
-
-        [data-testid="stTabs"] [data-baseweb="tab-highlight"] {
-            display: none;
-        }
-
         .signal-pill {
             margin: 0.2rem 0 0.8rem;
             width: 100%;
@@ -719,16 +665,6 @@ def configure_page():
 
             .pill-market {
                 min-width: 0;
-            }
-
-            [data-testid="stTabs"] [role="tablist"] {
-                gap: 0.35rem;
-            }
-
-            [data-testid="stTabs"] [role="tab"] {
-                font-size: 0.68rem;
-                letter-spacing: 0.02em;
-                padding: 0.3rem 0.3rem;
             }
 
             .brand-logo {
