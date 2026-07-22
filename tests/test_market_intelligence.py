@@ -6,10 +6,6 @@ def test_extracts_cashtags_and_aliases():
     assert extract_tickers("$NVDA calls and Nvidia breakout") == ["NVDA"]
 
 
-def test_extracts_expanded_universe_ticker():
-    assert extract_tickers("Watching $PLTR call volume") == ["PLTR"]
-
-
 def test_ignores_common_false_positive_words():
     assert extract_tickers("Can it go up now?") == []
 

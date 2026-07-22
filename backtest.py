@@ -12,7 +12,10 @@ from optionbeacon_strategy import (
     VOLUME_MULTIPLIER,
     score_candle as score_strategy_candle,
 )
-from optionbeacon_universe import ETF_SYMBOLS, STOCK_SYMBOLS, SYMBOLS
+
+ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
+STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
+SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
 
 PERIOD = "60d"
 INTERVAL = "5m"

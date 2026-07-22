@@ -2,7 +2,7 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, time
 
-from optionbeacon_universe import SYMBOLS
+SYMBOLS = ["SPY", "QQQ"]
 
 
 def get_data(symbol):

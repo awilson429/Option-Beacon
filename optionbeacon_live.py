@@ -4,7 +4,10 @@ import time
 from datetime import datetime
 
 from optionbeacon_strategy import score_candle
-from optionbeacon_universe import ETF_SYMBOLS, STOCK_SYMBOLS, SYMBOLS
+
+ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
+STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
+SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
 
 PERIOD = "5d"
 INTERVAL = "5m"

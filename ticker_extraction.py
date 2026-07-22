@@ -1,8 +1,16 @@
 import re
 
-from optionbeacon_universe import TRADABLE_SYMBOLS
 
-WHITELISTED_SYMBOLS = TRADABLE_SYMBOLS
+WHITELISTED_SYMBOLS = {
+    "SPY",
+    "QQQ",
+    "IWM",
+    "DIA",
+    "NVDA",
+    "TSLA",
+    "AAPL",
+    "AMD",
+}
 
 COMMON_FALSE_POSITIVES = {
     "A",
