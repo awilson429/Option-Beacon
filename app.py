@@ -18,15 +18,7 @@ from market_intelligence import (
     signal_explanation,
 )
 from optionbeacon_snapshot import load_latest_results
-
-
-ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
-STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
-SYMBOL_GROUPS = {
-    "ETF Scanner": ETF_SYMBOLS,
-    "Single Stock Scanner": STOCK_SYMBOLS,
-}
-SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
+from optionbeacon_universe import CUSTOM_SYMBOLS, SYMBOL_GROUPS, SYMBOLS
 LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-381bdd4d9924/OptionBeaconLLC%20Logo%20V2.png"
 
 
@@ -1010,7 +1002,11 @@ def render_current_scanner(latest_results):
         '<div class="section-kicker">Real-time opportunity groups</div>',
         unsafe_allow_html=True,
     )
-    for group_name, symbols in SYMBOL_GROUPS.items():
+    if CUSTOM_SYMBOLS:
+        custom_groups = {"Custom Scanner": SYMBOLS}
+    else:
+        custom_groups = SYMBOL_GROUPS
+    for group_name, symbols in custom_groups.items():
         st.markdown(
             f'<div class="section-subtitle"><span>{group_name}</span>'
             f'<span class="section-count">{len(symbols)} Symbols</span></div>',
