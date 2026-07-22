@@ -3,10 +3,16 @@ import pandas as pd
 import time
 from datetime import datetime
 
+from finnhub_universe import (
+    DEFAULT_ETF_SYMBOLS,
+    DEFAULT_STOCK_SYMBOLS,
+    active_symbol_groups,
+    flatten_symbol_groups,
+)
 from optionbeacon_strategy import score_candle
 
-ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
-STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
+ETF_SYMBOLS = DEFAULT_ETF_SYMBOLS
+STOCK_SYMBOLS = DEFAULT_STOCK_SYMBOLS
 SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
 
 PERIOD = "5d"
@@ -182,8 +188,13 @@ def main():
     while True:
         print("\n\nScanning...")
         print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        symbol_groups, source, error = active_symbol_groups()
+        scan_symbols = flatten_symbol_groups(symbol_groups)
+        print(f"Universe: {source} ({len(scan_symbols)} symbols)")
+        if error:
+            print(f"Universe note: {error}")
 
-        for symbol in SYMBOLS:
+        for symbol in scan_symbols:
             result = generate_signal(symbol)
 
             if result:

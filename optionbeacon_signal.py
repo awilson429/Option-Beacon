@@ -2,7 +2,9 @@ import yfinance as yf
 import pandas as pd
 from datetime import datetime, time
 
-SYMBOLS = ["SPY", "QQQ"]
+from finnhub_universe import DEFAULT_ETF_SYMBOLS
+
+SYMBOLS = DEFAULT_ETF_SYMBOLS[:2]
 
 
 def get_data(symbol):

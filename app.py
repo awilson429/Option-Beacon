@@ -5,6 +5,11 @@ import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
+from finnhub_universe import (
+    DEFAULT_SYMBOL_GROUPS,
+    active_symbol_groups,
+    flatten_symbol_groups,
+)
 from optionbeacon_history import (
     HIGH_SCORE_THRESHOLD,
     add_high_score_snapshot,
@@ -15,13 +20,7 @@ from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
 
 
-ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
-STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
-SYMBOL_GROUPS = {
-    "ETF Scanner": ETF_SYMBOLS,
-    "Single Stock Scanner": STOCK_SYMBOLS,
-}
-SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
+SYMBOL_GROUPS = DEFAULT_SYMBOL_GROUPS
 LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-381bdd4d9924/OptionBeaconLLC%20Logo%20V2.png"
 
 
@@ -759,6 +758,15 @@ def render_empty_state(message):
     st.markdown(f'<div class="empty-state">{message}</div>', unsafe_allow_html=True)
 
 
+def finnhub_secret():
+    return st.secrets.get("FINNHUB_API_KEY", "")
+
+
+@st.cache_data(ttl=60 * 60 * 8, show_spinner=False)
+def cached_symbol_groups(finnhub_key):
+    return active_symbol_groups(api_key=finnhub_key)
+
+
 @st.cache_data(ttl=60, show_spinner=False)
 def cached_generate_signal(symbol):
     try:
@@ -777,17 +785,19 @@ def normalize_market_signal(result, market_open):
 
 def scan_symbols():
     market_open = is_market_open_now()
+    symbol_groups, _, _ = cached_symbol_groups(finnhub_secret())
+    symbols = flatten_symbol_groups(symbol_groups)
     snapshot_results, snapshot_time = load_latest_results()
     if snapshot_results:
         snapshot_results = {
             symbol: normalize_market_signal(result, market_open)
             for symbol, result in snapshot_results.items()
         }
-        return snapshot_results, load_high_score_history(), snapshot_time
+        return snapshot_results, load_high_score_history(), snapshot_time, symbol_groups
 
     latest_results = {}
 
-    for symbol in SYMBOLS:
+    for symbol in symbols:
         result, error = cached_generate_signal(symbol)
 
         if result is None:
@@ -813,7 +823,7 @@ def scan_symbols():
             add_high_score_snapshot(result)
 
     history = load_high_score_history()
-    return latest_results, history, None
+    return latest_results, history, None, symbol_groups
 
 
 def render_opportunity_list(title, rows):
@@ -952,13 +962,13 @@ def render_signal_card(symbol, result):
                 st.write(f"- {reason}")
 
 
-def render_current_scanner(latest_results):
+def render_current_scanner(latest_results, symbol_groups):
     st.markdown('<div class="section-title">Scanner</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="section-kicker">Real-time opportunity groups</div>',
         unsafe_allow_html=True,
     )
-    for group_name, symbols in SYMBOL_GROUPS.items():
+    for group_name, symbols in symbol_groups.items():
         st.markdown(
             f'<div class="section-subtitle"><span>{group_name}</span>'
             f'<span class="section-count">{len(symbols)} Symbols</span></div>',
@@ -1016,7 +1026,7 @@ def main():
     require_app_access()
     render_header()
 
-    latest_results, high_score_history, _ = scan_symbols()
+    latest_results, high_score_history, _, symbol_groups = scan_symbols()
 
     render_top_opportunities(latest_results)
     st.divider()
@@ -1024,7 +1034,7 @@ def main():
     st.divider()
     render_score_guide()
     st.divider()
-    render_current_scanner(latest_results)
+    render_current_scanner(latest_results, symbol_groups)
     st.markdown(
         '<div class="notice notice-warning">Paper-trading dashboard only. Not financial advice.</div>',
         unsafe_allow_html=True,

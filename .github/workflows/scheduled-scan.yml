@@ -37,6 +37,7 @@ jobs:
         run: |
           git fetch origin scanner-data --depth=1 || true
           git show origin/scanner-data:high_score_history.csv > high_score_history.csv || true
+          git show origin/scanner-data:finnhub_movers_cache.json > finnhub_movers_cache.json || true
 
       - name: Run scanner
         run: python scheduled_scan.py
@@ -46,6 +47,7 @@ jobs:
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
           ALERT_TO_PHONE_NUMBER: ${{ secrets.ALERT_TO_PHONE_NUMBER }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
 
       - name: Publish scanner data
         run: |
@@ -53,6 +55,7 @@ jobs:
             mkdir -p /tmp/option-beacon-scanner-data
             cp latest_results.json /tmp/option-beacon-scanner-data/latest_results.json
             cp high_score_history.csv /tmp/option-beacon-scanner-data/high_score_history.csv || true
+            cp finnhub_movers_cache.json /tmp/option-beacon-scanner-data/finnhub_movers_cache.json || true
 
             git config user.name "option-beacon-scanner"
             git config user.email "actions@github.com"
@@ -60,7 +63,8 @@ jobs:
             git rm -rf . >/dev/null 2>&1 || true
             cp /tmp/option-beacon-scanner-data/* .
             touch high_score_history.csv
-            git add -f latest_results.json high_score_history.csv
+            touch finnhub_movers_cache.json
+            git add -f latest_results.json high_score_history.csv finnhub_movers_cache.json
             git commit -m "Update scheduled scanner data"
             git push -f origin scanner-data
           else

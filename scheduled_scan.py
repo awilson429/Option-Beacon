@@ -3,6 +3,7 @@ from datetime import time
 
 import pandas as pd
 
+from finnhub_universe import active_symbol_groups, flatten_symbol_groups
 from optionbeacon_alerts import send_high_score_alert, send_sms_message, twilio_configured
 from optionbeacon_history import (
     add_high_score_snapshot,
@@ -10,7 +11,7 @@ from optionbeacon_history import (
     load_high_score_history,
     previous_symbol_bias,
 )
-from optionbeacon_live import SYMBOLS, generate_signal
+from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import save_latest_results
 
 
@@ -72,8 +73,14 @@ def main():
     latest_results = {}
     high_score_history = load_high_score_history()
     alerts_enabled = twilio_configured()
+    symbol_groups, source, error = active_symbol_groups()
+    symbols = flatten_symbol_groups(symbol_groups)
 
-    for symbol in SYMBOLS:
+    print(f"Scanner universe: {source} ({len(symbols)} symbols)")
+    if error:
+        print(f"Scanner universe note: {error}")
+
+    for symbol in symbols:
         try:
             result = generate_signal(symbol)
         except Exception as exc:

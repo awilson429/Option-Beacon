@@ -12,9 +12,10 @@ from optionbeacon_strategy import (
     VOLUME_MULTIPLIER,
     score_candle as score_strategy_candle,
 )
+from finnhub_universe import DEFAULT_ETF_SYMBOLS, DEFAULT_STOCK_SYMBOLS
 
-ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
-STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
+ETF_SYMBOLS = DEFAULT_ETF_SYMBOLS
+STOCK_SYMBOLS = DEFAULT_STOCK_SYMBOLS
 SYMBOLS = ETF_SYMBOLS + STOCK_SYMBOLS
 
 PERIOD = "60d"
