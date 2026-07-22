@@ -9,6 +9,7 @@ signal_history.csv
 optionbeacon_live_signals.csv
 latest_results.json
 high_score_history.csv
+optionbeacon_trades.db
 threshold_optimizer_results.csv
 threshold_recommendations.csv
 

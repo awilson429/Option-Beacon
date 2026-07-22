@@ -17,6 +17,7 @@ from optionbeacon_history import (
 )
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
+from trade_storage import close_position, create_position, load_open_positions
 
 
 SYMBOL_GROUPS = DEFAULT_SYMBOL_GROUPS
@@ -910,6 +911,55 @@ def render_score_guide():
     )
 
 
+def render_enter_trade_form(symbol, result, trade_plan):
+    with st.expander("Enter Trade"):
+        st.markdown(
+            "Record a paper trade from this setup. The original plan will be saved separately from your actual entry."
+        )
+        with st.form(f"enter_trade_{symbol}"):
+            option_type = st.selectbox(
+                "Option type",
+                ["CALL", "PUT"],
+                index=0 if result.get("bias") == "Bullish" else 1,
+            )
+            f1, f2 = st.columns(2)
+            strike = f1.number_input("Strike", min_value=0.0, value=0.0, step=0.5)
+            expiration = f2.text_input("Expiration", placeholder="YYYY-MM-DD")
+
+            f3, f4 = st.columns(2)
+            entry_premium = f3.number_input("Entry premium", min_value=0.0, value=0.0, step=0.05)
+            contracts = f4.number_input("Contracts", min_value=1, value=1, step=1)
+
+            entry_underlying = st.number_input(
+                "Entry underlying price",
+                min_value=0.0,
+                value=float(result.get("price") or 0),
+                step=0.05,
+            )
+            notes = st.text_area("Notes", placeholder="Why are you entering? What would prove you wrong?")
+            submitted = st.form_submit_button("Save Paper Trade")
+
+        if submitted:
+            create_position(
+                symbol=symbol,
+                direction=trade_plan.get("direction", result.get("bias", "Neutral")),
+                option_type=option_type,
+                strike=strike or None,
+                expiration=expiration,
+                entry_premium=entry_premium or None,
+                contracts=int(contracts),
+                entry_underlying_price=entry_underlying or None,
+                current_stop=trade_plan.get("technical_stop"),
+                target_1=trade_plan.get("target_1"),
+                target_2=trade_plan.get("target_2"),
+                target_3=trade_plan.get("target_3"),
+                original_plan=trade_plan,
+                entry_notes=notes,
+            )
+            st.success(f"{symbol} paper trade saved.")
+            st.rerun()
+
+
 def render_signal_card(symbol, result):
     with st.container(border=True):
         st.markdown(f'<div class="ticker-title">{symbol}</div>', unsafe_allow_html=True)
@@ -982,6 +1032,8 @@ def render_signal_card(symbol, result):
 
                 st.write(trade_plan.get("contract_guidance", "Use liquid contracts with tight spreads."))
 
+            render_enter_trade_form(symbol, result, trade_plan)
+
         with st.expander("Signal Details"):
             checks = quality_summary(result)
             q1, q2, q3, q4, q5 = st.columns(5)
@@ -995,6 +1047,55 @@ def render_signal_card(symbol, result):
             reasons = result.get("reasons") or ["No strong setup yet"]
             for reason in reasons:
                 st.write(f"- {reason}")
+
+
+def render_active_trades():
+    render_section_header("Active Trades", "Paper trades currently being tracked")
+    positions = load_open_positions()
+
+    if not positions:
+        render_empty_state("No active paper trades yet.")
+        return
+
+    rows = []
+    for position in positions:
+        entry_premium = position.get("entry_premium") or 0
+        contracts = position.get("contracts") or 0
+        rows.append(
+            {
+                "ID": position["id"],
+                "Entered": position["entered_at"],
+                "Ticker": position["symbol"],
+                "Direction": position["direction"],
+                "Contract": f"{position['option_type']} {position.get('strike') or ''} {position.get('expiration') or ''}",
+                "Entry Premium": entry_premium,
+                "Contracts": contracts,
+                "Underlying Entry": position.get("entry_underlying_price"),
+                "Stop": position.get("current_stop"),
+                "Target 1": position.get("target_1"),
+                "Target 2": position.get("target_2"),
+            }
+        )
+
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    with st.expander("Close Paper Trade"):
+        position_options = {
+            f"#{position['id']} {position['symbol']} {position['option_type']}": position["id"]
+            for position in positions
+        }
+        selected = st.selectbox("Position", list(position_options.keys()))
+        exit_premium = st.number_input("Exit premium", min_value=0.0, value=0.0, step=0.05)
+        exit_notes = st.text_area("Exit notes", placeholder="Why are you closing this trade?")
+
+        if st.button("Mark Closed"):
+            close_position(
+                position_options[selected],
+                exit_premium=exit_premium or None,
+                exit_notes=exit_notes,
+            )
+            st.success("Paper trade closed.")
+            st.rerun()
 
 
 def render_current_scanner(latest_results, symbol_groups):
@@ -1064,6 +1165,8 @@ def main():
     latest_results, high_score_history, _, symbol_groups = scan_symbols()
 
     render_top_opportunities(latest_results)
+    st.divider()
+    render_active_trades()
     st.divider()
     render_recent_high_scores(high_score_history)
     st.divider()
