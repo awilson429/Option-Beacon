@@ -400,20 +400,8 @@ def configure_page():
             text-transform: inherit;
         }
 
-        [data-testid="stTabs"] [data-baseweb="tab-highlight"],
-        [data-testid="stTabs"] [data-baseweb="tab-border"] {
-            background: transparent !important;
-            border: 0 !important;
-            display: none !important;
-            height: 0 !important;
-        }
-
-        [data-testid="stTabs"] [role="tab"]::before,
-        [data-testid="stTabs"] [role="tab"]::after {
-            background: transparent !important;
-            border: 0 !important;
-            box-shadow: none !important;
-            content: none !important;
+        [data-testid="stTabs"] [data-baseweb="tab-highlight"] {
+            display: none;
         }
 
         .signal-pill {
