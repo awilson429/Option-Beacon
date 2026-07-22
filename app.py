@@ -938,18 +938,16 @@ def render_market_overview(latest_results):
     ]
 
     render_section_header("Market Snapshot", "Simple read on current conditions")
-
-    for row_start in range(0, len(snapshot_items), 4):
-        columns = st.columns(4)
-        for column, (label, value) in zip(columns, snapshot_items[row_start:row_start + 4]):
-            with column:
-                st.markdown(
-                    f'<div class="snapshot-item">'
-                    f'<div class="snapshot-label">{escape(label)}</div>'
-                    f'<div class="snapshot-value {value_class(value)}">'
-                    f'{escape(str(value))}</div></div>',
-                    unsafe_allow_html=True,
-                )
+    snapshot_html = "".join(
+        f"""
+        <div class="snapshot-item">
+            <div class="snapshot-label">{escape(label)}</div>
+            <div class="snapshot-value {value_class(value)}">{escape(str(value))}</div>
+        </div>
+        """
+        for label, value in snapshot_items
+    )
+    st.markdown(f'<div class="market-snapshot">{snapshot_html}</div>', unsafe_allow_html=True)
 
     st.markdown(
         '<div class="notice notice-info">Use this as background context. Top Opportunities still carries the main scanner ranking.</div>',
