@@ -7,7 +7,6 @@ from streamlit_autorefresh import st_autorefresh
 
 from finnhub_universe import (
     DEFAULT_SYMBOL_GROUPS,
-    active_symbol_groups,
     flatten_symbol_groups,
 )
 from optionbeacon_history import (
@@ -758,15 +757,6 @@ def render_empty_state(message):
     st.markdown(f'<div class="empty-state">{message}</div>', unsafe_allow_html=True)
 
 
-def finnhub_secret():
-    return st.secrets.get("FINNHUB_API_KEY", "")
-
-
-@st.cache_data(ttl=60 * 60 * 8, show_spinner=False)
-def cached_symbol_groups(finnhub_key):
-    return active_symbol_groups(api_key=finnhub_key)
-
-
 @st.cache_data(ttl=60, show_spinner=False)
 def cached_generate_signal(symbol):
     try:
@@ -783,18 +773,32 @@ def normalize_market_signal(result, market_open):
     return result
 
 
+def symbol_groups_from_snapshot(snapshot_results):
+    symbols = list(snapshot_results.keys())
+
+    if len(symbols) <= len(flatten_symbol_groups(DEFAULT_SYMBOL_GROUPS)):
+        return DEFAULT_SYMBOL_GROUPS
+
+    midpoint = min(25, max(1, len(symbols) // 2))
+    return {
+        "Top Bullish Movers": symbols[:midpoint],
+        "Top Bearish Movers": symbols[midpoint:],
+    }
+
+
 def scan_symbols():
     market_open = is_market_open_now()
-    symbol_groups, _, _ = cached_symbol_groups(finnhub_secret())
-    symbols = flatten_symbol_groups(symbol_groups)
     snapshot_results, snapshot_time = load_latest_results()
     if snapshot_results:
+        symbol_groups = symbol_groups_from_snapshot(snapshot_results)
         snapshot_results = {
             symbol: normalize_market_signal(result, market_open)
             for symbol, result in snapshot_results.items()
         }
         return snapshot_results, load_high_score_history(), snapshot_time, symbol_groups
 
+    symbol_groups = DEFAULT_SYMBOL_GROUPS
+    symbols = flatten_symbol_groups(symbol_groups)
     latest_results = {}
 
     for symbol in symbols:
