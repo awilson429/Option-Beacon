@@ -12,11 +12,6 @@ from optionbeacon_history import (
     load_high_score_history,
 )
 from optionbeacon_live import generate_signal
-from market_intelligence import (
-    build_market_overview,
-    build_trending_options_rows,
-    signal_explanation,
-)
 from optionbeacon_snapshot import load_latest_results
 
 
@@ -866,44 +861,6 @@ def render_top_opportunities(latest_results):
         render_opportunity_list("Top Bearish", bearish_rows)
 
 
-def render_market_overview(latest_results):
-    refreshed_at = eastern_now().strftime("%I:%M:%S %p ET")
-    overview = build_market_overview(
-        latest_results,
-        is_market_open_now(),
-        refreshed_at,
-    )
-
-    render_section_header("Market Overview", "Current scanner context across tracked tickers")
-    columns = st.columns(4)
-    overview_items = list(overview.items())
-    for index, (label, value) in enumerate(overview_items):
-        columns[index % 4].metric(label, value)
-
-    st.markdown(
-        '<div class="notice notice-info">Market regime helps frame scanner readings. It is context, not a stand-alone trade signal.</div>',
-        unsafe_allow_html=True,
-    )
-
-
-def render_trending_options(latest_results):
-    render_section_header(
-        "Trending Options Tickers",
-        "Ranked by current scanner strength until an approved sentiment provider is connected",
-    )
-    rows = build_trending_options_rows(latest_results)
-
-    if rows.empty:
-        render_empty_state("No trending ticker data available yet.")
-        return
-
-    st.dataframe(rows.head(10), use_container_width=True, hide_index=True)
-    st.markdown(
-        '<div class="notice notice-info">Mention, call/put, and options-volume fields are provider-ready placeholders. OptionBeacon will only fill them from approved APIs, not unauthorized scraping.</div>',
-        unsafe_allow_html=True,
-    )
-
-
 def render_score_guide():
     render_section_header("Score Guide", "How to read bullish and bearish setup scores")
     guide_rows = [
@@ -994,15 +951,6 @@ def render_signal_card(symbol, result):
             for reason in reasons:
                 st.write(f"- {reason}")
 
-            explanation = signal_explanation(result)
-            st.markdown("**Supporting Evidence**")
-            for reason in explanation["supporting"]:
-                st.write(f"- {reason}")
-
-            st.markdown("**Risk Checks**")
-            for risk in explanation["risks"]:
-                st.write(f"- {risk}")
-
 
 def render_current_scanner(latest_results):
     st.markdown('<div class="section-title">Scanner</div>', unsafe_allow_html=True)
@@ -1070,11 +1018,7 @@ def main():
 
     latest_results, high_score_history, _ = scan_symbols()
 
-    render_market_overview(latest_results)
-    st.divider()
     render_top_opportunities(latest_results)
-    st.divider()
-    render_trending_options(latest_results)
     st.divider()
     render_recent_high_scores(high_score_history)
     st.divider()
