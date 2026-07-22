@@ -350,11 +350,11 @@ def configure_page():
             color: var(--ob-muted);
         }
 
-        [data-testid="stRadio"] {
+        [data-testid="stTabs"] {
             margin-top: 0.25rem;
         }
 
-        [data-testid="stRadio"] [role="radiogroup"] {
+        [data-testid="stTabs"] [role="tablist"] {
             align-items: stretch;
             background: rgba(255, 255, 255, 0.035);
             border: 1px solid var(--ob-border);
@@ -366,7 +366,7 @@ def configure_page():
             width: 100%;
         }
 
-        [data-testid="stRadio"] [role="radiogroup"] label {
+        [data-testid="stTabs"] [role="tab"] {
             align-items: center;
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid var(--ob-border-strong);
@@ -385,23 +385,35 @@ def configure_page():
             white-space: nowrap;
         }
 
-        [data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) {
+        [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
             border-color: rgba(216, 179, 90, 0.65);
             color: var(--ob-text);
             background: rgba(216, 179, 90, 0.10);
         }
 
-        [data-testid="stRadio"] [role="radiogroup"] label > div:first-child {
-            display: none;
-        }
-
-        [data-testid="stRadio"] [role="radiogroup"] label p {
+        [data-testid="stTabs"] [role="tab"] p {
             color: inherit;
             font-size: inherit;
             font-weight: inherit;
             letter-spacing: inherit;
             margin: 0;
             text-transform: inherit;
+        }
+
+        [data-testid="stTabs"] [data-baseweb="tab-highlight"],
+        [data-testid="stTabs"] [data-baseweb="tab-border"] {
+            background: transparent !important;
+            border: 0 !important;
+            display: none !important;
+            height: 0 !important;
+        }
+
+        [data-testid="stTabs"] [role="tab"]::before,
+        [data-testid="stTabs"] [role="tab"]::after {
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            content: none !important;
         }
 
         .signal-pill {
@@ -721,11 +733,11 @@ def configure_page():
                 min-width: 0;
             }
 
-            [data-testid="stRadio"] [role="radiogroup"] {
+            [data-testid="stTabs"] [role="tablist"] {
                 gap: 0.35rem;
             }
 
-            [data-testid="stRadio"] [role="radiogroup"] label {
+            [data-testid="stTabs"] [role="tab"] {
                 font-size: 0.68rem;
                 letter-spacing: 0.02em;
                 padding: 0.3rem 0.3rem;
@@ -1212,23 +1224,23 @@ def main():
     render_top_opportunities(latest_results)
     st.divider()
 
-    selected_page = st.radio(
-        "Dashboard page",
-        ["Market", "Trending", "Scanner", "History", "Guide"],
-        horizontal=True,
-        label_visibility="collapsed",
-        key="dashboard_page",
+    market_tab, trending_tab, scanner_tab, history_tab, guide_tab = st.tabs(
+        ["Market", "Trending", "Scanner", "History", "Guide"]
     )
 
-    if selected_page == "Market":
+    with market_tab:
         render_market_overview(latest_results)
-    elif selected_page == "Trending":
+
+    with trending_tab:
         render_trending_options(latest_results)
-    elif selected_page == "Scanner":
+
+    with scanner_tab:
         render_current_scanner(latest_results)
-    elif selected_page == "History":
+
+    with history_tab:
         render_recent_high_scores(high_score_history)
-    elif selected_page == "Guide":
+
+    with guide_tab:
         render_score_guide()
 
     st.markdown(
