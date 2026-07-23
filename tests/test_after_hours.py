@@ -8,6 +8,7 @@ from after_hours import (
     normalize_earnings,
     normalize_news,
     normalize_report_time,
+    readable_api_error,
 )
 
 
@@ -66,6 +67,10 @@ def test_normalize_news_formats_current_day_time():
 
 def test_compact_summary_truncates_long_text():
     assert compact_summary("x" * 200, max_chars=10) == "xxxxxxx..."
+
+
+def test_readable_api_error_keeps_plain_exceptions():
+    assert readable_api_error(RuntimeError("missing key")) == "missing key"
 
 
 def test_after_hours_focus_rows_keeps_high_quality_setups():

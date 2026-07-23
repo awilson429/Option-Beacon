@@ -42,6 +42,21 @@ def _request_json(path, params, api_key=None, timeout=8):
         return json.loads(response.read().decode("utf-8"))
 
 
+def readable_api_error(exc):
+    if isinstance(exc, HTTPError):
+        detail = ""
+        try:
+            detail = exc.read().decode("utf-8").strip()
+        except Exception:
+            detail = ""
+
+        if detail:
+            return f"HTTP {exc.code}: {compact_summary(detail, max_chars=180)}"
+        return f"HTTP {exc.code}: {exc.reason}"
+
+    return str(exc)
+
+
 def after_hours_date_window(days=2, now=None):
     current = now or eastern_now()
     start = current.date()
@@ -152,22 +167,24 @@ def fetch_after_hours_briefing(days=2, api_key=None):
     errors = []
     earnings = []
     news = []
+    key_configured = bool((api_key or finnhub_api_key()).strip())
 
     try:
         earnings = fetch_earnings_calendar(days=days, api_key=api_key)
     except (RuntimeError, OSError, HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
-        errors.append(f"Earnings unavailable: {exc}")
+        errors.append(f"Earnings unavailable: {readable_api_error(exc)}")
 
     try:
         news = fetch_market_news(api_key=api_key)
     except (RuntimeError, OSError, HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
-        errors.append(f"News unavailable: {exc}")
+        errors.append(f"News unavailable: {readable_api_error(exc)}")
 
     return {
         "updated_at": eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET"),
         "earnings": earnings,
         "news": news,
         "errors": errors,
+        "key_configured": key_configured,
     }
 
 

@@ -1340,13 +1340,21 @@ def render_after_hours(latest_results):
     c4.metric("Updated", briefing.get("updated_at", "N/A").split(" ")[-3])
 
     if briefing.get("errors"):
+        if briefing.get("key_configured"):
+            error_intro = "Finnhub key detected, but one or more after-hours requests failed."
+        else:
+            error_intro = "FINNHUB_API_KEY is not detected in Streamlit Secrets."
+
         st.markdown(
-            '<div class="notice notice-warning">'
-            '<strong>Some after-hours data is unavailable.</strong><br>'
-            'Check that FINNHUB_API_KEY is saved in Streamlit Secrets, then refresh in a minute.'
-            '</div>',
+            f'<div class="notice notice-warning">'
+            f'<strong>Some after-hours data is unavailable.</strong><br>'
+            f'{escape(error_intro)}'
+            f'</div>',
             unsafe_allow_html=True,
         )
+        with st.expander("After-hours data details"):
+            for error in briefing.get("errors", []):
+                st.write(error)
 
     if focus_rows:
         st.markdown(
