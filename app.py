@@ -16,7 +16,11 @@ from optionbeacon_history import (
     eastern_now,
     load_high_score_history,
 )
-from trade_journal import lesson_pattern_rows, outcome_review_rows
+from trade_journal import (
+    lesson_pattern_rows,
+    outcome_review_rows,
+    review_dashboard_rows,
+)
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
 from optionbeacon_alerts import send_trade_coach_alert, twilio_configured
@@ -1374,8 +1378,13 @@ def render_trade_journal():
         render_empty_state("No closed paper trades yet.")
     else:
         journal_df = pd.DataFrame(position_journal_rows(closed_positions))
+        review_df = pd.DataFrame(review_dashboard_rows(journal_df.to_dict("records")))
         outcome_df = pd.DataFrame(outcome_review_rows(journal_df.to_dict("records")))
         lesson_df = pd.DataFrame(lesson_pattern_rows(journal_df.to_dict("records")))
+
+        if not review_df.empty:
+            st.markdown("**Trade Review Dashboard**")
+            st.dataframe(review_df, use_container_width=True, hide_index=True)
 
         if not outcome_df.empty:
             st.markdown("**Outcome Review**")

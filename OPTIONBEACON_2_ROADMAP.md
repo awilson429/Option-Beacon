@@ -29,7 +29,8 @@ Build OptionBeacon into a trade planning and management system, not just a scann
 - [x] Add compact active-trade summary.
 - [x] Add closed-trade outcome tags and lessons learned fields.
 - [x] Add journal review stats by outcome tag and common lesson patterns.
+- [x] Add trade review dashboard by setup, management, and discipline.
 
 ## Resume Here
 
-Next implementation step: add a trade review dashboard that separates setup quality, management quality, and rule discipline.
+Next implementation step: add optional structured review fields for setup grade, management grade, and rule-following score.

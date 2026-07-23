@@ -1,4 +1,8 @@
-from trade_journal import lesson_pattern_rows, outcome_review_rows
+from trade_journal import (
+    lesson_pattern_rows,
+    outcome_review_rows,
+    review_dashboard_rows,
+)
 
 
 def test_outcome_review_rows_groups_closed_trades():
@@ -61,3 +65,32 @@ def test_outcome_review_rows_ignores_missing_pnl():
             "Win Rate %": 0.0,
         }
     ]
+
+
+def test_review_dashboard_rows_separates_trade_quality_lenses():
+    rows = [
+        {"Outcome": "Good setup / poor management"},
+        {"Outcome": "Bad setup / avoided worse loss"},
+        {"Outcome": "Rule break"},
+    ]
+
+    dashboard = review_dashboard_rows(rows)
+
+    assert {
+        "Review Area": "Setup Quality",
+        "Result": "Good setup",
+        "Trades": 1,
+        "Share %": 33.33,
+    } in dashboard
+    assert {
+        "Review Area": "Management Quality",
+        "Result": "Poor management",
+        "Trades": 1,
+        "Share %": 33.33,
+    } in dashboard
+    assert {
+        "Review Area": "Rule Discipline",
+        "Result": "Rule break",
+        "Trades": 1,
+        "Share %": 33.33,
+    } in dashboard

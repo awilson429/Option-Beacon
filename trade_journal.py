@@ -93,6 +93,71 @@ def outcome_review_rows(journal_rows):
     return sorted(rows, key=lambda row: row["Trades"], reverse=True)
 
 
+def _quality_labels(outcome):
+    outcome = _clean_text(outcome)
+
+    setup_quality = "Unreviewed"
+    management_quality = "Unreviewed"
+    rule_discipline = "Rules followed"
+
+    if "Good setup" in outcome:
+        setup_quality = "Good setup"
+    elif "Bad setup" in outcome:
+        setup_quality = "Bad setup"
+    elif outcome == "Breakeven":
+        setup_quality = "Neutral setup"
+
+    if "good management" in outcome:
+        management_quality = "Good management"
+    elif "poor management" in outcome:
+        management_quality = "Poor management"
+    elif "avoided worse loss" in outcome:
+        management_quality = "Good management"
+    elif outcome == "Breakeven":
+        management_quality = "Neutral management"
+
+    if outcome == "Rule break":
+        setup_quality = "Unclear setup"
+        management_quality = "Rule break"
+        rule_discipline = "Rule break"
+    elif outcome == "Unreviewed":
+        rule_discipline = "Unreviewed"
+
+    return setup_quality, management_quality, rule_discipline
+
+
+def review_dashboard_rows(journal_rows):
+    buckets = {
+        "Setup Quality": Counter(),
+        "Management Quality": Counter(),
+        "Rule Discipline": Counter(),
+    }
+
+    for row in journal_rows:
+        setup_quality, management_quality, rule_discipline = _quality_labels(
+            row.get("Outcome")
+        )
+        buckets["Setup Quality"][setup_quality] += 1
+        buckets["Management Quality"][management_quality] += 1
+        buckets["Rule Discipline"][rule_discipline] += 1
+
+    rows = []
+    for category, counter in buckets.items():
+        total = sum(counter.values())
+        for label, count in counter.most_common():
+            percent = round((count / total) * 100, 2) if total else 0
+            rows.append(
+                {
+                    "Review Area": category,
+                    "Result": label,
+                    "Trades": count,
+                    "Share %": percent,
+                }
+            )
+
+    return rows
+
+
 def lesson_pattern_rows(journal_rows, limit=10):
     words = Counter()
     for row in journal_rows:
