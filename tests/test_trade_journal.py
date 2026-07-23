@@ -94,3 +94,35 @@ def test_review_dashboard_rows_separates_trade_quality_lenses():
         "Trades": 1,
         "Share %": 33.33,
     } in dashboard
+
+
+def test_review_dashboard_rows_prefers_structured_review_fields():
+    rows = [
+        {
+            "Outcome": "Good setup / good management",
+            "Setup Grade": "D",
+            "Management Grade": "A",
+            "Rule Score": 4,
+        }
+    ]
+
+    dashboard = review_dashboard_rows(rows)
+
+    assert {
+        "Review Area": "Setup Quality",
+        "Result": "Bad setup",
+        "Trades": 1,
+        "Share %": 100.0,
+    } in dashboard
+    assert {
+        "Review Area": "Management Quality",
+        "Result": "Good management",
+        "Trades": 1,
+        "Share %": 100.0,
+    } in dashboard
+    assert {
+        "Review Area": "Rule Discipline",
+        "Result": "Rule break",
+        "Trades": 1,
+        "Share %": 100.0,
+    } in dashboard

@@ -126,6 +126,28 @@ def _quality_labels(outcome):
     return setup_quality, management_quality, rule_discipline
 
 
+def _grade_bucket(grade, positive_label, negative_label):
+    grade = _clean_text(grade)
+    if grade in {"A", "B"}:
+        return positive_label
+    if grade in {"C"}:
+        return "Neutral"
+    if grade in {"D", "F"}:
+        return negative_label
+    return None
+
+
+def _rule_bucket(score):
+    score = _number_or_none(score)
+    if score is None:
+        return None
+    if score >= 8:
+        return "Rules followed"
+    if score >= 5:
+        return "Rules mixed"
+    return "Rule break"
+
+
 def review_dashboard_rows(journal_rows):
     buckets = {
         "Setup Quality": Counter(),
@@ -134,9 +156,20 @@ def review_dashboard_rows(journal_rows):
     }
 
     for row in journal_rows:
-        setup_quality, management_quality, rule_discipline = _quality_labels(
+        fallback_setup, fallback_management, fallback_discipline = _quality_labels(
             row.get("Outcome")
         )
+        setup_quality = _grade_bucket(
+            row.get("Setup Grade"),
+            "Good setup",
+            "Bad setup",
+        ) or fallback_setup
+        management_quality = _grade_bucket(
+            row.get("Management Grade"),
+            "Good management",
+            "Poor management",
+        ) or fallback_management
+        rule_discipline = _rule_bucket(row.get("Rule Score")) or fallback_discipline
         buckets["Setup Quality"][setup_quality] += 1
         buckets["Management Quality"][management_quality] += 1
         buckets["Rule Discipline"][rule_discipline] += 1

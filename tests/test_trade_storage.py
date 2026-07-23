@@ -42,6 +42,9 @@ def test_create_and_close_position(tmp_path):
         exit_notes="Test exit",
         outcome_tag="Good setup / good management",
         lessons_learned="Let the winner work.",
+        setup_grade="A",
+        management_grade="B",
+        rule_following_score=9,
         db_file=str(db_file),
     )
 
@@ -51,6 +54,9 @@ def test_create_and_close_position(tmp_path):
     assert closed[0]["exit_premium"] == 5.1
     assert closed[0]["outcome_tag"] == "Good setup / good management"
     assert closed[0]["lessons_learned"] == "Let the winner work."
+    assert closed[0]["setup_grade"] == "A"
+    assert closed[0]["management_grade"] == "B"
+    assert closed[0]["rule_following_score"] == 9
 
 
 def test_record_recommendation_skips_duplicate_score_and_action(tmp_path):

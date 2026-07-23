@@ -1284,6 +1284,21 @@ def render_active_trades(latest_results):
                 "Rule break",
             ],
         )
+        review_1, review_2, review_3 = st.columns(3)
+        setup_grade = review_1.selectbox(
+            "Setup grade",
+            ["Unreviewed", "A", "B", "C", "D", "F"],
+        )
+        management_grade = review_2.selectbox(
+            "Management grade",
+            ["Unreviewed", "A", "B", "C", "D", "F"],
+        )
+        rule_following_score = review_3.slider(
+            "Rule-following score",
+            min_value=0,
+            max_value=10,
+            value=5,
+        )
         exit_notes = st.text_area("Exit notes", placeholder="Why are you closing this trade?")
         lessons_learned = st.text_area(
             "Lessons learned",
@@ -1297,6 +1312,9 @@ def render_active_trades(latest_results):
                 exit_notes=exit_notes,
                 outcome_tag=outcome_tag,
                 lessons_learned=lessons_learned,
+                setup_grade=setup_grade,
+                management_grade=management_grade,
+                rule_following_score=rule_following_score,
             )
             st.success("Paper trade closed.")
             st.rerun()
@@ -1331,6 +1349,9 @@ def position_journal_rows(positions):
                 "Premium P/L": premium_pnl,
                 "P/L %": pnl_percent,
                 "Outcome": position.get("outcome_tag"),
+                "Setup Grade": position.get("setup_grade"),
+                "Management Grade": position.get("management_grade"),
+                "Rule Score": position.get("rule_following_score"),
                 "Entry Notes": position.get("entry_notes"),
                 "Exit Notes": position.get("exit_notes"),
                 "Lessons Learned": position.get("lessons_learned"),

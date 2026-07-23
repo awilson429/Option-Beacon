@@ -14,6 +14,9 @@ POSITION_COLUMNS = {
     "partial_2_taken": "INTEGER DEFAULT 0",
     "outcome_tag": "TEXT",
     "lessons_learned": "TEXT",
+    "setup_grade": "TEXT",
+    "management_grade": "TEXT",
+    "rule_following_score": "INTEGER",
 }
 
 RECOMMENDATION_COLUMNS = {
@@ -87,7 +90,10 @@ def initialize_trade_db(db_file=DB_FILE):
                 entry_notes TEXT,
                 exit_notes TEXT,
                 outcome_tag TEXT,
-                lessons_learned TEXT
+                lessons_learned TEXT,
+                setup_grade TEXT,
+                management_grade TEXT,
+                rule_following_score INTEGER
             )
             """
         )
@@ -214,6 +220,9 @@ def close_position(
     exit_notes="",
     outcome_tag="Unreviewed",
     lessons_learned="",
+    setup_grade="Unreviewed",
+    management_grade="Unreviewed",
+    rule_following_score=None,
     db_file=DB_FILE,
 ):
     initialize_trade_db(db_file)
@@ -237,7 +246,10 @@ def close_position(
                 exit_premium = ?,
                 exit_notes = ?,
                 outcome_tag = ?,
-                lessons_learned = ?
+                lessons_learned = ?,
+                setup_grade = ?,
+                management_grade = ?,
+                rule_following_score = ?
             WHERE id = ?
             """,
             (
@@ -249,6 +261,9 @@ def close_position(
                 exit_notes,
                 outcome_tag,
                 lessons_learned,
+                setup_grade,
+                management_grade,
+                rule_following_score,
                 position_id,
             ),
         )
