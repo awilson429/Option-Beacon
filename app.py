@@ -913,7 +913,7 @@ def render_score_guide():
         {
             "Score Range": "90-100",
             "Meaning": "High-probability setup",
-            "Action": "Alert-worthy. Review the setup, price levels, and risk before paper trading.",
+            "Action": "Alert-worthy. Review the setup, price levels, and risk before taking action.",
         },
         {
             "Score Range": "80-89",
@@ -941,7 +941,7 @@ def render_score_guide():
 def render_enter_trade_form(symbol, result, trade_plan):
     with st.expander("Enter Trade"):
         st.markdown(
-            "Record a paper trade from this setup. The original plan will be saved separately from your actual entry."
+            "Record a trade plan from this setup. The original plan will be saved separately from your actual entry."
         )
         with st.form(f"enter_trade_{symbol}"):
             option_type = st.selectbox(
@@ -964,7 +964,7 @@ def render_enter_trade_form(symbol, result, trade_plan):
                 step=0.05,
             )
             notes = st.text_area("Notes", placeholder="Why are you entering? What would prove you wrong?")
-            submitted = st.form_submit_button("Save Paper Trade")
+            submitted = st.form_submit_button("Save Trade Plan")
 
         if submitted:
             create_position(
@@ -983,7 +983,7 @@ def render_enter_trade_form(symbol, result, trade_plan):
                 original_plan=trade_plan,
                 entry_notes=notes,
             )
-            st.success(f"{symbol} paper trade saved.")
+            st.success(f"{symbol} trade plan saved.")
             st.rerun()
 
 
@@ -1077,11 +1077,11 @@ def render_signal_card(symbol, result):
 
 
 def render_active_trades(latest_results):
-    render_section_header("Active Trades", "Paper trades currently being tracked")
+    render_section_header("Active Trades", "Trades currently being tracked")
     positions = load_open_positions()
 
     if not positions:
-        render_empty_state("No active paper trades yet.")
+        render_empty_state("No active trades yet.")
         return
 
     rows = []
@@ -1242,7 +1242,7 @@ def render_active_trades(latest_results):
         timeline = load_recommendations(position_options[selected])
 
         if not timeline:
-            render_empty_state("No coach changes logged for this paper trade yet.")
+            render_empty_state("No coach changes logged for this trade yet.")
         else:
             timeline_df = pd.DataFrame(recommendation_rows(timeline))
             st.dataframe(timeline_df, use_container_width=True, hide_index=True)
@@ -1273,7 +1273,7 @@ def render_active_trades(latest_results):
             st.success("Premium updated.")
             st.rerun()
 
-    with st.expander("Close Paper Trade"):
+    with st.expander("Close Trade"):
         position_options = {
             f"#{position['id']} {position['symbol']} {position['option_type']}": position["id"]
             for position in positions
@@ -1324,7 +1324,7 @@ def render_active_trades(latest_results):
                 management_grade=management_grade,
                 rule_following_score=rule_following_score,
             )
-            st.success("Paper trade closed.")
+            st.success("Trade closed.")
             st.rerun()
 
 
@@ -1399,12 +1399,12 @@ def recommendation_rows(recommendations):
 
 
 def render_trade_journal():
-    render_section_header("Trade Journal", "Closed paper trades and coach history")
+    render_section_header("Trade Journal", "Closed trades and coach history")
     closed_positions = load_closed_positions()
     recommendations = load_recommendations()
 
     if not closed_positions:
-        render_empty_state("No closed paper trades yet.")
+        render_empty_state("No closed trades yet.")
     else:
         journal_df = pd.DataFrame(position_journal_rows(closed_positions))
         journal_records = journal_df.to_dict("records")
@@ -1562,7 +1562,7 @@ def replay_plain_read(summary, results):
     if win_rate >= 50 and average_pnl > 0 and target_1_rate >= 40:
         return (
             "Promising replay.",
-            "The setup rules found enough winners and reached first targets often enough to deserve more paper testing.",
+            "The setup rules found enough winners and reached first targets often enough to deserve more review.",
         )
     if average_pnl > 0:
         return (
@@ -1827,7 +1827,7 @@ def main():
     st.divider()
     render_current_scanner(latest_results, symbol_groups)
     st.markdown(
-        '<div class="notice notice-warning">Paper-trading dashboard only. Not financial advice.</div>',
+        '<div class="notice notice-warning">Decision-support dashboard only. Not financial advice.</div>',
         unsafe_allow_html=True,
     )
     st.markdown(

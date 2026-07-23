@@ -90,7 +90,7 @@ def run_active_trade_coaching(
 def main():
     rows = run_active_trade_coaching()
     if not rows:
-        print("No open paper trades to coach.")
+        print("No open trades to coach.")
         return
 
     for row in rows:

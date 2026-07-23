@@ -199,7 +199,7 @@ def coach_recommendation(position, scanner_result=None, current_premium=None):
         exit_payload["exit_reasons"] = [phase_two["reason"]] + exit_payload["exit_reasons"]
     elif score >= 90:
         action = "Exit"
-        next_step = "The original thesis appears invalidated. Close or strongly consider closing the paper trade."
+        next_step = "The original thesis appears invalidated. Close or strongly consider closing the trade."
     elif score >= 75:
         action = "Strong exit warning"
         next_step = "Review immediately. If this were live, this would call for decisive risk reduction."
