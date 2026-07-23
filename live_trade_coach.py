@@ -5,6 +5,89 @@ ACTION_AVOID = "Avoid chasing"
 ACTION_WAIT = "Wait"
 
 
+def exit_score_for_live_setup(result, coach=None):
+    if not result:
+        return {
+            "exit_score": 0,
+            "exit_label": "No active idea",
+            "exit_reasons": ["No live setup is available."],
+        }
+
+    coach = coach or {"action": ACTION_WAIT}
+    signal = result.get("signal", "WATCHLIST")
+    score = int(_number(result.get("confidence")))
+    direction = result.get("bias", "Neutral")
+    timing = result.get("entry_timing", "Wait")
+    reasons = []
+    exit_score = 0
+
+    if signal in ["MARKET CLOSED / WAIT", "WAITING FOR CANDLE", "DATA UNAVAILABLE"]:
+        return {
+            "exit_score": 0,
+            "exit_label": "No active idea",
+            "exit_reasons": ["Scanner is not showing an active idea."],
+        }
+
+    if coach["action"] == ACTION_AVOID:
+        exit_score += 65
+        reasons.append("The setup is extended; chasing risk is elevated.")
+
+    if timing in ["Do not chase", "Setup invalidated"]:
+        exit_score += 25
+        reasons.append(f"Entry timing is {timing.lower()}.")
+
+    bullish_score = _number(result.get("bullish_score"))
+    bearish_score = _number(result.get("bearish_score"))
+    if direction == "Bullish" and bearish_score >= bullish_score - 5:
+        exit_score += 20
+        reasons.append("Bearish score is close enough to challenge the bullish thesis.")
+    elif direction == "Bearish" and bullish_score >= bearish_score - 5:
+        exit_score += 20
+        reasons.append("Bullish score is close enough to challenge the bearish thesis.")
+
+    price = _number(result.get("price"))
+    vwap = _number(result.get("vwap"))
+    macd_hist = _number(result.get("macd_hist"))
+    relative_volume = _number(result.get("relative_volume"))
+
+    if direction == "Bullish" and price and vwap and price < vwap:
+        exit_score += 18
+        reasons.append("Price is below VWAP against the bullish idea.")
+    elif direction == "Bearish" and price and vwap and price > vwap:
+        exit_score += 18
+        reasons.append("Price is above VWAP against the bearish idea.")
+
+    if direction == "Bullish" and macd_hist < 0:
+        exit_score += 12
+        reasons.append("MACD histogram is bearish against the call idea.")
+    elif direction == "Bearish" and macd_hist > 0:
+        exit_score += 12
+        reasons.append("MACD histogram is bullish against the put idea.")
+
+    if relative_volume and relative_volume < 0.85:
+        exit_score += 10
+        reasons.append("Relative volume is fading.")
+
+    if score >= 90 and exit_score < 20:
+        reasons.append("No major reversal warning is active yet.")
+
+    exit_score = min(100, exit_score)
+    if exit_score >= 80:
+        label = "Reversal risk high"
+    elif exit_score >= 55:
+        label = "Weakness building"
+    elif exit_score >= 30:
+        label = "Some caution"
+    else:
+        label = "Hold idea"
+
+    return {
+        "exit_score": exit_score,
+        "exit_label": label,
+        "exit_reasons": reasons or ["No major reversal warning is active yet."],
+    }
+
+
 def _number(value, default=0):
     try:
         return float(value) if value is not None else default
@@ -52,7 +135,7 @@ def _management_text(result):
 
 def coach_live_setup(result):
     if not result:
-        return {
+        payload = {
             "action": ACTION_WAIT,
             "priority": 0,
             "summary": "No scanner data is available yet.",
@@ -60,6 +143,8 @@ def coach_live_setup(result):
             "risk_note": "No trade idea is active.",
             "contract": "N/A",
         }
+        payload.update(exit_score_for_live_setup(result, payload))
+        return payload
 
     signal = result.get("signal", "WATCHLIST")
     direction = result.get("bias", "Neutral")
@@ -74,7 +159,7 @@ def coach_live_setup(result):
     contract = _option_type(direction)
 
     if signal in ["MARKET CLOSED / WAIT", "WAITING FOR CANDLE"]:
-        return {
+        payload = {
             "action": ACTION_WAIT,
             "priority": score,
             "summary": f"{direction} setup is not actionable yet.",
@@ -82,9 +167,11 @@ def coach_live_setup(result):
             "risk_note": "Do not force an entry while the scanner is waiting.",
             "contract": contract,
         }
+        payload.update(exit_score_for_live_setup(result, payload))
+        return payload
 
     if signal == "DATA UNAVAILABLE":
-        return {
+        payload = {
             "action": ACTION_WAIT,
             "priority": 0,
             "summary": "Market data is unavailable for this symbol.",
@@ -92,9 +179,11 @@ def coach_live_setup(result):
             "risk_note": "No trade idea should be evaluated without data.",
             "contract": contract,
         }
+        payload.update(exit_score_for_live_setup(result, payload))
+        return payload
 
     if timing == "Do not chase" or stage == "Extended":
-        return {
+        payload = {
             "action": ACTION_AVOID,
             "priority": score,
             "summary": f"{direction} setup is extended at {price}.",
@@ -102,9 +191,11 @@ def coach_live_setup(result):
             "risk_note": f"Invalidation remains {invalidation}.",
             "contract": contract,
         }
+        payload.update(exit_score_for_live_setup(result, payload))
+        return payload
 
     if timing == "Trigger confirmed" and signal in ["BULLISH SETUP", "BEARISH SETUP"]:
-        return {
+        payload = {
             "action": ACTION_ENTER,
             "priority": score,
             "summary": f"{direction} {contract} idea is active at {price}.",
@@ -112,9 +203,11 @@ def coach_live_setup(result):
             "risk_note": _management_text(result),
             "contract": contract,
         }
+        payload.update(exit_score_for_live_setup(result, payload))
+        return payload
 
     if timing == "Watch closely" or stage == "Armed":
-        return {
+        payload = {
             "action": ACTION_WATCH,
             "priority": score,
             "summary": f"{direction} {contract} idea is setting up.",
@@ -122,9 +215,11 @@ def coach_live_setup(result):
             "risk_note": f"Do not act if price violates {invalidation}.",
             "contract": contract,
         }
+        payload.update(exit_score_for_live_setup(result, payload))
+        return payload
 
     if score >= 85 and direction in ["Bullish", "Bearish"]:
-        return {
+        payload = {
             "action": ACTION_HOLD,
             "priority": score,
             "summary": f"{direction} idea has a strong score but timing is {timing.lower()}.",
@@ -132,8 +227,10 @@ def coach_live_setup(result):
             "risk_note": f"Use {invalidation} as the thesis failure area.",
             "contract": contract,
         }
+        payload.update(exit_score_for_live_setup(result, payload))
+        return payload
 
-    return {
+    payload = {
         "action": ACTION_WAIT,
         "priority": score,
         "summary": f"{direction} setup is still developing.",
@@ -141,6 +238,8 @@ def coach_live_setup(result):
         "risk_note": "No live trade idea is active yet.",
         "contract": contract,
     }
+    payload.update(exit_score_for_live_setup(result, payload))
+    return payload
 
 
 def coach_rows(latest_results, min_score=80):
@@ -162,6 +261,8 @@ def coach_rows(latest_results, min_score=80):
                 "Timing": (result or {}).get("entry_timing", "Wait"),
                 "Coach Summary": coach["summary"],
                 "Next Step": coach["next_step"],
+                "Exit Score": coach["exit_score"],
+                "Exit Label": coach["exit_label"],
                 "Risk Note": coach["risk_note"],
             }
         )

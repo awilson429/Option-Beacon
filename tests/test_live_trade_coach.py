@@ -22,6 +22,7 @@ def test_live_coach_marks_triggered_setup_as_entry_zone_active():
 
     assert coach["action"] == ACTION_ENTER
     assert coach["contract"] == "CALL"
+    assert coach["exit_score"] >= 0
 
 
 def test_live_coach_marks_armed_setup_as_watch_for_trigger():
@@ -61,3 +62,4 @@ def test_live_coach_warns_when_setup_is_extended():
     coach = coach_live_setup(result)
 
     assert coach["action"] == ACTION_AVOID
+    assert coach["exit_score"] >= 65

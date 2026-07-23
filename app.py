@@ -162,10 +162,63 @@ def opportunity_rows(latest_results, direction, limit=3):
                 "setup_stage": result.get("setup_stage", ""),
                 "what_next": result.get("what_next", ""),
                 "reasons": result.get("reasons", []),
+                "result": result,
             }
         )
 
     return sorted(rows, key=lambda row: (row["is_active"], row["score"]), reverse=True)[:limit]
+
+
+def opportunity_grade(score):
+    if score >= 95:
+        return "A+"
+    if score >= 90:
+        return "A"
+    if score >= 85:
+        return "B+"
+    if score >= 80:
+        return "B"
+    if score >= 70:
+        return "C"
+    return "Developing"
+
+
+def money(value):
+    try:
+        return f"${float(value):.2f}" if value is not None else "N/A"
+    except (TypeError, ValueError):
+        return "N/A"
+
+
+def factor_status(result, direction, latest_results=None):
+    latest_results = latest_results or {}
+    trend = score_value(result, "trend_score")
+    momentum = score_value(result, "momentum_score")
+    volume = score_value(result, "volume_score")
+    price_action = score_value(result, "price_action_score")
+
+    market_support = "Waiting"
+    market_scores = []
+    for symbol in ["SPY", "QQQ"]:
+        market_result = latest_results.get(symbol)
+        if market_result:
+            market_scores.append(market_result.get("bias") == direction)
+
+    if market_scores:
+        market_support = "Aligned" if any(market_scores) else "Mixed"
+
+    return [
+        ("Trend", "Aligned" if trend >= 18 else "Developing"),
+        ("Momentum", "Aligned" if momentum >= 14 else "Developing"),
+        ("Volume", "Confirmed" if volume >= 14 else "Waiting"),
+        ("Price Action", "Confirmed" if price_action >= 12 else "Waiting"),
+        ("Market Support", market_support),
+        ("Sentiment", "Not connected"),
+    ]
+
+
+def plan_value(plan, key, fallback=None):
+    return plan.get(key) if plan and plan.get(key) is not None else fallback
 
 
 def configure_page():
@@ -575,6 +628,104 @@ def configure_page():
             white-space: nowrap;
         }
 
+        .coach-card {
+            border: 1px solid var(--ob-border);
+            border-radius: 8px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018));
+            padding: 1rem;
+            margin-bottom: 0.85rem;
+        }
+
+        .coach-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding-bottom: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .coach-symbol {
+            color: var(--ob-text);
+            font-size: 1.55rem;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+
+        .coach-grade {
+            color: var(--ob-gold);
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .coach-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.65rem;
+            margin: 0.75rem 0;
+        }
+
+        .coach-metric {
+            border: 1px solid var(--ob-border);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.035);
+            padding: 0.65rem;
+            min-height: 4.2rem;
+        }
+
+        .coach-label {
+            color: var(--ob-muted);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .coach-value {
+            color: var(--ob-text);
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-top: 0.2rem;
+        }
+
+        .factor-list {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.45rem;
+            margin: 0.75rem 0;
+        }
+
+        .factor-pill {
+            border: 1px solid var(--ob-border);
+            border-radius: 8px;
+            color: var(--ob-muted);
+            background: rgba(255,255,255,0.025);
+            padding: 0.45rem 0.55rem;
+            font-size: 0.86rem;
+        }
+
+        .factor-good {
+            border-color: rgba(47, 211, 122, 0.35);
+            color: var(--ob-green);
+        }
+
+        .factor-warn {
+            border-color: rgba(216, 179, 90, 0.35);
+            color: #d9c385;
+        }
+
+        .why-list {
+            color: var(--ob-muted);
+            margin: 0.65rem 0 0;
+            padding-left: 1rem;
+        }
+
+        .why-list li {
+            margin-bottom: 0.25rem;
+        }
+
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border-color: var(--ob-border);
             border-radius: 8px;
@@ -665,6 +816,11 @@ def configure_page():
 
             .opportunity-reason {
                 grid-column: 1 / -1;
+            }
+
+            .coach-grid,
+            .factor-list {
+                grid-template-columns: 1fr 1fr;
             }
         }
 
@@ -860,38 +1016,89 @@ def scan_symbols():
     return latest_results, history, None, symbol_groups
 
 
-def render_opportunity_list(title, rows):
-    with st.container(border=True):
-        title_class = "signal-call" if "Bullish" in title else "signal-put" if "Bearish" in title else ""
-        st.markdown(
-            f'<div class="opportunity-heading {title_class}">{title}</div>',
-            unsafe_allow_html=True,
+def render_opportunity_card(row, latest_results):
+    result = row["result"]
+    plan = result.get("trade_plan") or {}
+    score = row["score"]
+    grade = opportunity_grade(score)
+    direction = result.get("bias", "Neutral")
+    coach = coach_live_setup(result)
+    exit_reasons = coach.get("exit_reasons", [])
+    factors = factor_status(result, direction, latest_results)
+    factor_html = ""
+    for label, status in factors:
+        status_class = "factor-good" if status in ["Aligned", "Confirmed"] else "factor-warn"
+        factor_html += (
+            f'<div class="factor-pill {status_class}">'
+            f'<strong>{escape(label)}</strong><br>{escape(status)}</div>'
         )
 
-        if not rows:
-            render_empty_state("No scored opportunities yet.")
-            return
+    reasons = result.get("reasons") or ["No strong reason yet"]
+    reasons_html = "".join(
+        f"<li>{escape(reason)}</li>" for reason in reasons[:6]
+    )
+    exit_reasons_html = "".join(
+        f"<li>{escape(reason)}</li>" for reason in exit_reasons[:4]
+    )
 
-        for row in rows:
-            price = row.get("price")
-            price_label = f"${price:.2f}" if price else "N/A"
-            status = escape("Active" if row["is_active"] else signal_label(row["signal"]))
-            reason = escape(row["reasons"][0] if row["reasons"] else "No strong reason yet")
-            symbol = escape(row["symbol"])
-            quality = escape(row["quality"])
-            stage = escape(row.get("setup_stage") or "Setup")
-            what_next = escape(row.get("what_next") or status)
-            st.markdown(
-                f"""
-                <div class="opportunity-row">
-                    <div class="opportunity-symbol">{symbol}</div>
-                    <div class="opportunity-score">{row["score"]}/100</div>
-                    <div class="opportunity-meta">{price_label}<br>{quality}<br>{stage}</div>
-                    <div class="opportunity-reason">{what_next} - {reason}</div>
+    entry_zone_low = money(plan_value(plan, "entry_zone_low", result.get("entry")))
+    entry_zone_high = money(plan_value(plan, "entry_zone_high", result.get("entry")))
+    stop = money(plan_value(plan, "technical_stop", result.get("stop")))
+    target_1 = money(plan_value(plan, "target_1", result.get("target")))
+    target_2 = money(plan_value(plan, "target_2"))
+    target_3 = money(plan_value(plan, "target_3"))
+    risk_reward = plan.get("risk_reward")
+    risk_reward_label = f"{risk_reward}:1" if risk_reward else "N/A"
+    contract = coach.get("contract", "N/A")
+
+    st.markdown(
+        f"""
+        <div class="coach-card">
+            <div class="coach-card-header">
+                <div>
+                    <div class="coach-symbol">{escape(row["symbol"])}</div>
+                    <div class="content-kicker">{escape(direction)} {escape(contract)} idea</div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                <div class="coach-grade">
+                    Overall Opportunity: {grade}<br>
+                    <span class="content-kicker">Confidence {score}%</span>
+                </div>
+            </div>
+            <div class="factor-list">{factor_html}</div>
+            <div class="coach-grid">
+                <div class="coach-metric"><div class="coach-label">Entry Zone</div><div class="coach-value">{entry_zone_low}-{entry_zone_high}</div></div>
+                <div class="coach-metric"><div class="coach-label">Stop</div><div class="coach-value">{stop}</div></div>
+                <div class="coach-metric"><div class="coach-label">Target 1</div><div class="coach-value">{target_1}</div></div>
+                <div class="coach-metric"><div class="coach-label">Risk/Reward</div><div class="coach-value">{risk_reward_label}</div></div>
+                <div class="coach-metric"><div class="coach-label">Target 2</div><div class="coach-value">{target_2}</div></div>
+                <div class="coach-metric"><div class="coach-label">Target 3</div><div class="coach-value">{target_3}</div></div>
+                <div class="coach-metric"><div class="coach-label">Live Coach</div><div class="coach-value">{escape(coach["action"])}</div></div>
+                <div class="coach-metric"><div class="coach-label">Exit Score</div><div class="coach-value">{coach["exit_score"]}/100</div></div>
+            </div>
+            <div class="notice notice-info"><strong>What should I do next?</strong><br>{escape(coach["summary"])} {escape(coach["next_step"])}</div>
+            <div class="content-kicker">Why?</div>
+            <ul class="why-list">{reasons_html}</ul>
+            <div class="content-kicker">Exit / Reversal Watch</div>
+            <ul class="why-list">{exit_reasons_html}</ul>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_opportunity_list(title, rows, latest_results):
+    title_class = "signal-call" if "Bullish" in title else "signal-put" if "Bearish" in title else ""
+    st.markdown(
+        f'<div class="opportunity-heading {title_class}">{title}</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not rows:
+        render_empty_state("No scored opportunities yet.")
+        return
+
+    for row in rows:
+        render_opportunity_card(row, latest_results)
 
 
 def render_top_opportunities(latest_results):
@@ -901,10 +1108,10 @@ def render_top_opportunities(latest_results):
     bullish_column, bearish_column = st.columns(2)
 
     with bullish_column:
-        render_opportunity_list("Top Bullish", bullish_rows)
+        render_opportunity_list("Top Bullish", bullish_rows, latest_results)
 
     with bearish_column:
-        render_opportunity_list("Top Bearish", bearish_rows)
+        render_opportunity_list("Top Bearish", bearish_rows, latest_results)
 
 
 def render_score_guide():
@@ -970,6 +1177,8 @@ def render_live_trade_coach(latest_results):
                 "Timing",
                 "Coach Summary",
                 "Next Step",
+                "Exit Score",
+                "Exit Label",
                 "Risk Note",
             ]
         ],
@@ -980,6 +1189,7 @@ def render_live_trade_coach(latest_results):
     with st.expander("Coach Details"):
         for row in display_rows[:6]:
             st.markdown(f"**{row['Symbol']} - {row['Action']} ({row['Score']}/100)**")
+            st.write(f"Exit Score: {row['Exit Score']}/100 - {row['Exit Label']}")
             st.write(row["Coach Summary"])
             st.write(row["Next Step"])
             st.write(row["Risk Note"])
@@ -1061,7 +1271,8 @@ def render_signal_card(symbol, result):
         if coach["action"] != "Wait":
             st.markdown(
                 f'<div class="notice"><strong>Live Coach: {escape(coach["action"])}</strong><br>'
-                f'{escape(coach["summary"])}<br>{escape(coach["next_step"])}</div>',
+                f'{escape(coach["summary"])}<br>{escape(coach["next_step"])}<br>'
+                f'Exit Score: {coach["exit_score"]}/100 - {escape(coach["exit_label"])}</div>',
                 unsafe_allow_html=True,
             )
 
