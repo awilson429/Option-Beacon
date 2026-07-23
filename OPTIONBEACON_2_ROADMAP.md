@@ -22,9 +22,9 @@ Build OptionBeacon into a trade planning and management system, not just a scann
 - [x] Add partial-profit logic.
 - [x] Add breakeven recommendation.
 - [x] Add trailing-stop/profit-giveback recommendation.
-- [ ] Add timeline of recommendation changes.
-- [ ] Add alert rules for trade-coach changes.
+- [x] Add timeline of recommendation changes.
+- [x] Add alert rules for trade-coach changes.
 
 ## Resume Here
 
-Next implementation step: add a clearer timeline of recommendation changes for each active paper trade.
+Next implementation step: add manual buttons for marking partial profits taken so the coach can adjust future guidance.

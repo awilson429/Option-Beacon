@@ -18,11 +18,13 @@ from optionbeacon_history import (
 )
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
+from optionbeacon_alerts import send_trade_coach_alert, twilio_configured
 from trade_management import coach_recommendation
 from trade_storage import (
     close_position,
     create_position,
     load_closed_positions,
+    latest_recommendation,
     load_open_positions,
     load_recommendations,
     record_recommendation,
@@ -1072,7 +1074,25 @@ def render_active_trades(latest_results):
     for position in positions:
         scanner_result = latest_results.get(position["symbol"], {})
         recommendation = coach_recommendation(position, scanner_result)
+        previous_recommendation = latest_recommendation(position["id"])
         record_recommendation(position["id"], recommendation)
+        previous_action = (
+            previous_recommendation.get("coach_action")
+            if previous_recommendation
+            else None
+        )
+        if (
+            previous_action
+            and previous_action != recommendation["coach_action"]
+            and twilio_configured()
+        ):
+            sent, status = send_trade_coach_alert(
+                position,
+                recommendation,
+                previous_action=previous_action,
+            )
+            if not sent:
+                st.warning(f"Trade coach alert was not sent: {status}")
         recommendations[position["id"]] = recommendation
         entry_premium = position.get("entry_premium") or 0
         current_premium = position.get("current_premium") or entry_premium
@@ -1123,6 +1143,24 @@ def render_active_trades(latest_results):
             st.write(recommendation["coach_next_step"])
             for reason in recommendation["exit_reasons"]:
                 st.write(f"- {reason}")
+
+    with st.expander("Trade Coach Timeline"):
+        position_options = {
+            f"#{position['id']} {position['symbol']} {position['option_type']}": position["id"]
+            for position in positions
+        }
+        selected = st.selectbox(
+            "Position",
+            list(position_options.keys()),
+            key="timeline_position",
+        )
+        timeline = load_recommendations(position_options[selected])
+
+        if not timeline:
+            render_empty_state("No coach changes logged for this paper trade yet.")
+        else:
+            timeline_df = pd.DataFrame(recommendation_rows(timeline))
+            st.dataframe(timeline_df, use_container_width=True, hide_index=True)
 
     with st.expander("Update Premium / Peak Profit"):
         position_options = {
