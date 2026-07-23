@@ -4,7 +4,12 @@ ACTION_HOLD = "Manage active idea"
 ACTION_AVOID = "Avoid chasing"
 ACTION_WAIT = "Wait"
 
-from market_intelligence import chase_risk, confidence_explanation, missing_confirmations
+from market_intelligence import (
+    chase_risk,
+    confidence_explanation,
+    missing_confirmations,
+    setup_momentum_snapshot,
+)
 
 
 def exit_score_for_live_setup(result, coach=None):
@@ -287,10 +292,11 @@ def coach_live_setup(result):
     return payload
 
 
-def coach_rows(latest_results, min_score=80):
+def coach_rows(latest_results, min_score=80, history=None):
     rows = []
     for symbol, result in latest_results.items():
         coach = coach_live_setup(result)
+        momentum = setup_momentum_snapshot(result or {"symbol": symbol}, history)
         if coach["priority"] < min_score and coach["action"] == ACTION_WAIT:
             continue
 
@@ -309,6 +315,8 @@ def coach_rows(latest_results, min_score=80):
                 "Exit Score": coach["exit_score"],
                 "Exit Label": coach["exit_label"],
                 "Chase Risk": coach["chase_risk"],
+                "Live Read": momentum["label"],
+                "Live Detail": momentum["detail"],
                 "Missing": ", ".join(coach["missing_confirmations"]) or "None",
                 "Risk Note": coach["risk_note"],
             }

@@ -1,4 +1,11 @@
-from market_intelligence import chase_risk, confidence_explanation, market_regime
+import pandas as pd
+
+from market_intelligence import (
+    chase_risk,
+    confidence_explanation,
+    market_regime,
+    setup_momentum_snapshot,
+)
 
 
 def test_market_regime_detects_bullish_trend():
@@ -45,3 +52,53 @@ def test_confidence_explanation_lists_missing_confirmations():
 
     assert "momentum confirmation" in explanation
     assert "strong relative volume" in explanation
+
+
+def test_setup_momentum_snapshot_detects_improving_score():
+    history = pd.DataFrame(
+        [
+            {
+                "timestamp": "2026-07-23 09:45 AM ET",
+                "symbol": "SPY",
+                "bias": "Bullish",
+                "score": "78",
+                "signal": "WATCHLIST",
+            }
+        ]
+    )
+    result = {
+        "symbol": "SPY",
+        "bias": "Bullish",
+        "confidence": 88,
+        "signal": "BULLISH SETUP",
+    }
+
+    snapshot = setup_momentum_snapshot(result, history)
+
+    assert snapshot["label"] == "Improving"
+    assert snapshot["score_change"] == 10
+
+
+def test_setup_momentum_snapshot_detects_bias_flip():
+    history = pd.DataFrame(
+        [
+            {
+                "timestamp": "2026-07-23 09:45 AM ET",
+                "symbol": "QQQ",
+                "bias": "Bearish",
+                "score": "85",
+                "signal": "BEARISH SETUP",
+            }
+        ]
+    )
+    result = {
+        "symbol": "QQQ",
+        "bias": "Bullish",
+        "confidence": 86,
+        "signal": "BULLISH SETUP",
+    }
+
+    snapshot = setup_momentum_snapshot(result, history)
+
+    assert snapshot["label"] == "Bias flipped"
+    assert snapshot["bias_changed"] is True

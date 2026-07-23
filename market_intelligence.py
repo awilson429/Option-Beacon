@@ -151,3 +151,59 @@ def confidence_explanation(result, latest_results=None):
     if not missing:
         return "Most major confirmations are aligned."
     return "Missing: " + ", ".join(missing) + "."
+
+
+def _latest_history_row(history, symbol):
+    if history is None or history.empty or "symbol" not in history.columns:
+        return None
+
+    rows = history[history["symbol"] == symbol]
+    if rows.empty:
+        return None
+    return rows.iloc[-1].to_dict()
+
+
+def setup_momentum_snapshot(result, history=None):
+    symbol = result.get("symbol")
+    current_score = _number(result.get("confidence"))
+    current_bias = result.get("bias", "Neutral")
+    current_signal = result.get("signal", "WATCHLIST")
+    previous = _latest_history_row(history, symbol)
+
+    if not previous:
+        return {
+            "label": "New read",
+            "detail": "No recent high-score history for comparison yet.",
+            "score_change": None,
+            "bias_changed": False,
+        }
+
+    previous_score = _number(previous.get("score"))
+    previous_bias = previous.get("bias", "Neutral")
+    previous_signal = previous.get("signal", "WATCHLIST")
+    score_change = round(current_score - previous_score, 1)
+    bias_changed = bool(previous_bias and previous_bias != current_bias)
+    signal_changed = bool(previous_signal and previous_signal != current_signal)
+
+    if bias_changed:
+        label = "Bias flipped"
+        detail = f"Previous bias was {previous_bias}; current bias is {current_bias}."
+    elif score_change >= 8:
+        label = "Improving"
+        detail = f"Score improved by {score_change:g} points since the last high-score read."
+    elif score_change <= -8:
+        label = "Weakening"
+        detail = f"Score faded by {abs(score_change):g} points since the last high-score read."
+    elif signal_changed:
+        label = "State changed"
+        detail = f"Signal changed from {previous_signal} to {current_signal}."
+    else:
+        label = "Stable"
+        detail = "Current read is similar to the last high-score snapshot."
+
+    return {
+        "label": label,
+        "detail": detail,
+        "score_change": score_change,
+        "bias_changed": bias_changed,
+    }

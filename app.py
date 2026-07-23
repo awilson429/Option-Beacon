@@ -22,6 +22,7 @@ from market_intelligence import (
     confidence_explanation,
     market_regime,
     setup_market_support,
+    setup_momentum_snapshot,
 )
 from trade_journal import (
     filter_journal_rows,
@@ -1013,7 +1014,7 @@ def scan_symbols():
     return latest_results, history, None, symbol_groups
 
 
-def render_opportunity_card(row, latest_results):
+def render_opportunity_card(row, latest_results, high_score_history=None):
     result = row["result"]
     plan = result.get("trade_plan") or {}
     score = row["score"]
@@ -1022,6 +1023,7 @@ def render_opportunity_card(row, latest_results):
     coach = coach_live_setup(result)
     chase = chase_risk(result)
     confidence_note = confidence_explanation(result, latest_results)
+    momentum = setup_momentum_snapshot(result, high_score_history)
     exit_reasons = coach.get("exit_reasons", [])
     factors = factor_status(result, direction, latest_results)
     factor_html = ""
@@ -1075,6 +1077,7 @@ def render_opportunity_card(row, latest_results):
                 <div class="coach-metric"><div class="coach-label">Exit Score</div><div class="coach-value">{coach["exit_score"]}/100</div></div>
             </div>
             <div class="notice notice-info"><strong>What should I do next?</strong><br>{escape(coach["summary"])} {escape(coach["next_step"])}</div>
+            <div class="notice"><strong>Live Read: {escape(momentum["label"])}</strong><br>{escape(momentum["detail"])}</div>
             <div class="notice"><strong>Chase Risk: {escape(chase["label"])}</strong><br>{escape(chase["reason"])}<br>{escape(confidence_note)}</div>
             <div class="content-kicker">Why?</div>
             <ul class="why-list">{reasons_html}</ul>
@@ -1100,7 +1103,7 @@ def render_market_regime(latest_results):
     )
 
 
-def render_opportunity_list(title, rows, latest_results):
+def render_opportunity_list(title, rows, latest_results, high_score_history=None):
     title_class = "signal-call" if "Bullish" in title else "signal-put" if "Bearish" in title else ""
     st.markdown(
         f'<div class="opportunity-heading {title_class}">{title}</div>',
@@ -1112,20 +1115,20 @@ def render_opportunity_list(title, rows, latest_results):
         return
 
     for row in rows:
-        render_opportunity_card(row, latest_results)
+        render_opportunity_card(row, latest_results, high_score_history)
 
 
-def render_top_opportunities(latest_results):
+def render_top_opportunities(latest_results, high_score_history=None):
     render_section_header("Top Opportunities", "Highest-scoring bullish and bearish setups")
     bullish_rows = opportunity_rows(latest_results, "Bullish")
     bearish_rows = opportunity_rows(latest_results, "Bearish")
     bullish_column, bearish_column = st.columns(2)
 
     with bullish_column:
-        render_opportunity_list("Top Bullish", bullish_rows, latest_results)
+        render_opportunity_list("Top Bullish", bullish_rows, latest_results, high_score_history)
 
     with bearish_column:
-        render_opportunity_list("Top Bearish", bearish_rows, latest_results)
+        render_opportunity_list("Top Bearish", bearish_rows, latest_results, high_score_history)
 
 
 def render_score_guide():
@@ -1159,12 +1162,12 @@ def render_score_guide():
     )
 
 
-def render_live_trade_coach(latest_results):
+def render_live_trade_coach(latest_results, high_score_history=None):
     render_section_header(
         "Live Trade Coach",
         "Current scanner ideas with entry, wait, and risk guidance",
     )
-    rows = coach_rows(latest_results, min_score=75)
+    rows = coach_rows(latest_results, min_score=75, history=high_score_history)
 
     if not rows:
         render_empty_state("No live trade ideas are ready yet.")
@@ -1194,6 +1197,7 @@ def render_live_trade_coach(latest_results):
                 "Exit Score",
                 "Exit Label",
                 "Chase Risk",
+                "Live Read",
                 "Missing",
                 "Risk Note",
             ]
@@ -1207,6 +1211,7 @@ def render_live_trade_coach(latest_results):
             st.markdown(f"**{row['Symbol']} - {row['Action']} ({row['Score']}/100)**")
             st.write(f"Exit Score: {row['Exit Score']}/100 - {row['Exit Label']}")
             st.write(f"Chase Risk: {row['Chase Risk']}")
+            st.write(f"Live Read: {row['Live Read']} - {row['Live Detail']}")
             st.write(f"Missing: {row['Missing']}")
             st.write(row["Coach Summary"])
             st.write(row["Next Step"])
@@ -2048,9 +2053,9 @@ def main():
 
     render_market_regime(latest_results)
     st.divider()
-    render_top_opportunities(latest_results)
+    render_top_opportunities(latest_results, high_score_history)
     st.divider()
-    render_live_trade_coach(latest_results)
+    render_live_trade_coach(latest_results, high_score_history)
     st.divider()
     render_active_trades(latest_results)
     st.divider()
