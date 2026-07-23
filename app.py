@@ -154,6 +154,9 @@ def opportunity_rows(latest_results, direction, limit=3):
         if not result or result.get("signal") == "DATA UNAVAILABLE":
             continue
 
+        if result.get("bias") != direction:
+            continue
+
         score = score_value(result, score_key)
         if score <= 0:
             continue
