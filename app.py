@@ -273,6 +273,14 @@ def market_snapshot_values(latest_results):
     }
 
 
+def tape_row_color(value):
+    if value in ["Bullish", "Aligned", "Strong", "Entry zone active", "Improving"]:
+        return "tape-green"
+    if value in ["Bearish", "Against", "Weak", "Avoid chasing", "Weakening"]:
+        return "tape-red"
+    return "tape-muted"
+
+
 def opportunity_grade(score):
     if score >= 95:
         return "A+"
@@ -1059,6 +1067,91 @@ def configure_page():
             margin-top: 0.35rem;
         }
 
+        .beacon-tape {
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1.15fr 1fr 1fr;
+            margin-bottom: 0.85rem;
+            overflow: hidden;
+        }
+
+        .tape-panel {
+            background: #050505;
+            border-right: 1px solid rgba(255, 255, 255, 0.12);
+            min-height: 13rem;
+        }
+
+        .tape-panel:last-child {
+            border-right: 0;
+        }
+
+        .tape-header {
+            align-items: center;
+            background: rgba(255, 255, 255, 0.04);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--ob-muted);
+            display: flex;
+            font-size: 0.75rem;
+            font-weight: 900;
+            justify-content: space-between;
+            letter-spacing: 0.11em;
+            padding: 0.5rem 0.65rem;
+            text-transform: uppercase;
+        }
+
+        .tape-row {
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            display: grid;
+            gap: 0.45rem;
+            grid-template-columns: 0.75fr 0.85fr 0.55fr;
+            min-height: 2rem;
+            padding: 0.32rem 0.65rem;
+        }
+
+        .tape-row:last-child {
+            border-bottom: 0;
+        }
+
+        .tape-symbol {
+            color: var(--ob-text);
+            font-size: 1rem;
+            font-weight: 900;
+        }
+
+        .tape-main {
+            font-size: 0.95rem;
+            font-weight: 900;
+            text-align: right;
+        }
+
+        .tape-sub {
+            color: var(--ob-muted);
+            font-size: 0.76rem;
+            font-weight: 700;
+            text-align: right;
+        }
+
+        .tape-green {
+            color: var(--ob-green);
+        }
+
+        .tape-red {
+            color: var(--ob-red);
+        }
+
+        .tape-muted {
+            color: var(--ob-muted);
+        }
+
+        .tape-empty {
+            color: var(--ob-muted);
+            font-size: 0.85rem;
+            line-height: 1.25;
+            padding: 0.75rem;
+        }
+
         hr {
             border-color: rgba(255, 255, 255, 0.10);
         }
@@ -1128,6 +1221,15 @@ def configure_page():
 
             .snapshot-strip {
                 grid-template-columns: 1fr;
+            }
+
+            .beacon-tape {
+                grid-template-columns: 1fr;
+            }
+
+            .tape-panel {
+                border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+                border-right: 0;
             }
 
             .board-panel-wide,
@@ -1735,6 +1837,98 @@ def render_market_snapshot(latest_results):
                 <div class="snapshot-label">Sector Pulse</div>
                 <div class="snapshot-value">{escape(sector_value)}</div>
                 <div class="snapshot-detail">{escape(sector_detail)}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_beacon_tape(latest_results):
+    ranked_rows = ranked_setup_rows(latest_results, min_score=65, limit=7)
+    sector_rows = sector_strength_rows(latest_results)[:7]
+    alerts = load_live_coach_alerts()
+
+    def market_rows():
+        html = ""
+        for symbol in ["SPY", "QQQ", "IWM", "DIA", "XLK", "XLF"]:
+            result = latest_results.get(symbol, {})
+            if not result:
+                continue
+            bias = result.get("bias", "N/A")
+            price = money(result.get("price"))
+            score = result.get("confidence", 0)
+            html += (
+                '<div class="tape-row">'
+                f'<div class="tape-symbol">{escape(symbol)}</div>'
+                f'<div class="tape-main {tape_row_color(bias)}">{escape(str(bias))}</div>'
+                f'<div class="tape-sub">{escape(price)}<br>{escape(str(score))}</div>'
+                '</div>'
+            )
+        return html or '<div class="tape-empty">Market context is waiting on fresh scanner data.</div>'
+
+    def setup_rows():
+        html = ""
+        for row in ranked_rows:
+            color = tape_row_color(row["Bias"])
+            html += (
+                '<div class="tape-row">'
+                f'<div class="tape-symbol">{escape(row["Symbol"])}</div>'
+                f'<div class="tape-main {color}">{escape(row["Bias"])}</div>'
+                f'<div class="tape-sub">Q {escape(str(row["Quality Score"]))}<br>{escape(row["Grade"])}</div>'
+                '</div>'
+            )
+        return html or '<div class="tape-empty">No quality setups are separated yet.</div>'
+
+    def sector_tape_rows():
+        html = ""
+        for row in sector_rows:
+            color = tape_row_color(row["Bias"])
+            html += (
+                '<div class="tape-row">'
+                f'<div class="tape-symbol">{escape(row["ETF"])}</div>'
+                f'<div class="tape-main {color}">{escape(row["Bias"])}</div>'
+                f'<div class="tape-sub">{escape(str(row["Score"]))}<br>{escape(row["Sector"][:6])}</div>'
+                '</div>'
+            )
+        return html or '<div class="tape-empty">Sector reads appear after sector ETFs are scanned.</div>'
+
+    def alert_rows():
+        html = ""
+        if not alerts.empty:
+            for _, alert in alerts.tail(6).iloc[::-1].iterrows():
+                action = str(alert.get("action", ""))
+                html += (
+                    '<div class="tape-row">'
+                    f'<div class="tape-symbol">{escape(str(alert.get("symbol", "")))}</div>'
+                    f'<div class="tape-main {tape_row_color(action)}">{escape(action)}</div>'
+                    f'<div class="tape-sub">{escape(str(alert.get("score", "")))}<br>{escape(str(alert.get("live_read", ""))[:8])}</div>'
+                    '</div>'
+                )
+        return html or '<div class="tape-empty">No recent guide alerts logged.</div>'
+
+    bull_count = sum(1 for row in ranked_rows if row["Bias"] == "Bullish")
+    bear_count = sum(1 for row in ranked_rows if row["Bias"] == "Bearish")
+    sentiment_label = f"{bull_count}:{bear_count}"
+
+    st.markdown(
+        f"""
+        <div class="beacon-tape">
+            <div class="tape-panel">
+                <div class="tape-header"><span>Market</span><span>Table</span></div>
+                {market_rows()}
+            </div>
+            <div class="tape-panel">
+                <div class="tape-header"><span>Setup Bias</span><span>{escape(sentiment_label)}</span></div>
+                {setup_rows()}
+            </div>
+            <div class="tape-panel">
+                <div class="tape-header"><span>Sectors</span><span>Leaders</span></div>
+                {sector_tape_rows()}
+            </div>
+            <div class="tape-panel">
+                <div class="tape-header"><span>Alerts</span><span>Guide</span></div>
+                {alert_rows()}
             </div>
         </div>
         """,
@@ -2798,6 +2992,7 @@ def main():
 
     with live_tab:
         render_market_snapshot(latest_results)
+        render_beacon_tape(latest_results)
         render_beacon_board(latest_results, high_score_history)
         with st.expander("Detailed Live Guide"):
             render_live_trade_coach(latest_results, high_score_history)
