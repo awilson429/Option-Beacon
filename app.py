@@ -29,7 +29,6 @@ from optionbeacon_alerts import send_trade_coach_alert, twilio_configured
 from trade_management import coach_recommendation, trade_summary
 from trade_replay import (
     DEFAULT_MAX_HOLD_CANDLES,
-    DEFAULT_PERIOD,
     DEFAULT_REPLAY_SYMBOLS,
     replay_summary,
     replay_symbols,
@@ -1515,41 +1514,129 @@ def cached_trade_replay(symbols, period, min_score, max_hold_candles):
     )
 
 
+def replay_preset_settings(preset):
+    presets = {
+        "Balanced test": {
+            "period": "60d",
+            "min_score": 85,
+            "max_hold_candles": DEFAULT_MAX_HOLD_CANDLES,
+            "description": "Best first read. Looks for strong setups without being too strict.",
+        },
+        "Strict quality test": {
+            "period": "60d",
+            "min_score": 90,
+            "max_hold_candles": DEFAULT_MAX_HOLD_CANDLES,
+            "description": "Fewer trades, higher setup quality requirement.",
+        },
+        "More signal test": {
+            "period": "30d",
+            "min_score": 80,
+            "max_hold_candles": 24,
+            "description": "More frequent setups. Useful for seeing whether the scanner becomes too loose.",
+        },
+    }
+    return presets[preset]
+
+
+def replay_symbol_choices(group_name):
+    if group_name == "Core watchlist":
+        return DEFAULT_REPLAY_SYMBOLS[:8]
+    if group_name == "ETFs only":
+        return SYMBOL_GROUPS.get("ETF Scanner", DEFAULT_REPLAY_SYMBOLS[:4])
+    if group_name == "Single stocks only":
+        return SYMBOL_GROUPS.get("Single Stock Scanner", DEFAULT_REPLAY_SYMBOLS[4:])
+    return DEFAULT_REPLAY_SYMBOLS
+
+
+def replay_plain_read(summary, results):
+    if not summary["Trades"]:
+        return (
+            "No trades found.",
+            "The scanner did not find enough setups with these settings. Try More signal test or lower the score in Advanced settings.",
+        )
+
+    win_rate = float(summary["Win Rate"].replace("%", ""))
+    average_pnl = float(summary["Average P/L"].replace("%", ""))
+    target_1_rate = float(summary["Target 1 Rate"].replace("%", ""))
+
+    if win_rate >= 50 and average_pnl > 0 and target_1_rate >= 40:
+        return (
+            "Promising replay.",
+            "The setup rules found enough winners and reached first targets often enough to deserve more paper testing.",
+        )
+    if average_pnl > 0:
+        return (
+            "Mixed but constructive.",
+            "The replay was positive overall, but review the table to see whether results depend on only a few strong trades.",
+        )
+    return (
+        "Needs refinement.",
+        "The replay did not show an edge with these settings. Treat this as feedback before using the setup live.",
+    )
+
+
 def render_trade_replay_backtest():
     render_section_header(
         "Trade Replay Backtest",
-        "Historical 5-minute replay of setup entries and management rules",
+        "Simple historical check for setup quality and trade management",
     )
     st.markdown(
-        '<div class="notice">Replay uses historical underlying candles. It estimates management behavior; it does not reconstruct exact option contract premiums.</div>',
+        '<div class="notice notice-info"><strong>Plain English:</strong> choose a test, click Run, then read whether the scanner looked promising, mixed, or weak. This uses historical stock/ETF candles, not exact option contract premiums.</div>',
         unsafe_allow_html=True,
     )
+    with st.expander("How to use this"):
+        st.markdown(
+            """
+            1. Start with **Balanced test** and **Core watchlist**.
+            2. Click **Run Balanced test on Core watchlist**.
+            3. Read the plain-English verdict first.
+            4. Use **Win Rate**, **Average P/L**, and **Target 1 Rate** as the main gut-check.
+            5. Open the detailed table only when you want to inspect individual trades.
+            """
+        )
 
-    controls_1, controls_2, controls_3, controls_4 = st.columns([2.2, 1, 1, 1])
-    symbols = controls_1.multiselect(
-        "Symbols",
-        DEFAULT_REPLAY_SYMBOLS,
-        default=DEFAULT_REPLAY_SYMBOLS[:4],
-        help="Start small. More symbols take longer to fetch and replay.",
+    setup_1, setup_2 = st.columns([1.2, 1])
+    preset = setup_1.selectbox(
+        "What do you want to test?",
+        ["Balanced test", "Strict quality test", "More signal test"],
     )
-    period = controls_2.selectbox(
-        "Period",
-        ["30d", "60d"],
-        index=1 if DEFAULT_PERIOD == "60d" else 0,
-    )
-    min_score = controls_3.slider("Minimum Score", 75, 95, 85, 5)
-    max_hold_candles = controls_4.selectbox(
-        "Max Hold",
-        [12, 24, DEFAULT_MAX_HOLD_CANDLES, 78],
-        index=2,
-        format_func=lambda value: f"{value} candles",
+    symbol_group = setup_2.selectbox(
+        "Which symbols?",
+        ["Core watchlist", "ETFs only", "Single stocks only", "All scanner symbols"],
     )
 
-    if not symbols:
-        render_empty_state("Choose at least one symbol to replay.")
-        return
+    settings = replay_preset_settings(preset)
+    symbols = replay_symbol_choices(symbol_group)
+    period = settings["period"]
+    min_score = settings["min_score"]
+    max_hold_candles = settings["max_hold_candles"]
 
-    if st.button("Run Trade Replay", use_container_width=True):
+    st.caption(
+        f"{settings['description']} Testing {len(symbols)} symbols, last {period}, score {min_score}+."
+    )
+
+    with st.expander("Advanced settings"):
+        symbols = st.multiselect("Symbols", DEFAULT_REPLAY_SYMBOLS, default=symbols)
+        advanced_1, advanced_2, advanced_3 = st.columns(3)
+        period = advanced_1.selectbox(
+            "Period",
+            ["30d", "60d"],
+            index=1 if period == "60d" else 0,
+        )
+        min_score = advanced_2.slider("Minimum Score", 75, 95, min_score, 5)
+        max_hold_candles = advanced_3.selectbox(
+            "Max Hold",
+            [12, 24, DEFAULT_MAX_HOLD_CANDLES, 78],
+            index=[12, 24, DEFAULT_MAX_HOLD_CANDLES, 78].index(max_hold_candles),
+            format_func=lambda value: f"{value} candles",
+        )
+
+    run_label = f"Run {preset} on {symbol_group}"
+    if st.button(run_label, use_container_width=True):
+        if not symbols:
+            render_empty_state("Choose at least one symbol to replay.")
+            return
+
         with st.spinner("Replaying historical setups..."):
             results, errors = cached_trade_replay(
                 tuple(symbols),
@@ -1557,30 +1644,107 @@ def render_trade_replay_backtest():
                 min_score,
                 max_hold_candles,
             )
+        st.session_state["trade_replay_results"] = results
+        st.session_state["trade_replay_errors"] = errors
+        st.session_state["trade_replay_label"] = (
+            f"{preset} | {symbol_group} | {period} | score {min_score}+ | {max_hold_candles} candles"
+        )
 
-        if errors:
-            st.warning(
-                "Some symbols could not be replayed: "
-                + ", ".join(f"{symbol}: {message}" for symbol, message in errors.items())
-            )
+    results = st.session_state.get("trade_replay_results")
+    errors = st.session_state.get("trade_replay_errors", {})
 
-        if results.empty:
-            render_empty_state("No replayed trades matched those settings.")
-            return
+    if results is None:
+        render_empty_state("No replay has been run yet. Start with Balanced test on Core watchlist.")
+        return
 
-        summary = replay_summary(results)
-        metric_columns = st.columns(7)
-        for column, (label, value) in zip(metric_columns, summary.items()):
+    st.caption(f"Last replay: {st.session_state.get('trade_replay_label', 'Custom replay')}")
+
+    if errors:
+        st.warning(
+            "Some symbols could not be replayed: "
+            + ", ".join(f"{symbol}: {message}" for symbol, message in errors.items())
+        )
+
+    if results.empty:
+        render_empty_state("No replayed trades matched those settings.")
+        return
+
+    summary = replay_summary(results)
+    verdict_title, verdict_body = replay_plain_read(summary, results)
+    st.markdown(
+        f'<div class="notice"><strong>{verdict_title}</strong><br>{verdict_body}</div>',
+        unsafe_allow_html=True,
+    )
+
+    metric_columns = st.columns(4)
+    primary_metrics = [
+        ("Trades", summary["Trades"]),
+        ("Win Rate", summary["Win Rate"]),
+        ("Average P/L", summary["Average P/L"]),
+        ("Target 1 Rate", summary["Target 1 Rate"]),
+    ]
+    for column, (label, value) in zip(metric_columns, primary_metrics):
+        column.metric(label, value)
+
+    with st.expander("More replay stats"):
+        metric_columns = st.columns(3)
+        secondary_metrics = [
+            ("Total P/L", summary["Total P/L"]),
+            ("Average Peak P/L", summary["Average Peak P/L"]),
+            ("Breakeven Rate", summary["Breakeven Rate"]),
+        ]
+        for column, (label, value) in zip(metric_columns, secondary_metrics):
             column.metric(label, value)
 
-        st.markdown("**Replay Results**")
-        st.dataframe(results, use_container_width=True, hide_index=True)
-        st.download_button(
-            "Download Trade Replay CSV",
-            results.to_csv(index=False),
-            file_name="optionbeacon_trade_replay.csv",
-            mime="text/csv",
+    simple_columns = [
+        "Symbol",
+        "Entry Time",
+        "Direction",
+        "Score",
+        "Entry Price",
+        "Exit Reason",
+        "P/L %",
+        "Peak P/L %",
+        "Events",
+    ]
+    st.markdown("**What Happened**")
+    st.dataframe(
+        results[simple_columns].tail(25).sort_index(ascending=False),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    by_symbol = (
+        results.groupby("Symbol")
+        .agg(
+            Trades=("Symbol", "size"),
+            Win_Rate=("P/L %", lambda values: round((values.gt(0).mean() * 100), 2)),
+            Average_PL=("P/L %", "mean"),
+            Target_1_Rate=("Target 1 Hit", lambda values: round((values.eq("Yes").mean() * 100), 2)),
         )
+        .reset_index()
+    )
+    by_symbol["Average_PL"] = by_symbol["Average_PL"].round(3)
+    by_symbol = by_symbol.rename(
+        columns={
+            "Win_Rate": "Win Rate %",
+            "Average_PL": "Average P/L %",
+            "Target_1_Rate": "Target 1 Rate %",
+        }
+    )
+
+    st.markdown("**Symbol Read**")
+    st.dataframe(by_symbol, use_container_width=True, hide_index=True)
+
+    with st.expander("Detailed replay table"):
+        st.dataframe(results, use_container_width=True, hide_index=True)
+
+    st.download_button(
+        "Download Trade Replay CSV",
+        results.to_csv(index=False),
+        file_name="optionbeacon_trade_replay.csv",
+        mime="text/csv",
+    )
 
 
 def render_current_scanner(latest_results, symbol_groups):
