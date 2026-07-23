@@ -17,6 +17,7 @@ from optionbeacon_history import (
 )
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
+from trade_management import coach_recommendation
 from trade_storage import close_position, create_position, load_open_positions
 
 
@@ -1049,7 +1050,7 @@ def render_signal_card(symbol, result):
                 st.write(f"- {reason}")
 
 
-def render_active_trades():
+def render_active_trades(latest_results):
     render_section_header("Active Trades", "Paper trades currently being tracked")
     positions = load_open_positions()
 
@@ -1059,8 +1060,11 @@ def render_active_trades():
 
     rows = []
     for position in positions:
+        scanner_result = latest_results.get(position["symbol"], {})
+        recommendation = coach_recommendation(position, scanner_result)
         entry_premium = position.get("entry_premium") or 0
         contracts = position.get("contracts") or 0
+        main_reason = recommendation["exit_reasons"][0] if recommendation["exit_reasons"] else ""
         rows.append(
             {
                 "ID": position["id"],
@@ -1074,10 +1078,27 @@ def render_active_trades():
                 "Stop": position.get("current_stop"),
                 "Target 1": position.get("target_1"),
                 "Target 2": position.get("target_2"),
+                "Exit Score": recommendation["exit_score"],
+                "Coach": recommendation["coach_action"],
+                "Main Reason": main_reason,
             }
         )
 
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    with st.expander("Trade Coach Details"):
+        for position in positions:
+            scanner_result = latest_results.get(position["symbol"], {})
+            recommendation = coach_recommendation(position, scanner_result)
+            st.markdown(
+                f"**#{position['id']} {position['symbol']} - {recommendation['coach_action']}**"
+            )
+            st.write(
+                f"Exit Score: {recommendation['exit_score']}/100 - {recommendation['exit_label']}"
+            )
+            st.write(recommendation["coach_next_step"])
+            for reason in recommendation["exit_reasons"]:
+                st.write(f"- {reason}")
 
     with st.expander("Close Paper Trade"):
         position_options = {
@@ -1166,7 +1187,7 @@ def main():
 
     render_top_opportunities(latest_results)
     st.divider()
-    render_active_trades()
+    render_active_trades(latest_results)
     st.divider()
     render_recent_high_scores(high_score_history)
     st.divider()

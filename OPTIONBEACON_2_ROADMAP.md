@@ -13,9 +13,9 @@ Build OptionBeacon into a trade planning and management system, not just a scann
 - [x] Add "What should I do next?" guidance to scanner cards.
 - [x] Add manual trade entry.
 - [x] Add active position tracking.
-- [ ] Add basic exit score.
+- [x] Add basic exit score.
 - [ ] Add trade journal storage.
 
 ## Resume Here
 
-Next implementation step: add a basic exit score and trade-coach recommendation for each active paper trade.
+Next implementation step: add trade journal storage for closed trades, including recommendation history and CSV export.
