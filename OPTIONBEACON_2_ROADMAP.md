@@ -35,6 +35,21 @@ Build OptionBeacon into a trade planning and management system, not just a scann
 - [x] Add export buttons for filtered review dashboard, outcome review, and lesson patterns.
 - [x] Add review trend snapshots over time.
 
+## Phase 2 Summary
+
+Phase 2 turned OptionBeacon from a signal-only scanner into a paper-trade management system. The app can now track open trades, monitor premium progress, recommend partial profits, suggest breakeven/trailing stops, log trade-coach changes, and review closed trades by outcome, setup quality, management quality, rule discipline, and lessons learned.
+
+## Phase 3 Candidates
+
+- [ ] Add scheduled active-trade coaching outside the Streamlit session.
+- [ ] Add trade-coach SMS alerts from scheduled scans, not only app refreshes.
+- [ ] Add option-chain contract tracking so current premiums can update automatically.
+- [ ] Add portfolio-level risk controls and max open exposure rules.
+- [ ] Add broker/import-ready trade journal CSV support.
+- [ ] Add win-rate and expectancy review by ticker, setup grade, and management grade.
+- [ ] Add chart snapshots or entry/exit screenshots for closed trades.
+- [ ] Add a clean multi-page Streamlit layout for Scanner, Active Trades, Journal, and Settings.
+
 ## Resume Here
 
-Next implementation step: add a small Phase 2 completion summary and identify which trade-management features should move into Phase 3.
+Next implementation step: choose the first Phase 3 priority and start a focused implementation slice.
