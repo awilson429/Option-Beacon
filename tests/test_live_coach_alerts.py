@@ -1,6 +1,11 @@
 import pandas as pd
 
-from live_coach_alerts import append_live_coach_alert, build_live_coach_alert
+from live_coach_alerts import (
+    append_live_coach_alert,
+    build_live_coach_alert,
+    symbol_alert_timeline,
+    timeline_summary,
+)
 
 
 def triggered_result():
@@ -47,3 +52,50 @@ def test_append_live_coach_alert_suppresses_duplicate(tmp_path, monkeypatch):
 
     assert first_added is True
     assert second_added is False
+
+
+def test_timeline_summary_detects_latest_story():
+    alerts = pd.DataFrame(
+        [
+            {
+                "timestamp": "2026-07-23 09:45 AM ET",
+                "symbol": "SPY",
+                "bias": "Bullish",
+                "score": "82",
+                "action": "Watch for trigger",
+                "live_read": "New read",
+                "exit_score": "5",
+                "chase_risk": "Low",
+            },
+            {
+                "timestamp": "2026-07-23 10:00 AM ET",
+                "symbol": "SPY",
+                "bias": "Bullish",
+                "score": "91",
+                "action": "Entry zone active",
+                "live_read": "Improving",
+                "exit_score": "10",
+                "chase_risk": "Low",
+            },
+        ]
+    )
+
+    summary = timeline_summary(alerts, symbol="SPY")
+
+    assert summary["headline"] == "Idea improving"
+    assert summary["events"] == 2
+    assert summary["latest_action"] == "Entry zone active"
+
+
+def test_symbol_alert_timeline_filters_symbol():
+    alerts = pd.DataFrame(
+        [
+            {"symbol": "SPY", "action": "Watch for trigger"},
+            {"symbol": "QQQ", "action": "Avoid chasing"},
+        ]
+    )
+
+    timeline = symbol_alert_timeline(alerts, symbol="QQQ")
+
+    assert len(timeline) == 1
+    assert timeline.iloc[0]["symbol"] == "QQQ"

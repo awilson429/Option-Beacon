@@ -16,7 +16,11 @@ from optionbeacon_history import (
     eastern_now,
     load_high_score_history,
 )
-from live_coach_alerts import load_live_coach_alerts
+from live_coach_alerts import (
+    load_live_coach_alerts,
+    symbol_alert_timeline,
+    timeline_summary,
+)
 from live_trade_coach import coach_live_setup, coach_rows
 from market_intelligence import (
     chase_risk,
@@ -1268,6 +1272,69 @@ def render_live_coach_alerts():
     )
 
 
+def render_coach_timeline():
+    render_section_header(
+        "Coach Timeline",
+        "How a symbol's setup has changed through recent scanner reads",
+    )
+    alerts = load_live_coach_alerts()
+
+    if alerts.empty:
+        render_empty_state("No coach timeline yet.")
+        return
+
+    symbols = sorted(alerts["symbol"].dropna().unique())
+    if not symbols:
+        render_empty_state("No symbols have coach alerts yet.")
+        return
+
+    selected_symbol = st.selectbox("Symbol timeline", symbols)
+    timeline = symbol_alert_timeline(alerts, symbol=selected_symbol, limit=25)
+    summary = timeline_summary(alerts, symbol=selected_symbol)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Events", summary["events"])
+    c2.metric("Latest Action", summary["latest_action"])
+    c3.metric("Latest Read", summary["latest_read"])
+    st.markdown(
+        f'<div class="notice notice-info"><strong>{escape(summary["headline"])}</strong><br>{escape(summary["detail"])}</div>',
+        unsafe_allow_html=True,
+    )
+
+    display = timeline.rename(
+        columns={
+            "timestamp": "Time",
+            "symbol": "Symbol",
+            "bias": "Bias",
+            "score": "Score",
+            "action": "Action",
+            "live_read": "Live Read",
+            "exit_score": "Exit Score",
+            "exit_label": "Exit Label",
+            "chase_risk": "Chase Risk",
+            "next_step": "Next Step",
+            "reason": "Reason",
+        }
+    )
+    st.dataframe(
+        display[
+            [
+                "Time",
+                "Action",
+                "Live Read",
+                "Bias",
+                "Score",
+                "Exit Score",
+                "Chase Risk",
+                "Next Step",
+                "Reason",
+            ]
+        ].sort_index(ascending=False),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
 def render_signal_card(symbol, result):
     with st.container(border=True):
         st.markdown(f'<div class="ticker-title">{symbol}</div>', unsafe_allow_html=True)
@@ -2096,6 +2163,8 @@ def main():
     render_live_trade_coach(latest_results, high_score_history)
     st.divider()
     render_live_coach_alerts()
+    st.divider()
+    render_coach_timeline()
     st.divider()
     render_active_trades(latest_results)
     st.divider()

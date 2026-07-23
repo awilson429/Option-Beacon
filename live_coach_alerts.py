@@ -149,3 +149,64 @@ def append_live_coach_alert(alert, alerts=None):
 def record_live_coach_alert(result, history=None, alerts=None):
     alert = build_live_coach_alert(result, history=history)
     return append_live_coach_alert(alert, alerts=alerts)
+
+
+def symbol_alert_timeline(alerts, symbol=None, limit=25):
+    alerts = normalize_alerts(alerts)
+    if alerts.empty:
+        return alerts
+
+    timeline = alerts.copy()
+    if symbol:
+        timeline = timeline[timeline["symbol"] == symbol]
+
+    return timeline.tail(limit)
+
+
+def timeline_summary(alerts, symbol=None):
+    timeline = symbol_alert_timeline(alerts, symbol=symbol, limit=50)
+    if timeline.empty:
+        return {
+            "headline": "No timeline yet",
+            "detail": "No coach alerts have been logged for this symbol yet.",
+            "events": 0,
+            "latest_action": "N/A",
+            "latest_read": "N/A",
+        }
+
+    first = timeline.iloc[0]
+    latest = timeline.iloc[-1]
+    events = len(timeline)
+    latest_action = latest.get("action", "N/A")
+    latest_read = latest.get("live_read", "N/A")
+    latest_score = latest.get("score", "N/A")
+    latest_exit_score = latest.get("exit_score", "N/A")
+
+    if latest_read == "Bias flipped":
+        headline = "Bias changed"
+    elif latest_read == "Improving":
+        headline = "Idea improving"
+    elif latest_read == "Weakening":
+        headline = "Idea weakening"
+    elif latest_action == "Avoid chasing":
+        headline = "Chase risk active"
+    elif latest_action == "Entry zone active":
+        headline = "Entry zone active"
+    elif latest_action == "Watch for trigger":
+        headline = "Setup on watch"
+    else:
+        headline = "Coach updated"
+
+    detail = (
+        f"{first.get('timestamp', 'First read')} -> {latest.get('timestamp', 'latest read')}. "
+        f"Latest action: {latest_action}. Live read: {latest_read}. "
+        f"Score {latest_score}/100, exit score {latest_exit_score}/100."
+    )
+
+    return {
+        "headline": headline,
+        "detail": detail,
+        "events": events,
+        "latest_action": latest_action,
+        "latest_read": latest_read,
+    }
