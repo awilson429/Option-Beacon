@@ -50,3 +50,59 @@ def test_exit_score_holds_clean_trade():
 
     assert recommendation["exit_score"] < 25
     assert recommendation["coach_action"] == "Hold"
+
+
+def test_trade_coach_recommends_partial_profit_at_30_percent():
+    position = {
+        "direction": "Bullish",
+        "option_type": "CALL",
+        "current_stop": 99,
+        "target_1": 104,
+        "target_2": 106,
+        "entry_underlying_price": 101,
+        "entry_premium": 4,
+        "current_premium": 5.25,
+        "peak_premium": 5.25,
+    }
+    scanner_result = {
+        "price": 102,
+        "vwap": 101,
+        "ema20": 101,
+        "ema50": 100,
+        "relative_volume": 1.2,
+        "macd_hist": 0.1,
+        "rsi": 55,
+    }
+
+    recommendation = coach_recommendation(position, scanner_result)
+
+    assert recommendation["coach_action"] == "Take partial profit"
+    assert recommendation["current_profit_percent"] == 31.25
+
+
+def test_trade_coach_flags_peak_profit_giveback():
+    position = {
+        "direction": "Bullish",
+        "option_type": "CALL",
+        "current_stop": 99,
+        "target_1": 104,
+        "target_2": 106,
+        "entry_underlying_price": 101,
+        "entry_premium": 4,
+        "current_premium": 5.2,
+        "peak_premium": 6.4,
+    }
+    scanner_result = {
+        "price": 102,
+        "vwap": 101,
+        "ema20": 101,
+        "ema50": 100,
+        "relative_volume": 1.2,
+        "macd_hist": 0.1,
+        "rsi": 55,
+    }
+
+    recommendation = coach_recommendation(position, scanner_result)
+
+    assert recommendation["coach_action"] == "Trail remaining position"
+    assert recommendation["profit_giveback_percent"] == 50.0

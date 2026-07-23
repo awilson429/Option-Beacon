@@ -5,6 +5,7 @@ from trade_storage import (
     load_positions,
     load_recommendations,
     record_recommendation,
+    update_position_premium,
 )
 
 
@@ -72,3 +73,29 @@ def test_record_recommendation_skips_duplicate_score_and_action(tmp_path):
 
     assert first_id == second_id
     assert len(load_recommendations(position_id, db_file=str(db_file))) == 1
+
+
+def test_update_position_premium_tracks_peak(tmp_path):
+    db_file = tmp_path / "trades.db"
+    position_id = create_position(
+        symbol="SPY",
+        direction="Bullish",
+        option_type="CALL",
+        strike=600,
+        expiration="2026-08-21",
+        entry_premium=4.0,
+        contracts=1,
+        entry_underlying_price=601.5,
+        current_stop=599.0,
+        target_1=604.0,
+        target_2=606.0,
+        target_3=608.0,
+        original_plan={"trigger_price": 601.0},
+        db_file=str(db_file),
+    )
+
+    update_position_premium(position_id, 6.0, db_file=str(db_file))
+    updated = update_position_premium(position_id, 5.0, db_file=str(db_file))
+
+    assert updated["current_premium"] == 5.0
+    assert updated["peak_premium"] == 6.0

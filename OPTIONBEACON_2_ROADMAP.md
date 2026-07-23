@@ -16,6 +16,15 @@ Build OptionBeacon into a trade planning and management system, not just a scann
 - [x] Add basic exit score.
 - [x] Add trade journal storage.
 
+## Phase 2
+
+- [x] Add peak-profit tracking.
+- [x] Add partial-profit logic.
+- [x] Add breakeven recommendation.
+- [x] Add trailing-stop/profit-giveback recommendation.
+- [ ] Add timeline of recommendation changes.
+- [ ] Add alert rules for trade-coach changes.
+
 ## Resume Here
 
-Next implementation step: begin Phase 2 by adding peak-profit tracking, partial-profit logic, and breakeven/trailing-stop recommendations.
+Next implementation step: add a clearer timeline of recommendation changes for each active paper trade.

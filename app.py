@@ -26,6 +26,7 @@ from trade_storage import (
     load_open_positions,
     load_recommendations,
     record_recommendation,
+    update_position_premium,
 )
 
 
@@ -1074,6 +1075,8 @@ def render_active_trades(latest_results):
         record_recommendation(position["id"], recommendation)
         recommendations[position["id"]] = recommendation
         entry_premium = position.get("entry_premium") or 0
+        current_premium = position.get("current_premium") or entry_premium
+        peak_premium = position.get("peak_premium") or current_premium
         contracts = position.get("contracts") or 0
         main_reason = recommendation["exit_reasons"][0] if recommendation["exit_reasons"] else ""
         rows.append(
@@ -1084,6 +1087,11 @@ def render_active_trades(latest_results):
                 "Direction": position["direction"],
                 "Contract": f"{position['option_type']} {position.get('strike') or ''} {position.get('expiration') or ''}",
                 "Entry Premium": entry_premium,
+                "Current Premium": current_premium,
+                "Peak Premium": peak_premium,
+                "Current P/L %": recommendation.get("current_profit_percent"),
+                "Peak P/L %": recommendation.get("peak_profit_percent"),
+                "Giveback %": recommendation.get("profit_giveback_percent"),
                 "Contracts": contracts,
                 "Underlying Entry": position.get("entry_underlying_price"),
                 "Stop": position.get("current_stop"),
@@ -1106,9 +1114,41 @@ def render_active_trades(latest_results):
             st.write(
                 f"Exit Score: {recommendation['exit_score']}/100 - {recommendation['exit_label']}"
             )
+            st.write(
+                "Premium: "
+                f"current {recommendation.get('current_profit_percent')}%, "
+                f"peak {recommendation.get('peak_profit_percent')}%, "
+                f"giveback {recommendation.get('profit_giveback_percent')}%"
+            )
             st.write(recommendation["coach_next_step"])
             for reason in recommendation["exit_reasons"]:
                 st.write(f"- {reason}")
+
+    with st.expander("Update Premium / Peak Profit"):
+        position_options = {
+            f"#{position['id']} {position['symbol']} {position['option_type']}": position["id"]
+            for position in positions
+        }
+        selected = st.selectbox("Position", list(position_options.keys()), key="premium_position")
+        selected_position = next(
+            position for position in positions if position["id"] == position_options[selected]
+        )
+        default_premium = float(
+            selected_position.get("current_premium")
+            or selected_position.get("entry_premium")
+            or 0
+        )
+        current_premium = st.number_input(
+            "Current option premium",
+            min_value=0.0,
+            value=default_premium,
+            step=0.05,
+        )
+
+        if st.button("Update Premium"):
+            update_position_premium(position_options[selected], current_premium)
+            st.success("Premium updated.")
+            st.rerun()
 
     with st.expander("Close Paper Trade"):
         position_options = {
@@ -1152,6 +1192,7 @@ def position_journal_rows(positions):
                 "Direction": position["direction"],
                 "Contract": f"{position['option_type']} {position.get('strike') or ''} {position.get('expiration') or ''}",
                 "Entry Premium": entry_premium,
+                "Peak Premium": position.get("peak_premium"),
                 "Exit Premium": exit_premium or None,
                 "Contracts": contracts,
                 "Premium P/L": premium_pnl,
@@ -1181,6 +1222,9 @@ def recommendation_rows(recommendations):
                 "Exit Label": recommendation["exit_label"],
                 "Coach Action": recommendation["coach_action"],
                 "Next Step": recommendation["coach_next_step"],
+                "Current P/L %": recommendation.get("current_profit_percent"),
+                "Peak P/L %": recommendation.get("peak_profit_percent"),
+                "Giveback %": recommendation.get("profit_giveback_percent"),
                 "Reasons": reasons,
             }
         )
