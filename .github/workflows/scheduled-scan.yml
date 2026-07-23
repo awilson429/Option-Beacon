@@ -49,6 +49,7 @@ jobs:
           TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
           ALERT_TO_PHONE_NUMBER: ${{ secrets.ALERT_TO_PHONE_NUMBER }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Publish scanner data
         run: |

@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -32,40 +33,136 @@ def eastern_timestamp():
     return datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %I:%M:%S %p ET")
 
 
+def database_url():
+    value = os.getenv("DATABASE_URL")
+    if value:
+        return value
+
+    try:
+        import streamlit as st
+
+        return st.secrets.get("DATABASE_URL", "")
+    except Exception:
+        return ""
+
+
+def using_postgres(db_file=DB_FILE):
+    return db_file == DB_FILE and bool(database_url())
+
+
 def connect(db_file=DB_FILE):
+    if using_postgres(db_file):
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+        except ImportError as exc:
+            raise RuntimeError(
+                "DATABASE_URL is configured, but psycopg2-binary is not installed."
+            ) from exc
+
+        url = database_url()
+        kwargs = {"cursor_factory": RealDictCursor}
+        if "sslmode=" not in url:
+            kwargs["sslmode"] = "require"
+
+        return psycopg2.connect(url, **kwargs)
+
     connection = sqlite3.connect(db_file)
     connection.row_factory = sqlite3.Row
     return connection
 
 
+def is_postgres_connection(connection):
+    return connection.__class__.__module__.startswith("psycopg2")
+
+
+def normalize_sql(connection, sql):
+    if is_postgres_connection(connection):
+        return sql.replace("?", "%s")
+    return sql
+
+
+def fetchall(connection, sql, params=()):
+    cursor = connection.cursor()
+    cursor.execute(normalize_sql(connection, sql), params)
+    rows = cursor.fetchall()
+    cursor.close()
+
+    return [dict(row) for row in rows]
+
+
+def fetchone(connection, sql, params=()):
+    cursor = connection.cursor()
+    cursor.execute(normalize_sql(connection, sql), params)
+    row = cursor.fetchone()
+    cursor.close()
+
+    return dict(row) if row else None
+
+
+def execute(connection, sql, params=()):
+    cursor = connection.cursor()
+    cursor.execute(normalize_sql(connection, sql), params)
+    return cursor
+
+
 def ensure_position_columns(connection):
-    existing_columns = {
-        row["name"]
-        for row in connection.execute("PRAGMA table_info(positions)").fetchall()
-    }
+    if is_postgres_connection(connection):
+        existing_columns = {
+            row["column_name"]
+            for row in fetchall(
+                connection,
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'positions'
+                """,
+            )
+        }
+    else:
+        existing_columns = {
+            row["name"]
+            for row in fetchall(connection, "PRAGMA table_info(positions)")
+        }
 
     for column, column_type in POSITION_COLUMNS.items():
         if column not in existing_columns:
-            connection.execute(f"ALTER TABLE positions ADD COLUMN {column} {column_type}")
+            execute(connection, f"ALTER TABLE positions ADD COLUMN {column} {column_type}")
 
 
 def ensure_recommendation_columns(connection):
-    existing_columns = {
-        row["name"]
-        for row in connection.execute("PRAGMA table_info(recommendations)").fetchall()
-    }
+    if is_postgres_connection(connection):
+        existing_columns = {
+            row["column_name"]
+            for row in fetchall(
+                connection,
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'recommendations'
+                """,
+            )
+        }
+    else:
+        existing_columns = {
+            row["name"]
+            for row in fetchall(connection, "PRAGMA table_info(recommendations)")
+        }
 
     for column, column_type in RECOMMENDATION_COLUMNS.items():
         if column not in existing_columns:
-            connection.execute(f"ALTER TABLE recommendations ADD COLUMN {column} {column_type}")
+            execute(connection, f"ALTER TABLE recommendations ADD COLUMN {column} {column_type}")
 
 
 def initialize_trade_db(db_file=DB_FILE):
     with connect(db_file) as connection:
-        connection.execute(
+        position_id_type = "SERIAL PRIMARY KEY" if is_postgres_connection(connection) else "INTEGER PRIMARY KEY AUTOINCREMENT"
+        recommendation_id_type = position_id_type
+        execute(
+            connection,
             """
             CREATE TABLE IF NOT EXISTS positions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {position_id_type},
                 status TEXT NOT NULL,
                 entered_at TEXT NOT NULL,
                 closed_at TEXT,
@@ -95,13 +192,14 @@ def initialize_trade_db(db_file=DB_FILE):
                 management_grade TEXT,
                 rule_following_score INTEGER
             )
-            """
+            """.format(position_id_type=position_id_type),
         )
         ensure_position_columns(connection)
-        connection.execute(
+        execute(
+            connection,
             """
             CREATE TABLE IF NOT EXISTS recommendations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {recommendation_id_type},
                 position_id INTEGER NOT NULL,
                 timestamp TEXT NOT NULL,
                 exit_score INTEGER NOT NULL,
@@ -116,7 +214,7 @@ def initialize_trade_db(db_file=DB_FILE):
                 reasons_json TEXT NOT NULL,
                 FOREIGN KEY(position_id) REFERENCES positions(id)
             )
-            """
+            """.format(recommendation_id_type=recommendation_id_type),
         )
         ensure_recommendation_columns(connection)
 
@@ -141,7 +239,9 @@ def create_position(
 ):
     initialize_trade_db(db_file)
     with connect(db_file) as connection:
-        cursor = connection.execute(
+        returning = " RETURNING id" if is_postgres_connection(connection) else ""
+        cursor = execute(
+            connection,
             """
             INSERT INTO positions (
                 status,
@@ -164,7 +264,7 @@ def create_position(
                 entry_notes
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+            """ + returning,
             (
                 "OPEN",
                 eastern_timestamp(),
@@ -186,7 +286,14 @@ def create_position(
                 entry_notes,
             ),
         )
-        return cursor.lastrowid
+        if is_postgres_connection(connection):
+            row = cursor.fetchone()
+            cursor.close()
+            return row["id"]
+
+        lastrowid = cursor.lastrowid
+        cursor.close()
+        return lastrowid
 
 
 def load_positions(status=None, db_file=DB_FILE):
@@ -201,9 +308,9 @@ def load_positions(status=None, db_file=DB_FILE):
     query += " ORDER BY entered_at DESC, id DESC"
 
     with connect(db_file) as connection:
-        rows = connection.execute(query, params).fetchall()
+        rows = fetchall(connection, query, params)
 
-    return [dict(row) for row in rows]
+    return rows
 
 
 def load_open_positions(db_file=DB_FILE):
@@ -236,7 +343,8 @@ def close_position(
         peak_premium = exit_premium
 
     with connect(db_file) as connection:
-        connection.execute(
+        execute(
+            connection,
             """
             UPDATE positions
             SET status = ?,
@@ -272,12 +380,11 @@ def close_position(
 def load_position(position_id, db_file=DB_FILE):
     initialize_trade_db(db_file)
     with connect(db_file) as connection:
-        row = connection.execute(
+        return fetchone(
+            connection,
             "SELECT * FROM positions WHERE id = ?",
             (position_id,),
-        ).fetchone()
-
-    return dict(row) if row else None
+        )
 
 
 def update_position_premium(position_id, current_premium, db_file=DB_FILE):
@@ -291,7 +398,8 @@ def update_position_premium(position_id, current_premium, db_file=DB_FILE):
     peak_premium = max(float(previous_peak or 0), current_premium)
 
     with connect(db_file) as connection:
-        connection.execute(
+        execute(
+            connection,
             """
             UPDATE positions
             SET current_premium = ?, peak_premium = ?
@@ -306,7 +414,8 @@ def update_position_premium(position_id, current_premium, db_file=DB_FILE):
 def update_position_stop(position_id, current_stop, db_file=DB_FILE):
     initialize_trade_db(db_file)
     with connect(db_file) as connection:
-        connection.execute(
+        execute(
+            connection,
             """
             UPDATE positions
             SET current_stop = ?
@@ -325,7 +434,8 @@ def mark_partial_profit(position_id, partial_level, taken=True, db_file=DB_FILE)
 
     column = f"partial_{partial_level}_taken"
     with connect(db_file) as connection:
-        connection.execute(
+        execute(
+            connection,
             f"""
             UPDATE positions
             SET {column} = ?
@@ -340,7 +450,8 @@ def mark_partial_profit(position_id, partial_level, taken=True, db_file=DB_FILE)
 def latest_recommendation(position_id, db_file=DB_FILE):
     initialize_trade_db(db_file)
     with connect(db_file) as connection:
-        row = connection.execute(
+        return fetchone(
+            connection,
             """
             SELECT * FROM recommendations
             WHERE position_id = ?
@@ -348,9 +459,7 @@ def latest_recommendation(position_id, db_file=DB_FILE):
             LIMIT 1
             """,
             (position_id,),
-        ).fetchone()
-
-    return dict(row) if row else None
+        )
 
 
 def record_recommendation(position_id, recommendation, db_file=DB_FILE):
@@ -365,7 +474,9 @@ def record_recommendation(position_id, recommendation, db_file=DB_FILE):
             return previous["id"]
 
     with connect(db_file) as connection:
-        cursor = connection.execute(
+        returning = " RETURNING id" if is_postgres_connection(connection) else ""
+        cursor = execute(
+            connection,
             """
             INSERT INTO recommendations (
                 position_id,
@@ -382,7 +493,7 @@ def record_recommendation(position_id, recommendation, db_file=DB_FILE):
                 reasons_json
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+            """ + returning,
             (
                 position_id,
                 eastern_timestamp(),
@@ -398,7 +509,14 @@ def record_recommendation(position_id, recommendation, db_file=DB_FILE):
                 json.dumps(recommendation.get("exit_reasons", []), sort_keys=True),
             ),
         )
-        return cursor.lastrowid
+        if is_postgres_connection(connection):
+            row = cursor.fetchone()
+            cursor.close()
+            return row["id"]
+
+        lastrowid = cursor.lastrowid
+        cursor.close()
+        return lastrowid
 
 
 def load_recommendations(position_id=None, db_file=DB_FILE):
@@ -413,6 +531,6 @@ def load_recommendations(position_id=None, db_file=DB_FILE):
     query += " ORDER BY timestamp DESC, id DESC"
 
     with connect(db_file) as connection:
-        rows = connection.execute(query, params).fetchall()
+        rows = fetchall(connection, query, params)
 
-    return [dict(row) for row in rows]
+    return rows

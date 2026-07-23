@@ -4,3 +4,4 @@ streamlit
 streamlit-autorefresh
 pandas-market-calendars
 twilio
+psycopg2-binary
