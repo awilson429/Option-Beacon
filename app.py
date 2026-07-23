@@ -258,6 +258,35 @@ def ranked_setup_rows(latest_results, min_score=70, limit=60):
     return rows[:limit]
 
 
+def command_center_summary(latest_results, high_score_history=None):
+    regime = market_regime(latest_results)
+    ranked_rows = ranked_setup_rows(latest_results, min_score=65, limit=8)
+    coach_queue = coach_rows(latest_results, min_score=70, history=high_score_history)
+    sector_rows = sector_strength_rows(latest_results)
+    alerts = load_live_coach_alerts()
+
+    best_setup = ranked_rows[0] if ranked_rows else None
+    urgent_coach = next(
+        (
+            row for row in coach_queue
+            if row["Action"] in ["Entry zone active", "Avoid chasing"]
+        ),
+        coach_queue[0] if coach_queue else None,
+    )
+    leading_sector = sector_rows[0] if sector_rows else None
+    latest_alert = alerts.tail(1).iloc[0].to_dict() if not alerts.empty else None
+
+    return {
+        "regime": regime,
+        "best_setup": best_setup,
+        "urgent_coach": urgent_coach,
+        "leading_sector": leading_sector,
+        "latest_alert": latest_alert,
+        "ranked_rows": ranked_rows,
+        "coach_queue": coach_queue,
+    }
+
+
 def opportunity_grade(score):
     if score >= 95:
         return "A+"
@@ -1006,6 +1035,57 @@ def configure_page():
             margin-top: 0.5rem;
         }
 
+        .command-hero {
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 8px;
+            background: linear-gradient(135deg, rgba(216, 179, 90, 0.10), rgba(255, 255, 255, 0.025));
+            margin-bottom: 0.8rem;
+            padding: 1rem;
+        }
+
+        .command-grid {
+            display: grid;
+            gap: 0.75rem;
+            grid-template-columns: 1.15fr 1fr 1fr;
+        }
+
+        .command-panel {
+            background: rgba(0, 0, 0, 0.34);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 8px;
+            padding: 0.8rem;
+        }
+
+        .command-label {
+            color: var(--ob-muted);
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.11em;
+            text-transform: uppercase;
+        }
+
+        .command-value {
+            color: var(--ob-text);
+            font-size: 1.55rem;
+            font-weight: 800;
+            line-height: 1.05;
+            margin-top: 0.25rem;
+        }
+
+        .command-detail {
+            color: var(--ob-muted);
+            font-size: 0.88rem;
+            line-height: 1.25;
+            margin-top: 0.35rem;
+        }
+
+        .command-focus {
+            display: grid;
+            gap: 0.7rem;
+            grid-template-columns: 1fr 1fr;
+            margin-bottom: 0.8rem;
+        }
+
         hr {
             border-color: rgba(255, 255, 255, 0.10);
         }
@@ -1070,6 +1150,11 @@ def configure_page():
             }
 
             .beacon-board {
+                grid-template-columns: 1fr;
+            }
+
+            .command-grid,
+            .command-focus {
                 grid-template-columns: 1fr;
             }
 
@@ -1637,6 +1722,136 @@ def render_live_trade_coach(latest_results, high_score_history=None):
             st.write(row["Coach Summary"])
             st.write(row["Next Step"])
             st.write(row["Risk Note"])
+
+
+def render_command_center(latest_results, high_score_history=None):
+    summary = command_center_summary(latest_results, high_score_history)
+    regime = summary["regime"]
+    best_setup = summary["best_setup"]
+    urgent_coach = summary["urgent_coach"]
+    leading_sector = summary["leading_sector"]
+    latest_alert = summary["latest_alert"]
+
+    focus_value = "No clean setup"
+    focus_detail = "Waiting for a higher-quality opportunity."
+    if best_setup:
+        focus_value = f'{best_setup["Symbol"]} {best_setup["Grade"]}'
+        focus_detail = (
+            f'{best_setup["Bias"]} | Quality {best_setup["Quality Score"]}/100 | '
+            f'{best_setup["Why Here"]}'
+        )
+
+    coach_value = "Wait"
+    coach_detail = "No coach action is urgent yet."
+    if urgent_coach:
+        coach_value = f'{urgent_coach["Symbol"]}: {urgent_coach["Action"]}'
+        coach_detail = f'{urgent_coach["Next Step"]} {urgent_coach["Risk Note"]}'
+
+    sector_value = "Sector data pending"
+    sector_detail = "Sector ETFs will appear after the scheduled scan includes context symbols."
+    if leading_sector:
+        sector_value = f'{leading_sector["ETF"]}: {leading_sector["Bias"]}'
+        sector_detail = (
+            f'{leading_sector["Sector"]} leads the sector board with '
+            f'score {leading_sector["Score"]}/100.'
+        )
+
+    st.markdown(
+        f"""
+        <div class="command-hero">
+            <div class="command-grid">
+                <div class="command-panel">
+                    <div class="command-label">Market Read</div>
+                    <div class="command-value">{escape(regime["regime"])}</div>
+                    <div class="command-detail">{escape(regime["support"])} {escape(regime["best_strategy"])}</div>
+                </div>
+                <div class="command-panel">
+                    <div class="command-label">Best Focus</div>
+                    <div class="command-value">{escape(focus_value)}</div>
+                    <div class="command-detail">{escape(focus_detail)}</div>
+                </div>
+                <div class="command-panel">
+                    <div class="command-label">Coach Says</div>
+                    <div class="command-value">{escape(coach_value)}</div>
+                    <div class="command-detail">{escape(coach_detail)}</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"""
+        <div class="command-focus">
+            <div class="board-panel">
+                <div class="board-header"><span>Sector Pulse</span><span>{escape(sector_value)}</span></div>
+                <div class="board-body"><div class="board-note">{escape(sector_detail)}</div></div>
+            </div>
+            <div class="board-panel">
+                <div class="board-header"><span>Latest Alert</span><span>Coach Log</span></div>
+                <div class="board-body">
+                    <div class="board-note">{escape(latest_alert_text(latest_alert))}</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    focus_rows = summary["ranked_rows"][:6]
+    if focus_rows:
+        st.markdown(
+            '<div class="opportunity-heading">Today\'s Focus List</div>',
+            unsafe_allow_html=True,
+        )
+        st.dataframe(
+            pd.DataFrame(focus_rows)[
+                [
+                    "Symbol",
+                    "Bias",
+                    "Quality Score",
+                    "Grade",
+                    "Score",
+                    "Market Support",
+                    "Sector Support",
+                    "Liquidity",
+                    "Chase Risk",
+                    "Why Here",
+                ]
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        render_empty_state("No focus-list setups are clean enough yet.")
+
+    st.markdown(
+        '<div class="opportunity-heading">Coach Feed</div>',
+        unsafe_allow_html=True,
+    )
+    coach_feed = summary["coach_queue"][:6]
+    if coach_feed:
+        st.dataframe(
+            pd.DataFrame(coach_feed)[
+                ["Symbol", "Action", "Bias", "Score", "Next Step", "Chase Risk", "Exit Score", "Risk Note"]
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        render_empty_state("No coach feed items yet.")
+
+
+def latest_alert_text(alert):
+    if not alert:
+        return "No recent coach alerts logged yet."
+
+    symbol = alert.get("symbol", "")
+    action = alert.get("action", "")
+    headline = alert.get("headline", "")
+    timestamp = alert.get("timestamp", "")
+    return f"{symbol} {action}: {headline} {timestamp}".strip()
 
 
 def render_beacon_board(latest_results, high_score_history=None):
@@ -2689,21 +2904,20 @@ def main():
 
     latest_results, high_score_history, _, symbol_groups = scan_symbols()
 
-    live_tab, after_hours_tab, opportunities_tab, history_tab, tools_tab = st.tabs(
-        ["Live Coach", "After Hours", "Opportunities", "History", "Tools"]
+    command_tab, setups_tab, after_hours_tab, history_tab, tools_tab = st.tabs(
+        ["Command Center", "Setups", "After Hours", "History", "Tools"]
     )
 
-    with live_tab:
-        render_beacon_board(latest_results, high_score_history)
+    with command_tab:
+        render_command_center(latest_results, high_score_history)
+        with st.expander("Beacon Board"):
+            render_beacon_board(latest_results, high_score_history)
         with st.expander("Detailed Live Coach"):
             render_live_trade_coach(latest_results, high_score_history)
         with st.expander("Recent Coach Alert Table"):
             render_live_coach_alerts()
 
-    with after_hours_tab:
-        render_after_hours(latest_results)
-
-    with opportunities_tab:
+    with setups_tab:
         render_top_opportunities(latest_results, high_score_history)
         st.divider()
         render_sector_strength(latest_results)
@@ -2711,6 +2925,9 @@ def main():
         render_ranked_setup_table(latest_results)
         with st.expander("Full Scanner"):
             render_current_scanner(latest_results, symbol_groups)
+
+    with after_hours_tab:
+        render_after_hours(latest_results)
 
     with history_tab:
         render_coach_timeline()
