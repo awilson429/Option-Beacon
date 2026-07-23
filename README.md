@@ -55,6 +55,8 @@ If the key is missing or Finnhub is unavailable, the app will still load and sho
 
 When `FINNHUB_API_KEY` is configured in GitHub Actions, the scheduled scanner ranks a broad list of liquid symbols and scans the top movers. By default it keeps up to 30 bullish movers and 30 bearish movers.
 
+The scheduled scan also includes major market and sector ETFs so the dashboard can show whether individual stock setups are aligned with their sector.
+
 To tune that number, add this optional GitHub Actions secret:
 
 ```toml

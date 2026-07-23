@@ -13,6 +13,164 @@ def _direction_score(result, direction):
     return _number(result.get("confidence"))
 
 
+SECTOR_ETF_NAMES = {
+    "XLK": "Technology",
+    "XLY": "Consumer Discretionary",
+    "XLF": "Financials",
+    "XLV": "Health Care",
+    "XLI": "Industrials",
+    "XLE": "Energy",
+    "XLP": "Consumer Staples",
+    "XLU": "Utilities",
+    "XLC": "Communication Services",
+    "XLRE": "Real Estate",
+    "XLB": "Materials",
+}
+
+SYMBOL_SECTOR_ETF = {
+    "AAPL": "XLK",
+    "AMD": "XLK",
+    "AVGO": "XLK",
+    "CRM": "XLK",
+    "INTC": "XLK",
+    "MSFT": "XLK",
+    "MU": "XLK",
+    "NVDA": "XLK",
+    "ORCL": "XLK",
+    "QCOM": "XLK",
+    "SMCI": "XLK",
+    "SNOW": "XLK",
+    "ABNB": "XLY",
+    "AMZN": "XLY",
+    "DKNG": "XLY",
+    "HD": "XLY",
+    "NKE": "XLY",
+    "RIVN": "XLY",
+    "ROKU": "XLY",
+    "TSLA": "XLY",
+    "UBER": "XLY",
+    "BABA": "XLY",
+    "BAC": "XLF",
+    "C": "XLF",
+    "GS": "XLF",
+    "JPM": "XLF",
+    "MS": "XLF",
+    "ABBV": "XLV",
+    "BMY": "XLV",
+    "LLY": "XLV",
+    "MRK": "XLV",
+    "PFE": "XLV",
+    "UNH": "XLV",
+    "BA": "XLI",
+    "CAT": "XLI",
+    "FDX": "XLI",
+    "GE": "XLI",
+    "CVX": "XLE",
+    "SLB": "XLE",
+    "USO": "XLE",
+    "XOM": "XLE",
+    "KO": "XLP",
+    "PEP": "XLP",
+    "WMT": "XLP",
+    "T": "XLC",
+    "DIS": "XLC",
+    "GOOGL": "XLC",
+    "META": "XLC",
+    "NFLX": "XLC",
+    "BIDU": "XLC",
+    "COIN": "XLF",
+    "PYPL": "XLF",
+    "SHOP": "XLK",
+    "SOFI": "XLF",
+    "PLTR": "XLK",
+    "MSTR": "XLK",
+    "RBLX": "XLC",
+    "F": "XLY",
+}
+
+
+def sector_for_symbol(symbol):
+    symbol = str(symbol or "").upper()
+    if symbol in SECTOR_ETF_NAMES:
+        return symbol
+    return SYMBOL_SECTOR_ETF.get(symbol)
+
+
+def setup_sector_support(result, latest_results):
+    symbol = result.get("symbol")
+    direction = result.get("bias", "Neutral")
+    sector_etf = sector_for_symbol(symbol)
+
+    if not sector_etf:
+        return {
+            "status": "Unknown",
+            "sector_etf": "",
+            "sector_name": "Unmapped",
+            "sector_bias": "Unknown",
+            "sector_score": 0,
+            "detail": "Sector context is not mapped for this symbol yet.",
+        }
+
+    sector_result = latest_results.get(sector_etf) or {}
+    sector_bias = sector_result.get("bias", "Unknown")
+    sector_score = _number(sector_result.get("confidence"))
+    sector_name = SECTOR_ETF_NAMES.get(sector_etf, sector_etf)
+
+    if not sector_result:
+        return {
+            "status": "Unavailable",
+            "sector_etf": sector_etf,
+            "sector_name": sector_name,
+            "sector_bias": "Unknown",
+            "sector_score": 0,
+            "detail": f"{sector_etf} has not been scanned yet.",
+        }
+
+    if symbol == sector_etf:
+        status = "Benchmark"
+        detail = f"{sector_etf} is the {sector_name} benchmark."
+    elif direction in ["Bullish", "Bearish"] and sector_bias == direction and sector_score >= 70:
+        status = "Aligned"
+        detail = f"{sector_name} ({sector_etf}) supports the {direction.lower()} setup."
+    elif direction in ["Bullish", "Bearish"] and sector_bias in ["Bullish", "Bearish"] and sector_bias != direction and sector_score >= 70:
+        status = "Against"
+        detail = f"{sector_name} ({sector_etf}) is leaning {sector_bias.lower()}, against this setup."
+    else:
+        status = "Mixed"
+        detail = f"{sector_name} ({sector_etf}) is not strongly confirming this setup."
+
+    return {
+        "status": status,
+        "sector_etf": sector_etf,
+        "sector_name": sector_name,
+        "sector_bias": sector_bias,
+        "sector_score": round(sector_score, 1),
+        "detail": detail,
+    }
+
+
+def sector_strength_rows(latest_results):
+    rows = []
+    for sector_etf, sector_name in SECTOR_ETF_NAMES.items():
+        result = latest_results.get(sector_etf)
+        if not result or result.get("signal") == "DATA UNAVAILABLE":
+            continue
+
+        rows.append(
+            {
+                "Sector": sector_name,
+                "ETF": sector_etf,
+                "Bias": result.get("bias", "Neutral"),
+                "Score": int(_number(result.get("confidence"))),
+                "RVol": round(_number(result.get("relative_volume")), 2),
+                "Primary Reason": (result.get("reasons") or [""])[0],
+            }
+        )
+
+    rows.sort(key=lambda row: row["Score"], reverse=True)
+    return rows
+
+
 def market_regime(latest_results):
     market_symbols = [
         result for symbol, result in latest_results.items()
@@ -138,6 +296,10 @@ def missing_confirmations(result, latest_results=None):
     support = setup_market_support(result, latest_results)
     if support != "Aligned" and direction in ["Bullish", "Bearish"]:
         missing.append("market support")
+
+    sector = setup_sector_support(result, latest_results)
+    if sector["status"] not in ["Aligned", "Benchmark"] and direction in ["Bullish", "Bearish"]:
+        missing.append("sector support")
 
     chase = chase_risk(result)
     if chase["label"] in ["Moderate", "High"]:

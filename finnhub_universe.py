@@ -10,6 +10,23 @@ from zoneinfo import ZoneInfo
 
 DEFAULT_ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
 DEFAULT_STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
+MARKET_CONTEXT_SYMBOLS = [
+    "SPY",
+    "QQQ",
+    "IWM",
+    "DIA",
+    "XLK",
+    "XLY",
+    "XLF",
+    "XLV",
+    "XLI",
+    "XLE",
+    "XLP",
+    "XLU",
+    "XLC",
+    "XLRE",
+    "XLB",
+]
 DEFAULT_SYMBOL_GROUPS = {
     "ETF Scanner": DEFAULT_ETF_SYMBOLS,
     "Single Stock Scanner": DEFAULT_STOCK_SYMBOLS,
@@ -227,6 +244,7 @@ def active_symbol_groups(api_key=None):
 
     return (
         {
+            "Market Context": MARKET_CONTEXT_SYMBOLS,
             "Top Bullish Movers": bullish_symbols,
             "Top Bearish Movers": bearish_symbols,
         },

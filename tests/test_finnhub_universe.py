@@ -1,6 +1,12 @@
 import os
 
-from finnhub_universe import DEFAULT_TOP_MOVER_COUNT, MAX_TOP_MOVER_COUNT, top_mover_count
+from finnhub_universe import (
+    DEFAULT_TOP_MOVER_COUNT,
+    MARKET_CONTEXT_SYMBOLS,
+    MAX_TOP_MOVER_COUNT,
+    active_symbol_groups,
+    top_mover_count,
+)
 
 
 def test_top_mover_count_uses_default_when_missing():
@@ -34,3 +40,23 @@ def test_top_mover_count_has_floor():
             os.environ.pop("OPTION_BEACON_TOP_MOVER_COUNT", None)
         else:
             os.environ["OPTION_BEACON_TOP_MOVER_COUNT"] = original
+
+
+def test_active_symbol_groups_includes_market_context_when_movers_available(monkeypatch):
+    def fake_rank_daily_movers(api_key=None):
+        return {
+            "bullish": [{"symbol": "NVDA"}],
+            "bearish": [{"symbol": "JPM"}],
+        }, ""
+
+    monkeypatch.setattr("finnhub_universe.load_cached_movers", lambda: None)
+    monkeypatch.setattr("finnhub_universe.rank_daily_movers", fake_rank_daily_movers)
+    monkeypatch.setattr("finnhub_universe.save_cached_movers", lambda movers: None)
+
+    groups, source, error = active_symbol_groups(api_key="test")
+
+    assert source == "Finnhub daily movers"
+    assert error == ""
+    assert groups["Market Context"] == MARKET_CONTEXT_SYMBOLS
+    assert groups["Top Bullish Movers"] == ["NVDA"]
+    assert groups["Top Bearish Movers"] == ["JPM"]

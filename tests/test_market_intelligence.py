@@ -4,7 +4,9 @@ from market_intelligence import (
     chase_risk,
     confidence_explanation,
     market_regime,
+    sector_strength_rows,
     setup_momentum_snapshot,
+    setup_sector_support,
 )
 
 
@@ -102,3 +104,40 @@ def test_setup_momentum_snapshot_detects_bias_flip():
 
     assert snapshot["label"] == "Bias flipped"
     assert snapshot["bias_changed"] is True
+
+
+def test_setup_sector_support_detects_aligned_technology_setup():
+    result = {"symbol": "NVDA", "bias": "Bullish", "confidence": 88}
+    latest_results = {
+        "XLK": {"bias": "Bullish", "confidence": 84},
+    }
+
+    support = setup_sector_support(result, latest_results)
+
+    assert support["status"] == "Aligned"
+    assert support["sector_etf"] == "XLK"
+    assert "Technology" in support["detail"]
+
+
+def test_setup_sector_support_detects_against_sector():
+    result = {"symbol": "JPM", "bias": "Bullish", "confidence": 82}
+    latest_results = {
+        "XLF": {"bias": "Bearish", "confidence": 78},
+    }
+
+    support = setup_sector_support(result, latest_results)
+
+    assert support["status"] == "Against"
+    assert support["sector_bias"] == "Bearish"
+
+
+def test_sector_strength_rows_sorts_by_score():
+    latest_results = {
+        "XLK": {"bias": "Bullish", "confidence": 72, "relative_volume": 1.2, "reasons": ["Tech reason"]},
+        "XLF": {"bias": "Bearish", "confidence": 91, "relative_volume": 1.5, "reasons": ["Financial reason"]},
+    }
+
+    rows = sector_strength_rows(latest_results)
+
+    assert rows[0]["ETF"] == "XLF"
+    assert rows[0]["Sector"] == "Financials"

@@ -9,6 +9,7 @@ from streamlit_autorefresh import st_autorefresh
 from after_hours import after_hours_focus_rows, fetch_after_hours_briefing
 from finnhub_universe import (
     DEFAULT_SYMBOL_GROUPS,
+    MARKET_CONTEXT_SYMBOLS,
     flatten_symbol_groups,
 )
 from optionbeacon_history import (
@@ -27,8 +28,10 @@ from market_intelligence import (
     chase_risk,
     confidence_explanation,
     market_regime,
+    sector_strength_rows,
     setup_market_support,
     setup_momentum_snapshot,
+    setup_sector_support,
 )
 from trade_journal import (
     filter_journal_rows,
@@ -210,12 +213,16 @@ def ranked_setup_rows(latest_results, min_score=70, limit=60):
         if score < min_score:
             continue
 
+        sector = setup_sector_support(result, latest_results)
         rows.append(
             {
                 "Symbol": symbol,
                 "Bias": bias,
                 "Score": score,
                 "Confirmations": confirmation_count(result, latest_results),
+                "Sector Support": sector["status"],
+                "Sector": sector["sector_etf"] or "N/A",
+                "Sector Bias": sector["sector_bias"],
                 "State": result.get("signal", "WATCHLIST"),
                 "Timing": result.get("entry_timing", "Wait"),
                 "Price": money(result.get("price")),
@@ -262,6 +269,7 @@ def factor_status(result, direction, latest_results=None):
     volume = score_value(result, "volume_score")
     price_action = score_value(result, "price_action_score")
     market_support = setup_market_support(result, latest_results)
+    sector_support = setup_sector_support(result, latest_results)["status"]
 
     return [
         ("Trend", "Aligned" if trend >= 18 else "Developing"),
@@ -269,7 +277,7 @@ def factor_status(result, direction, latest_results=None):
         ("Volume", "Confirmed" if volume >= 14 else "Waiting"),
         ("Price Action", "Confirmed" if price_action >= 12 else "Waiting"),
         ("Market Support", market_support),
-        ("Sentiment", "Not connected"),
+        ("Sector Support", sector_support),
     ]
 
 
@@ -1199,6 +1207,33 @@ def symbol_groups_from_snapshot(snapshot_results):
     if len(symbols) <= len(flatten_symbol_groups(DEFAULT_SYMBOL_GROUPS)):
         return DEFAULT_SYMBOL_GROUPS
 
+    context_symbols = [symbol for symbol in MARKET_CONTEXT_SYMBOLS if symbol in snapshot_results]
+    remaining_symbols = [symbol for symbol in symbols if symbol not in context_symbols]
+    bullish_symbols = [
+        symbol for symbol in remaining_symbols
+        if snapshot_results.get(symbol, {}).get("bias") == "Bullish"
+    ]
+    bearish_symbols = [
+        symbol for symbol in remaining_symbols
+        if snapshot_results.get(symbol, {}).get("bias") == "Bearish"
+    ]
+    other_symbols = [
+        symbol for symbol in remaining_symbols
+        if symbol not in bullish_symbols and symbol not in bearish_symbols
+    ]
+
+    if context_symbols or bullish_symbols or bearish_symbols:
+        groups = {}
+        if context_symbols:
+            groups["Market Context"] = context_symbols
+        if bullish_symbols:
+            groups["Bullish Setups"] = bullish_symbols
+        if bearish_symbols:
+            groups["Bearish Setups"] = bearish_symbols
+        if other_symbols:
+            groups["Developing Setups"] = other_symbols
+        return groups
+
     midpoint = min(25, max(1, len(symbols) // 2))
     return {
         "Top Bullish Movers": symbols[:midpoint],
@@ -1263,6 +1298,7 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
     direction = result.get("bias", "Neutral")
     coach = coach_live_setup(result)
     chase = chase_risk(result)
+    sector = setup_sector_support(result, latest_results)
     confidence_note = confidence_explanation(result, latest_results)
     momentum = setup_momentum_snapshot(result, high_score_history)
     exit_reasons = coach.get("exit_reasons", [])
@@ -1318,6 +1354,7 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
                 <div class="coach-metric"><div class="coach-label">Exit Score</div><div class="coach-value">{coach["exit_score"]}/100</div></div>
             </div>
             <div class="notice notice-info"><strong>What should I do next?</strong><br>{escape(coach["summary"])} {escape(coach["next_step"])}</div>
+            <div class="notice"><strong>Sector Support: {escape(sector["status"])}</strong><br>{escape(sector["detail"])}</div>
             <div class="notice"><strong>Live Read: {escape(momentum["label"])}</strong><br>{escape(momentum["detail"])}</div>
             <div class="notice"><strong>Chase Risk: {escape(chase["label"])}</strong><br>{escape(chase["reason"])}<br>{escape(confidence_note)}</div>
             <div class="content-kicker">Why?</div>
@@ -1341,6 +1378,24 @@ def render_market_regime(latest_results):
     st.markdown(
         f'<div class="notice notice-info"><strong>{escape(regime["support"])}</strong><br>{escape(regime["best_strategy"])}</div>',
         unsafe_allow_html=True,
+    )
+
+
+def render_sector_strength(latest_results):
+    render_section_header(
+        "Sector Strength",
+        "Shows whether major sectors are confirming or fighting individual setups",
+    )
+    rows = sector_strength_rows(latest_results)
+
+    if not rows:
+        render_empty_state("Sector ETF context has not been scanned yet.")
+        return
+
+    st.dataframe(
+        pd.DataFrame(rows),
+        use_container_width=True,
+        hide_index=True,
     )
 
 
@@ -2627,6 +2682,8 @@ def main():
 
     with opportunities_tab:
         render_top_opportunities(latest_results, high_score_history)
+        st.divider()
+        render_sector_strength(latest_results)
         st.divider()
         render_ranked_setup_table(latest_results)
         with st.expander("Full Scanner"):
