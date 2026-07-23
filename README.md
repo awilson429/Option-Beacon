@@ -59,8 +59,6 @@ The scheduled scan also includes major market and sector ETFs so the dashboard c
 
 Opportunities are ranked by a blended setup quality score that considers raw scanner score, market support, sector support, liquidity, and chase risk.
 
-The first dashboard tab is the **Command Center**, which summarizes market read, best focus setup, live coach guidance, sector pulse, recent alerts, and the highest-quality focus list before users drill into the full setup tables.
-
 To tune that number, add this optional GitHub Actions secret:
 
 ```toml
