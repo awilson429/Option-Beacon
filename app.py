@@ -1435,14 +1435,32 @@ def render_trade_journal():
         if not review_df.empty:
             st.markdown("**Trade Review Dashboard**")
             st.dataframe(review_df, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download Trade Review Dashboard CSV",
+                review_df.to_csv(index=False),
+                file_name="optionbeacon_trade_review_dashboard.csv",
+                mime="text/csv",
+            )
 
         if not outcome_df.empty:
             st.markdown("**Outcome Review**")
             st.dataframe(outcome_df, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download Outcome Review CSV",
+                outcome_df.to_csv(index=False),
+                file_name="optionbeacon_outcome_review.csv",
+                mime="text/csv",
+            )
 
         if not lesson_df.empty:
             st.markdown("**Common Lesson Patterns**")
             st.dataframe(lesson_df, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download Lesson Patterns CSV",
+                lesson_df.to_csv(index=False),
+                file_name="optionbeacon_lesson_patterns.csv",
+                mime="text/csv",
+            )
 
         st.markdown("**Closed Trade Journal**")
         st.dataframe(filtered_journal_df, use_container_width=True, hide_index=True)
