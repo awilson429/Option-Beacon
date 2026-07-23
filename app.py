@@ -226,6 +226,14 @@ def plan_value(plan, key, fallback=None):
     return plan.get(key) if plan and plan.get(key) is not None else fallback
 
 
+def board_color_class(value):
+    if value in ["Bullish", "Entry zone active", "Improving", "Aligned", "Low"]:
+        return "board-green"
+    if value in ["Bearish", "Avoid chasing", "Weakening", "Bias flipped", "Against", "High"]:
+        return "board-red"
+    return "board-muted"
+
+
 def configure_page():
     st.set_page_config(page_title="Option Beacon", layout="wide")
     st_autorefresh(interval=60000, key="option_beacon_refresh")
@@ -790,6 +798,138 @@ def configure_page():
             background: rgba(216, 179, 90, 0.08);
         }
 
+        .beacon-board {
+            display: grid;
+            gap: 0.65rem;
+            grid-template-columns: 1.15fr 1fr 1fr;
+            margin-top: 0.2rem;
+        }
+
+        .board-panel {
+            background: #070707;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 8px;
+            min-height: 10rem;
+            overflow: hidden;
+        }
+
+        .board-panel-wide {
+            grid-column: span 2;
+        }
+
+        .board-panel-full {
+            grid-column: 1 / -1;
+        }
+
+        .board-header {
+            align-items: center;
+            background: rgba(255, 255, 255, 0.055);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--ob-muted);
+            display: flex;
+            font-size: 0.78rem;
+            font-weight: 800;
+            justify-content: space-between;
+            letter-spacing: 0.1em;
+            padding: 0.55rem 0.7rem;
+            text-transform: uppercase;
+        }
+
+        .board-body {
+            padding: 0.55rem 0.7rem;
+        }
+
+        .board-row {
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+            display: grid;
+            gap: 0.5rem;
+            grid-template-columns: 0.7fr 1.05fr 0.6fr 0.8fr;
+            min-height: 2.35rem;
+            padding: 0.35rem 0;
+        }
+
+        .board-row:last-child {
+            border-bottom: 0;
+        }
+
+        .board-row-compact {
+            grid-template-columns: 0.7fr 1fr 0.55fr;
+        }
+
+        .board-symbol {
+            color: var(--ob-text);
+            font-size: 1.05rem;
+            font-weight: 800;
+        }
+
+        .board-main {
+            color: var(--ob-text);
+            font-size: 0.93rem;
+            font-weight: 700;
+            line-height: 1.15;
+        }
+
+        .board-sub {
+            color: var(--ob-muted);
+            font-size: 0.78rem;
+            line-height: 1.15;
+        }
+
+        .board-number {
+            color: var(--ob-gold);
+            font-size: 1rem;
+            font-weight: 800;
+            text-align: right;
+        }
+
+        .board-green {
+            color: var(--ob-green);
+        }
+
+        .board-red {
+            color: var(--ob-red);
+        }
+
+        .board-muted {
+            color: var(--ob-muted);
+        }
+
+        .board-strip {
+            display: grid;
+            gap: 0.45rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .board-tile {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.035);
+            padding: 0.55rem 0.65rem;
+        }
+
+        .board-tile-label {
+            color: var(--ob-muted);
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .board-tile-value {
+            color: var(--ob-text);
+            font-size: 1.2rem;
+            font-weight: 800;
+            margin-top: 0.15rem;
+        }
+
+        .board-note {
+            color: var(--ob-muted);
+            font-size: 0.85rem;
+            line-height: 1.25;
+            margin-top: 0.5rem;
+        }
+
         hr {
             border-color: rgba(255, 255, 255, 0.10);
         }
@@ -850,6 +990,19 @@ def configure_page():
 
             .coach-grid,
             .factor-list {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .beacon-board {
+                grid-template-columns: 1fr;
+            }
+
+            .board-panel-wide,
+            .board-panel-full {
+                grid-column: auto;
+            }
+
+            .board-strip {
                 grid-template-columns: 1fr 1fr;
             }
         }
@@ -1248,6 +1401,125 @@ def render_live_trade_coach(latest_results, high_score_history=None):
             st.write(row["Coach Summary"])
             st.write(row["Next Step"])
             st.write(row["Risk Note"])
+
+
+def render_beacon_board(latest_results, high_score_history=None):
+    regime = market_regime(latest_results)
+    coach_queue = coach_rows(latest_results, min_score=70, history=high_score_history)
+    alerts = load_live_coach_alerts()
+    bullish_rows = opportunity_rows(latest_results, "Bullish", limit=5)
+    bearish_rows = opportunity_rows(latest_results, "Bearish", limit=5)
+    risk_rows = [
+        row for row in coach_queue
+        if row["Chase Risk"] == "High" or int(row.get("Exit Score") or 0) >= 55
+    ][:6]
+
+    market_tiles = ""
+    for symbol in ["SPY", "QQQ", "IWM", "DIA"]:
+        result = latest_results.get(symbol, {})
+        bias = result.get("bias", "N/A")
+        score = result.get("confidence", 0)
+        color = board_color_class(bias)
+        market_tiles += (
+            f'<div class="board-tile">'
+            f'<div class="board-tile-label">{escape(symbol)}</div>'
+            f'<div class="board-tile-value {color}">{escape(str(bias))}</div>'
+            f'<div class="board-sub">Score {escape(str(score))}/100</div>'
+            f'</div>'
+        )
+
+    coach_html = ""
+    for row in coach_queue[:7]:
+        action_color = board_color_class(row["Action"])
+        coach_html += (
+            '<div class="board-row">'
+            f'<div class="board-symbol">{escape(row["Symbol"])}</div>'
+            f'<div><div class="board-main {action_color}">{escape(row["Action"])}</div>'
+            f'<div class="board-sub">{escape(row["Live Read"])} | {escape(row["Timing"])}</div></div>'
+            f'<div class="board-number">{escape(str(row["Score"]))}</div>'
+            f'<div class="board-sub">{escape(row["Chase Risk"])} chase<br>Exit {escape(str(row["Exit Score"]))}</div>'
+            '</div>'
+        )
+    if not coach_html:
+        coach_html = '<div class="board-note">No coach ideas are active yet.</div>'
+
+    def setup_rows(rows):
+        html = ""
+        for row in rows:
+            result = row["result"]
+            plan = result.get("trade_plan") or {}
+            html += (
+                '<div class="board-row board-row-compact">'
+                f'<div class="board-symbol">{escape(row["symbol"])}</div>'
+                f'<div><div class="board-main">{escape(result.get("bias", "Neutral"))} {escape(result.get("entry_timing", "Wait"))}</div>'
+                f'<div class="board-sub">Entry {money(plan_value(plan, "trigger_price", result.get("entry")))} | Stop {money(plan_value(plan, "technical_stop", result.get("stop")))}</div></div>'
+                f'<div class="board-number">{escape(str(row["score"]))}</div>'
+                '</div>'
+            )
+        return html or '<div class="board-note">No scored setups yet.</div>'
+
+    risk_html = ""
+    for row in risk_rows:
+        risk_color = board_color_class(row["Chase Risk"])
+        risk_html += (
+            '<div class="board-row board-row-compact">'
+            f'<div class="board-symbol">{escape(row["Symbol"])}</div>'
+            f'<div><div class="board-main {risk_color}">{escape(row["Chase Risk"])} chase</div>'
+            f'<div class="board-sub">{escape(row["Exit Label"])} | {escape(row["Action"])}</div></div>'
+            f'<div class="board-number">{escape(str(row["Exit Score"]))}</div>'
+            '</div>'
+        )
+    if not risk_html:
+        risk_html = '<div class="board-note">No high chase-risk or elevated exit-score warnings.</div>'
+
+    alert_html = ""
+    if not alerts.empty:
+        for _, alert in alerts.tail(6).iloc[::-1].iterrows():
+            alert_html += (
+                '<div class="board-row board-row-compact">'
+                f'<div class="board-symbol">{escape(str(alert.get("symbol", "")))}</div>'
+                f'<div><div class="board-main">{escape(str(alert.get("action", "")))}</div>'
+                f'<div class="board-sub">{escape(str(alert.get("live_read", "")))} | {escape(str(alert.get("timestamp", "")))}</div></div>'
+                f'<div class="board-number">{escape(str(alert.get("score", "")))}</div>'
+                '</div>'
+            )
+    if not alert_html:
+        alert_html = '<div class="board-note">No recent coach alerts logged yet.</div>'
+
+    st.markdown(
+        f"""
+        <div class="beacon-board">
+            <div class="board-panel board-panel-full">
+                <div class="board-header"><span>Market Pulse</span><span>{escape(regime["regime"])}</span></div>
+                <div class="board-body">
+                    <div class="board-strip">{market_tiles}</div>
+                    <div class="board-note">{escape(regime["support"])} {escape(regime["best_strategy"])}</div>
+                </div>
+            </div>
+            <div class="board-panel board-panel-wide">
+                <div class="board-header"><span>Coach Queue</span><span>What matters now</span></div>
+                <div class="board-body">{coach_html}</div>
+            </div>
+            <div class="board-panel">
+                <div class="board-header"><span>Risk Watch</span><span>Exit / chase</span></div>
+                <div class="board-body">{risk_html}</div>
+            </div>
+            <div class="board-panel">
+                <div class="board-header"><span>Top Bullish</span><span>Calls</span></div>
+                <div class="board-body">{setup_rows(bullish_rows)}</div>
+            </div>
+            <div class="board-panel">
+                <div class="board-header"><span>Top Bearish</span><span>Puts</span></div>
+                <div class="board-body">{setup_rows(bearish_rows)}</div>
+            </div>
+            <div class="board-panel">
+                <div class="board-header"><span>Recent Alerts</span><span>In-app</span></div>
+                <div class="board-body">{alert_html}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_live_coach_alerts():
@@ -2186,11 +2458,11 @@ def main():
     )
 
     with live_tab:
-        render_market_regime(latest_results)
-        st.divider()
-        render_live_trade_coach(latest_results, high_score_history)
-        st.divider()
-        render_live_coach_alerts()
+        render_beacon_board(latest_results, high_score_history)
+        with st.expander("Detailed Live Coach"):
+            render_live_trade_coach(latest_results, high_score_history)
+        with st.expander("Recent Coach Alert Table"):
+            render_live_coach_alerts()
 
     with opportunities_tab:
         render_top_opportunities(latest_results, high_score_history)
