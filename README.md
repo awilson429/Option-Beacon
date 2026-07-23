@@ -57,6 +57,8 @@ When `FINNHUB_API_KEY` is configured in GitHub Actions, the scheduled scanner ra
 
 The scheduled scan also includes major market and sector ETFs so the dashboard can show whether individual stock setups are aligned with their sector.
 
+Opportunities are ranked by a blended setup quality score that considers raw scanner score, market support, sector support, liquidity, and chase risk.
+
 To tune that number, add this optional GitHub Actions secret:
 
 ```toml

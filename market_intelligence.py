@@ -171,6 +171,180 @@ def sector_strength_rows(latest_results):
     return rows
 
 
+def liquidity_quality(result):
+    price = _number(result.get("price"))
+    volume = _number(result.get("volume"))
+    avg_volume = _number(result.get("avg_volume"))
+    relative_volume = _number(result.get("relative_volume"))
+
+    score = 0
+    reasons = []
+
+    if price >= 20:
+        score += 25
+        reasons.append("price above $20")
+    elif price >= 5:
+        score += 12
+        reasons.append("lower-priced but tradeable")
+    else:
+        reasons.append("very low share price")
+
+    if avg_volume >= 5_000_000:
+        score += 25
+        reasons.append("strong average volume")
+    elif avg_volume >= 1_000_000:
+        score += 18
+        reasons.append("acceptable average volume")
+    elif avg_volume > 0:
+        score += 8
+        reasons.append("thin average volume")
+    else:
+        reasons.append("average volume unavailable")
+
+    if volume >= 1_000_000:
+        score += 20
+        reasons.append("active current volume")
+    elif volume >= 250_000:
+        score += 12
+        reasons.append("some current volume")
+    elif volume > 0:
+        score += 4
+        reasons.append("light current volume")
+    else:
+        reasons.append("current volume unavailable")
+
+    if relative_volume >= 2:
+        score += 30
+        reasons.append("relative volume above 2.0x")
+    elif relative_volume >= 1.2:
+        score += 22
+        reasons.append("relative volume above average")
+    elif relative_volume >= 0.8:
+        score += 12
+        reasons.append("normal relative volume")
+    else:
+        reasons.append("relative volume is light")
+
+    score = min(score, 100)
+    if score >= 80:
+        label = "Strong"
+    elif score >= 60:
+        label = "Acceptable"
+    elif score >= 40:
+        label = "Thin"
+    else:
+        label = "Weak"
+
+    return {
+        "score": score,
+        "label": label,
+        "detail": ", ".join(reasons[:3]) + ".",
+    }
+
+
+def setup_quality(result, latest_results=None):
+    latest_results = latest_results or {}
+    raw_score = _number(result.get("confidence"))
+    direction = result.get("bias", "Neutral")
+    market_support = setup_market_support(result, latest_results)
+    sector_support = setup_sector_support(result, latest_results)
+    liquidity = liquidity_quality(result)
+    chase = chase_risk(result)
+
+    quality_score = raw_score * 0.55
+    adjustments = []
+
+    if market_support == "Aligned":
+        quality_score += 10
+        adjustments.append("market aligned")
+    elif market_support == "Against":
+        quality_score -= 10
+        adjustments.append("market against")
+    else:
+        adjustments.append("market mixed")
+
+    if sector_support["status"] in ["Aligned", "Benchmark"]:
+        quality_score += 10
+        adjustments.append("sector aligned")
+    elif sector_support["status"] == "Against":
+        quality_score -= 12
+        adjustments.append("sector against")
+    else:
+        adjustments.append("sector mixed")
+
+    if liquidity["score"] >= 80:
+        quality_score += 10
+        adjustments.append("strong liquidity")
+    elif liquidity["score"] >= 60:
+        quality_score += 5
+        adjustments.append("acceptable liquidity")
+    elif liquidity["score"] < 40:
+        quality_score -= 12
+        adjustments.append("weak liquidity")
+    else:
+        quality_score -= 5
+        adjustments.append("thin liquidity")
+
+    if chase["label"] == "Low":
+        quality_score += 8
+        adjustments.append("good entry location")
+    elif chase["label"] == "Waiting":
+        quality_score += 3
+        adjustments.append("waiting for trigger")
+    elif chase["label"] == "Moderate":
+        quality_score -= 5
+        adjustments.append("some chase risk")
+    elif chase["label"] == "High":
+        quality_score -= 15
+        adjustments.append("high chase risk")
+
+    if direction not in ["Bullish", "Bearish"]:
+        quality_score = min(quality_score, 50)
+
+    quality_score = max(0, min(100, round(quality_score)))
+
+    if quality_score >= 85:
+        grade = "A"
+    elif quality_score >= 75:
+        grade = "B"
+    elif quality_score >= 65:
+        grade = "C"
+    elif quality_score >= 50:
+        grade = "Developing"
+    else:
+        grade = "Low Quality"
+
+    return {
+        "score": quality_score,
+        "grade": grade,
+        "market_support": market_support,
+        "sector_support": sector_support["status"],
+        "liquidity": liquidity["label"],
+        "chase_risk": chase["label"],
+        "detail": ", ".join(adjustments[:4]) + ".",
+    }
+
+
+def setup_quality_summary(result, latest_results=None):
+    quality = setup_quality(result, latest_results)
+    direction = result.get("bias", "Neutral")
+    score = int(_number(result.get("confidence")))
+
+    if quality["grade"] in ["A", "B"]:
+        return (
+            f"{direction} setup with {quality['market_support'].lower()} market support, "
+            f"{quality['sector_support'].lower()} sector support, and {quality['liquidity'].lower()} liquidity."
+        )
+
+    if quality["chase_risk"] in ["Moderate", "High"]:
+        return f"Raw score is {score}, but entry location is not ideal yet."
+
+    if quality["sector_support"] == "Against":
+        return f"Raw score is {score}, but the sector is working against the setup."
+
+    return f"{direction} setup is developing, but confirmation quality is still mixed."
+
+
 def market_regime(latest_results):
     market_symbols = [
         result for symbol, result in latest_results.items()

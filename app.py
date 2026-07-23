@@ -27,8 +27,11 @@ from live_trade_coach import coach_live_setup, coach_rows
 from market_intelligence import (
     chase_risk,
     confidence_explanation,
+    liquidity_quality,
     market_regime,
     sector_strength_rows,
+    setup_quality,
+    setup_quality_summary,
     setup_market_support,
     setup_momentum_snapshot,
     setup_sector_support,
@@ -169,10 +172,13 @@ def opportunity_rows(latest_results, direction, limit=5):
         if score <= 0:
             continue
 
+        quality = setup_quality(result, latest_results)
         rows.append(
             {
                 "symbol": symbol,
                 "score": score,
+                "quality_score": quality["score"],
+                "quality_grade": quality["grade"],
                 "signal": result.get("signal", "WATCHLIST"),
                 "is_active": result.get("signal") == signal_name,
                 "price": result.get("price"),
@@ -184,7 +190,11 @@ def opportunity_rows(latest_results, direction, limit=5):
             }
         )
 
-    return sorted(rows, key=lambda row: (row["is_active"], row["score"]), reverse=True)[:limit]
+    return sorted(
+        rows,
+        key=lambda row: (row["is_active"], row["quality_score"], row["score"]),
+        reverse=True,
+    )[:limit]
 
 
 def confirmation_count(result, latest_results=None):
@@ -214,15 +224,21 @@ def ranked_setup_rows(latest_results, min_score=70, limit=60):
             continue
 
         sector = setup_sector_support(result, latest_results)
+        quality = setup_quality(result, latest_results)
         rows.append(
             {
                 "Symbol": symbol,
                 "Bias": bias,
+                "Quality Score": quality["score"],
+                "Grade": quality["grade"],
                 "Score": score,
                 "Confirmations": confirmation_count(result, latest_results),
                 "Sector Support": sector["status"],
                 "Sector": sector["sector_etf"] or "N/A",
                 "Sector Bias": sector["sector_bias"],
+                "Market Support": quality["market_support"],
+                "Liquidity": quality["liquidity"],
+                "Chase Risk": quality["chase_risk"],
                 "State": result.get("signal", "WATCHLIST"),
                 "Timing": result.get("entry_timing", "Wait"),
                 "Price": money(result.get("price")),
@@ -233,11 +249,12 @@ def ranked_setup_rows(latest_results, min_score=70, limit=60):
                 "Volume": score_value(result, "volume_score"),
                 "Volatility": score_value(result, "volatility_score"),
                 "Price Action": score_value(result, "price_action_score"),
+                "Why Here": setup_quality_summary(result, latest_results),
                 "Primary Reason": (result.get("reasons") or [""])[0],
             }
         )
 
-    rows.sort(key=lambda row: (row["Score"], row["Confirmations"], row["RVol"]), reverse=True)
+    rows.sort(key=lambda row: (row["Quality Score"], row["Score"], row["Confirmations"]), reverse=True)
     return rows[:limit]
 
 
@@ -1294,11 +1311,13 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
     result = row["result"]
     plan = result.get("trade_plan") or {}
     score = row["score"]
-    grade = opportunity_grade(score)
     direction = result.get("bias", "Neutral")
     coach = coach_live_setup(result)
     chase = chase_risk(result)
     sector = setup_sector_support(result, latest_results)
+    quality = setup_quality(result, latest_results)
+    liquidity = liquidity_quality(result)
+    quality_note = setup_quality_summary(result, latest_results)
     confidence_note = confidence_explanation(result, latest_results)
     momentum = setup_momentum_snapshot(result, high_score_history)
     exit_reasons = coach.get("exit_reasons", [])
@@ -1338,8 +1357,8 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
                     <div class="content-kicker">{escape(direction)} {escape(contract)} idea</div>
                 </div>
                 <div class="coach-grade">
-                    Overall Opportunity: {grade}<br>
-                    <span class="content-kicker">Confidence {score}%</span>
+                    Quality: {escape(quality["grade"])}<br>
+                    <span class="content-kicker">Quality {quality["score"]}/100 | Setup {score}%</span>
                 </div>
             </div>
             <div class="factor-list">{factor_html}</div>
@@ -1352,9 +1371,13 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
                 <div class="coach-metric"><div class="coach-label">Target 3</div><div class="coach-value">{target_3}</div></div>
                 <div class="coach-metric"><div class="coach-label">Live Coach</div><div class="coach-value">{escape(coach["action"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Exit Score</div><div class="coach-value">{coach["exit_score"]}/100</div></div>
+                <div class="coach-metric"><div class="coach-label">Liquidity</div><div class="coach-value">{escape(liquidity["label"])}</div></div>
+                <div class="coach-metric"><div class="coach-label">Sector</div><div class="coach-value">{escape(sector["status"])}</div></div>
             </div>
+            <div class="notice notice-info"><strong>Why this is here</strong><br>{escape(quality_note)}</div>
             <div class="notice notice-info"><strong>What should I do next?</strong><br>{escape(coach["summary"])} {escape(coach["next_step"])}</div>
             <div class="notice"><strong>Sector Support: {escape(sector["status"])}</strong><br>{escape(sector["detail"])}</div>
+            <div class="notice"><strong>Liquidity: {escape(liquidity["label"])}</strong><br>{escape(liquidity["detail"])}</div>
             <div class="notice"><strong>Live Read: {escape(momentum["label"])}</strong><br>{escape(momentum["detail"])}</div>
             <div class="notice"><strong>Chase Risk: {escape(chase["label"])}</strong><br>{escape(chase["reason"])}<br>{escape(confidence_note)}</div>
             <div class="content-kicker">Why?</div>
