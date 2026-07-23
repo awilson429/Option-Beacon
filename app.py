@@ -27,6 +27,13 @@ from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
 from optionbeacon_alerts import send_trade_coach_alert, twilio_configured
 from trade_management import coach_recommendation, trade_summary
+from trade_replay import (
+    DEFAULT_MAX_HOLD_CANDLES,
+    DEFAULT_PERIOD,
+    DEFAULT_REPLAY_SYMBOLS,
+    replay_summary,
+    replay_symbols,
+)
 from trade_storage import (
     close_position,
     create_position,
@@ -1498,6 +1505,84 @@ def render_trade_journal():
         )
 
 
+@st.cache_data(ttl=900, show_spinner=False)
+def cached_trade_replay(symbols, period, min_score, max_hold_candles):
+    return replay_symbols(
+        list(symbols),
+        period=period,
+        min_score=min_score,
+        max_hold_candles=max_hold_candles,
+    )
+
+
+def render_trade_replay_backtest():
+    render_section_header(
+        "Trade Replay Backtest",
+        "Historical 5-minute replay of setup entries and management rules",
+    )
+    st.markdown(
+        '<div class="notice">Replay uses historical underlying candles. It estimates management behavior; it does not reconstruct exact option contract premiums.</div>',
+        unsafe_allow_html=True,
+    )
+
+    controls_1, controls_2, controls_3, controls_4 = st.columns([2.2, 1, 1, 1])
+    symbols = controls_1.multiselect(
+        "Symbols",
+        DEFAULT_REPLAY_SYMBOLS,
+        default=DEFAULT_REPLAY_SYMBOLS[:4],
+        help="Start small. More symbols take longer to fetch and replay.",
+    )
+    period = controls_2.selectbox(
+        "Period",
+        ["30d", "60d"],
+        index=1 if DEFAULT_PERIOD == "60d" else 0,
+    )
+    min_score = controls_3.slider("Minimum Score", 75, 95, 85, 5)
+    max_hold_candles = controls_4.selectbox(
+        "Max Hold",
+        [12, 24, DEFAULT_MAX_HOLD_CANDLES, 78],
+        index=2,
+        format_func=lambda value: f"{value} candles",
+    )
+
+    if not symbols:
+        render_empty_state("Choose at least one symbol to replay.")
+        return
+
+    if st.button("Run Trade Replay", use_container_width=True):
+        with st.spinner("Replaying historical setups..."):
+            results, errors = cached_trade_replay(
+                tuple(symbols),
+                period,
+                min_score,
+                max_hold_candles,
+            )
+
+        if errors:
+            st.warning(
+                "Some symbols could not be replayed: "
+                + ", ".join(f"{symbol}: {message}" for symbol, message in errors.items())
+            )
+
+        if results.empty:
+            render_empty_state("No replayed trades matched those settings.")
+            return
+
+        summary = replay_summary(results)
+        metric_columns = st.columns(7)
+        for column, (label, value) in zip(metric_columns, summary.items()):
+            column.metric(label, value)
+
+        st.markdown("**Replay Results**")
+        st.dataframe(results, use_container_width=True, hide_index=True)
+        st.download_button(
+            "Download Trade Replay CSV",
+            results.to_csv(index=False),
+            file_name="optionbeacon_trade_replay.csv",
+            mime="text/csv",
+        )
+
+
 def render_current_scanner(latest_results, symbol_groups):
     st.markdown('<div class="section-title">Scanner</div>', unsafe_allow_html=True)
     st.markdown(
@@ -1569,6 +1654,8 @@ def main():
     render_active_trades(latest_results)
     st.divider()
     render_trade_journal()
+    st.divider()
+    render_trade_replay_backtest()
     st.divider()
     render_recent_high_scores(high_score_history)
     st.divider()
