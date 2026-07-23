@@ -765,6 +765,31 @@ def configure_page():
             overflow: hidden;
         }
 
+        .stTabs [data-baseweb="tab-list"] {
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid var(--ob-border);
+            border-radius: 8px;
+            gap: 0.45rem;
+            padding: 0.45rem;
+            margin-bottom: 1rem;
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            border: 1px solid var(--ob-border-strong);
+            border-radius: 999px;
+            color: var(--ob-muted);
+            font-weight: 700;
+            min-height: 2.5rem;
+            padding: 0.35rem 1.2rem;
+            text-transform: uppercase;
+        }
+
+        .stTabs [aria-selected="true"] {
+            border-color: rgba(216, 179, 90, 0.65);
+            color: var(--ob-text);
+            background: rgba(216, 179, 90, 0.08);
+        }
+
         hr {
             border-color: rgba(255, 255, 255, 0.10);
         }
@@ -2156,27 +2181,36 @@ def main():
 
     latest_results, high_score_history, _, symbol_groups = scan_symbols()
 
-    render_market_regime(latest_results)
-    st.divider()
-    render_top_opportunities(latest_results, high_score_history)
-    st.divider()
-    render_live_trade_coach(latest_results, high_score_history)
-    st.divider()
-    render_live_coach_alerts()
-    st.divider()
-    render_coach_timeline()
-    st.divider()
-    render_active_trades(latest_results)
-    st.divider()
-    render_trade_journal()
-    st.divider()
-    render_trade_replay_backtest()
-    st.divider()
-    render_recent_high_scores(high_score_history)
-    st.divider()
-    render_score_guide()
-    st.divider()
-    render_current_scanner(latest_results, symbol_groups)
+    live_tab, opportunities_tab, history_tab, tools_tab = st.tabs(
+        ["Live Coach", "Opportunities", "History", "Tools"]
+    )
+
+    with live_tab:
+        render_market_regime(latest_results)
+        st.divider()
+        render_live_trade_coach(latest_results, high_score_history)
+        st.divider()
+        render_live_coach_alerts()
+
+    with opportunities_tab:
+        render_top_opportunities(latest_results, high_score_history)
+        with st.expander("Full Scanner"):
+            render_current_scanner(latest_results, symbol_groups)
+
+    with history_tab:
+        render_coach_timeline()
+        st.divider()
+        render_recent_high_scores(high_score_history)
+        st.divider()
+        render_trade_journal()
+
+    with tools_tab:
+        render_trade_replay_backtest()
+        st.divider()
+        render_score_guide()
+        st.divider()
+        render_active_trades(latest_results)
+
     st.markdown(
         '<div class="notice notice-warning">Decision-support dashboard only. Not financial advice.</div>',
         unsafe_allow_html=True,
