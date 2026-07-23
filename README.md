@@ -41,6 +41,16 @@ Alerts are intentionally limited. A symbol can log when:
 - exit score reaches caution levels
 - chase risk turns high
 
+## After-hours briefing
+
+The dashboard includes an **After Hours** tab for earnings, general market headlines, and next-session watchlist setups. Add this optional secret in Streamlit Community Cloud to power Finnhub data:
+
+```toml
+FINNHUB_API_KEY = "your-finnhub-key"
+```
+
+If the key is missing or Finnhub is unavailable, the app will still load and show the scanner data it already has.
+
 ## Threshold optimizer
 
 Run the optimizer locally to compare per-ticker call and put score thresholds before changing the live scanner:

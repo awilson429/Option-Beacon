@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
+from after_hours import after_hours_focus_rows, fetch_after_hours_briefing
 from finnhub_universe import (
     DEFAULT_SYMBOL_GROUPS,
     flatten_symbol_groups,
@@ -1199,6 +1200,11 @@ def scan_symbols():
     return latest_results, history, None, symbol_groups
 
 
+@st.cache_data(ttl=900, show_spinner=False)
+def cached_after_hours_briefing():
+    return fetch_after_hours_briefing()
+
+
 def render_opportunity_card(row, latest_results, high_score_history=None):
     result = row["result"]
     plan = result.get("trade_plan") or {}
@@ -1314,6 +1320,73 @@ def render_top_opportunities(latest_results, high_score_history=None):
 
     with bearish_column:
         render_opportunity_list("Top Bearish", bearish_rows, latest_results, high_score_history)
+
+
+def render_after_hours(latest_results):
+    render_section_header(
+        "After Hours Briefing",
+        "Earnings, market headlines, and next-session names to review after the close",
+    )
+
+    briefing = cached_after_hours_briefing()
+    earnings = briefing.get("earnings") or []
+    news = briefing.get("news") or []
+    focus_rows = after_hours_focus_rows(latest_results, min_score=80)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Earnings Watch", len(earnings))
+    c2.metric("Market Notes", len(news))
+    c3.metric("Next-Session Setups", len(focus_rows))
+    c4.metric("Updated", briefing.get("updated_at", "N/A").split(" ")[-3])
+
+    if briefing.get("errors"):
+        st.markdown(
+            '<div class="notice notice-warning">'
+            '<strong>Some after-hours data is unavailable.</strong><br>'
+            'Check that FINNHUB_API_KEY is saved in Streamlit Secrets, then refresh in a minute.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+    if focus_rows:
+        st.markdown(
+            '<div class="opportunity-heading">Next-Session Watchlist</div>',
+            unsafe_allow_html=True,
+        )
+        st.dataframe(pd.DataFrame(focus_rows), use_container_width=True, hide_index=True)
+    else:
+        render_empty_state("No 80+ score setups are ready for next-session review yet.")
+
+    earnings_col, news_col = st.columns([1, 1.25])
+
+    with earnings_col:
+        st.markdown(
+            '<div class="opportunity-heading">Earnings Calendar</div>',
+            unsafe_allow_html=True,
+        )
+        if earnings:
+            st.dataframe(
+                pd.DataFrame(earnings),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            render_empty_state("No upcoming earnings returned yet.")
+
+    with news_col:
+        st.markdown(
+            '<div class="opportunity-heading">Important Headlines</div>',
+            unsafe_allow_html=True,
+        )
+        if news:
+            display_news = pd.DataFrame(news)
+            st.dataframe(
+                display_news[["Time", "Source", "Headline", "Summary", "URL"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            render_empty_state("No current market headlines returned yet.")
 
 
 def render_score_guide():
@@ -2453,8 +2526,8 @@ def main():
 
     latest_results, high_score_history, _, symbol_groups = scan_symbols()
 
-    live_tab, opportunities_tab, history_tab, tools_tab = st.tabs(
-        ["Live Coach", "Opportunities", "History", "Tools"]
+    live_tab, after_hours_tab, opportunities_tab, history_tab, tools_tab = st.tabs(
+        ["Live Coach", "After Hours", "Opportunities", "History", "Tools"]
     )
 
     with live_tab:
@@ -2463,6 +2536,9 @@ def main():
             render_live_trade_coach(latest_results, high_score_history)
         with st.expander("Recent Coach Alert Table"):
             render_live_coach_alerts()
+
+    with after_hours_tab:
+        render_after_hours(latest_results)
 
     with opportunities_tab:
         render_top_opportunities(latest_results, high_score_history)
