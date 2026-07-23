@@ -41,7 +41,6 @@ Phase 2 turned OptionBeacon from a signal-only scanner into a paper-trade manage
 
 ## Phase 3 Candidates
 
-- [ ] Add scheduled active-trade coaching outside the Streamlit session.
 - [ ] Add trade-coach SMS alerts from scheduled scans, not only app refreshes.
 - [ ] Add option-chain contract tracking so current premiums can update automatically.
 - [ ] Add portfolio-level risk controls and max open exposure rules.
@@ -50,6 +49,12 @@ Phase 2 turned OptionBeacon from a signal-only scanner into a paper-trade manage
 - [ ] Add chart snapshots or entry/exit screenshots for closed trades.
 - [ ] Add a clean multi-page Streamlit layout for Scanner, Active Trades, Journal, and Settings.
 
+## Phase 3
+
+- [x] Add scheduled active-trade coaching outside the Streamlit session.
+- [ ] Add reliable shared trade storage for Streamlit and scheduled jobs.
+- [ ] Add trade-coach SMS alerts from scheduled scans after shared storage is reliable.
+
 ## Resume Here
 
-Next implementation step: choose the first Phase 3 priority and start a focused implementation slice.
+Next implementation step: decide whether to use GitHub branch storage, Streamlit-compatible cloud storage, or a hosted database for reliable shared trade storage.

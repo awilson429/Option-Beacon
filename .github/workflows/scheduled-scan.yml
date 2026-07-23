@@ -38,6 +38,7 @@ jobs:
           git fetch origin scanner-data --depth=1 || true
           git show origin/scanner-data:high_score_history.csv > high_score_history.csv || true
           git show origin/scanner-data:finnhub_movers_cache.json > finnhub_movers_cache.json || true
+          git show origin/scanner-data:optionbeacon_trades.db > optionbeacon_trades.db || true
 
       - name: Run scanner
         run: python scheduled_scan.py
@@ -56,6 +57,7 @@ jobs:
             cp latest_results.json /tmp/option-beacon-scanner-data/latest_results.json
             cp high_score_history.csv /tmp/option-beacon-scanner-data/high_score_history.csv || true
             cp finnhub_movers_cache.json /tmp/option-beacon-scanner-data/finnhub_movers_cache.json || true
+            cp optionbeacon_trades.db /tmp/option-beacon-scanner-data/optionbeacon_trades.db || true
 
             git config user.name "option-beacon-scanner"
             git config user.email "actions@github.com"
@@ -65,6 +67,9 @@ jobs:
             touch high_score_history.csv
             touch finnhub_movers_cache.json
             git add -f latest_results.json high_score_history.csv finnhub_movers_cache.json
+            if [[ -f optionbeacon_trades.db ]]; then
+              git add -f optionbeacon_trades.db
+            fi
             git commit -m "Update scheduled scanner data"
             git push -f origin scanner-data
           else

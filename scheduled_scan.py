@@ -13,6 +13,7 @@ from optionbeacon_history import (
 )
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import save_latest_results
+from scheduled_trade_coach import run_active_trade_coaching
 
 
 def is_market_open_now():
@@ -116,6 +117,20 @@ def main():
 
     save_latest_results(latest_results)
     print(f"Saved scheduled scan for {len(latest_results)} symbols.")
+
+    coach_rows = run_active_trade_coaching(
+        latest_results=latest_results,
+        alerts_enabled=alerts_enabled,
+    )
+    if coach_rows:
+        print(f"Coached {len(coach_rows)} open paper trade(s).")
+        for row in coach_rows:
+            previous = row["previous_action"] or "None"
+            print(
+                f"Trade #{row['position_id']} {row['symbol']}: "
+                f"{previous} -> {row['coach_action']} "
+                f"({row['exit_score']}/100), alert {row['alert_status']}"
+            )
 
 
 if __name__ == "__main__":
