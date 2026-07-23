@@ -12,6 +12,8 @@ POSITION_COLUMNS = {
     "peak_premium": "REAL",
     "partial_1_taken": "INTEGER DEFAULT 0",
     "partial_2_taken": "INTEGER DEFAULT 0",
+    "outcome_tag": "TEXT",
+    "lessons_learned": "TEXT",
 }
 
 RECOMMENDATION_COLUMNS = {
@@ -83,7 +85,9 @@ def initialize_trade_db(db_file=DB_FILE):
                 partial_2_taken INTEGER DEFAULT 0,
                 original_plan_json TEXT NOT NULL,
                 entry_notes TEXT,
-                exit_notes TEXT
+                exit_notes TEXT,
+                outcome_tag TEXT,
+                lessons_learned TEXT
             )
             """
         )
@@ -204,7 +208,14 @@ def load_closed_positions(db_file=DB_FILE):
     return load_positions(status="CLOSED", db_file=db_file)
 
 
-def close_position(position_id, exit_premium=None, exit_notes="", db_file=DB_FILE):
+def close_position(
+    position_id,
+    exit_premium=None,
+    exit_notes="",
+    outcome_tag="Unreviewed",
+    lessons_learned="",
+    db_file=DB_FILE,
+):
     initialize_trade_db(db_file)
     position = load_position(position_id, db_file=db_file)
     peak_premium = position.get("peak_premium") if position else None
@@ -224,7 +235,9 @@ def close_position(position_id, exit_premium=None, exit_notes="", db_file=DB_FIL
                 current_premium = ?,
                 peak_premium = ?,
                 exit_premium = ?,
-                exit_notes = ?
+                exit_notes = ?,
+                outcome_tag = ?,
+                lessons_learned = ?
             WHERE id = ?
             """,
             (
@@ -234,6 +247,8 @@ def close_position(position_id, exit_premium=None, exit_notes="", db_file=DB_FIL
                 peak_premium,
                 exit_premium,
                 exit_notes,
+                outcome_tag,
+                lessons_learned,
                 position_id,
             ),
         )

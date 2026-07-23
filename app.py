@@ -1267,13 +1267,31 @@ def render_active_trades(latest_results):
         }
         selected = st.selectbox("Position", list(position_options.keys()))
         exit_premium = st.number_input("Exit premium", min_value=0.0, value=0.0, step=0.05)
+        outcome_tag = st.selectbox(
+            "Outcome tag",
+            [
+                "Unreviewed",
+                "Good setup / good management",
+                "Good setup / poor management",
+                "Bad setup / avoided worse loss",
+                "Bad setup / poor management",
+                "Breakeven",
+                "Rule break",
+            ],
+        )
         exit_notes = st.text_area("Exit notes", placeholder="Why are you closing this trade?")
+        lessons_learned = st.text_area(
+            "Lessons learned",
+            placeholder="What should you repeat, avoid, or watch for next time?",
+        )
 
         if st.button("Mark Closed"):
             close_position(
                 position_options[selected],
                 exit_premium=exit_premium or None,
                 exit_notes=exit_notes,
+                outcome_tag=outcome_tag,
+                lessons_learned=lessons_learned,
             )
             st.success("Paper trade closed.")
             st.rerun()
@@ -1307,8 +1325,10 @@ def position_journal_rows(positions):
                 "Contracts": contracts,
                 "Premium P/L": premium_pnl,
                 "P/L %": pnl_percent,
+                "Outcome": position.get("outcome_tag"),
                 "Entry Notes": position.get("entry_notes"),
                 "Exit Notes": position.get("exit_notes"),
+                "Lessons Learned": position.get("lessons_learned"),
             }
         )
 

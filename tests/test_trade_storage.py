@@ -36,12 +36,21 @@ def test_create_and_close_position(tmp_path):
     assert open_positions[0]["id"] == position_id
     assert open_positions[0]["symbol"] == "SPY"
 
-    close_position(position_id, exit_premium=5.1, exit_notes="Test exit", db_file=str(db_file))
+    close_position(
+        position_id,
+        exit_premium=5.1,
+        exit_notes="Test exit",
+        outcome_tag="Good setup / good management",
+        lessons_learned="Let the winner work.",
+        db_file=str(db_file),
+    )
 
     assert load_open_positions(db_file=str(db_file)) == []
     closed = load_positions(status="CLOSED", db_file=str(db_file))
     assert len(closed) == 1
     assert closed[0]["exit_premium"] == 5.1
+    assert closed[0]["outcome_tag"] == "Good setup / good management"
+    assert closed[0]["lessons_learned"] == "Let the winner work."
 
 
 def test_record_recommendation_skips_duplicate_score_and_action(tmp_path):
