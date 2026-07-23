@@ -269,6 +269,25 @@ def update_position_premium(position_id, current_premium, db_file=DB_FILE):
     return load_position(position_id, db_file=db_file)
 
 
+def mark_partial_profit(position_id, partial_level, taken=True, db_file=DB_FILE):
+    initialize_trade_db(db_file)
+    if partial_level not in (1, 2):
+        raise ValueError("partial_level must be 1 or 2")
+
+    column = f"partial_{partial_level}_taken"
+    with connect(db_file) as connection:
+        connection.execute(
+            f"""
+            UPDATE positions
+            SET {column} = ?
+            WHERE id = ?
+            """,
+            (1 if taken else 0, position_id),
+        )
+
+    return load_position(position_id, db_file=db_file)
+
+
 def latest_recommendation(position_id, db_file=DB_FILE):
     initialize_trade_db(db_file)
     with connect(db_file) as connection:

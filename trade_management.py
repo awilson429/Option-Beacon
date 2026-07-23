@@ -39,6 +39,8 @@ def phase_two_guidance(position, current_premium=None):
     current_profit = metrics["current_profit_percent"]
     peak_profit = metrics["peak_profit_percent"]
     giveback = metrics["profit_giveback_percent"]
+    partial_1_taken = bool(position.get("partial_1_taken"))
+    partial_2_taken = bool(position.get("partial_2_taken"))
 
     if current_profit is None:
         return None, metrics
@@ -51,15 +53,36 @@ def phase_two_guidance(position, current_premium=None):
         }, metrics
 
     if current_profit >= 50:
+        if partial_1_taken and partial_2_taken:
+            return {
+                "coach_action": "Trail remaining position",
+                "coach_next_step": "Both partial-profit targets are marked taken; focus on trailing the rest.",
+                "reason": f"Current premium profit is {current_profit}%.",
+            }, metrics
+
+        if partial_1_taken:
+            return {
+                "coach_action": "Take second partial profit",
+                "coach_next_step": "Consider selling another portion and trailing the rest.",
+                "reason": f"Current premium profit is {current_profit}%.",
+            }, metrics
+
         return {
-            "coach_action": "Take partial profit",
-            "coach_next_step": "Consider taking another partial profit and trailing the rest.",
+            "coach_action": "Take first partial profit",
+            "coach_next_step": "Consider selling 25% of the position, then trail the remainder if strength continues.",
             "reason": f"Current premium profit is {current_profit}%.",
         }, metrics
 
     if current_profit >= 30:
+        if partial_1_taken:
+            return {
+                "coach_action": "Hold protected runner",
+                "coach_next_step": "First partial is marked taken; consider holding the rest toward the next profit zone.",
+                "reason": f"Current premium profit is {current_profit}%.",
+            }, metrics
+
         return {
-            "coach_action": "Take partial profit",
+            "coach_action": "Take first partial profit",
             "coach_next_step": "Consider selling 25% of the position and protecting the remainder.",
             "reason": f"Current premium profit is {current_profit}%.",
         }, metrics

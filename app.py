@@ -27,6 +27,7 @@ from trade_storage import (
     latest_recommendation,
     load_open_positions,
     load_recommendations,
+    mark_partial_profit,
     record_recommendation,
     update_position_premium,
 )
@@ -1112,6 +1113,8 @@ def render_active_trades(latest_results):
                 "Current P/L %": recommendation.get("current_profit_percent"),
                 "Peak P/L %": recommendation.get("peak_profit_percent"),
                 "Giveback %": recommendation.get("profit_giveback_percent"),
+                "Partial 1": "Taken" if position.get("partial_1_taken") else "Open",
+                "Partial 2": "Taken" if position.get("partial_2_taken") else "Open",
                 "Contracts": contracts,
                 "Underlying Entry": position.get("entry_underlying_price"),
                 "Stop": position.get("current_stop"),
@@ -1143,6 +1146,32 @@ def render_active_trades(latest_results):
             st.write(recommendation["coach_next_step"])
             for reason in recommendation["exit_reasons"]:
                 st.write(f"- {reason}")
+
+    with st.expander("Partial Profit Tracker"):
+        for position in positions:
+            st.markdown(
+                f"**#{position['id']} {position['symbol']} {position['option_type']}**"
+            )
+            p1, p2, p3, p4 = st.columns(4)
+            partial_1_taken = bool(position.get("partial_1_taken"))
+            partial_2_taken = bool(position.get("partial_2_taken"))
+
+            p1.metric("First Partial", "Taken" if partial_1_taken else "Open")
+            p2.metric("Second Partial", "Taken" if partial_2_taken else "Open")
+
+            if p3.button(
+                "Mark First Taken" if not partial_1_taken else "Reset First",
+                key=f"partial_1_{position['id']}",
+            ):
+                mark_partial_profit(position["id"], 1, taken=not partial_1_taken)
+                st.rerun()
+
+            if p4.button(
+                "Mark Second Taken" if not partial_2_taken else "Reset Second",
+                key=f"partial_2_{position['id']}",
+            ):
+                mark_partial_profit(position["id"], 2, taken=not partial_2_taken)
+                st.rerun()
 
     with st.expander("Trade Coach Timeline"):
         position_options = {
