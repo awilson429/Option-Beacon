@@ -18,6 +18,8 @@ RECOMMENDATION_COLUMNS = {
     "current_profit_percent": "REAL",
     "peak_profit_percent": "REAL",
     "profit_giveback_percent": "REAL",
+    "suggested_stop": "REAL",
+    "suggested_stop_reason": "TEXT",
 }
 
 
@@ -99,6 +101,8 @@ def initialize_trade_db(db_file=DB_FILE):
                 current_profit_percent REAL,
                 peak_profit_percent REAL,
                 profit_giveback_percent REAL,
+                suggested_stop REAL,
+                suggested_stop_reason TEXT,
                 reasons_json TEXT NOT NULL,
                 FOREIGN KEY(position_id) REFERENCES positions(id)
             )
@@ -269,6 +273,21 @@ def update_position_premium(position_id, current_premium, db_file=DB_FILE):
     return load_position(position_id, db_file=db_file)
 
 
+def update_position_stop(position_id, current_stop, db_file=DB_FILE):
+    initialize_trade_db(db_file)
+    with connect(db_file) as connection:
+        connection.execute(
+            """
+            UPDATE positions
+            SET current_stop = ?
+            WHERE id = ?
+            """,
+            (float(current_stop), position_id),
+        )
+
+    return load_position(position_id, db_file=db_file)
+
+
 def mark_partial_profit(position_id, partial_level, taken=True, db_file=DB_FILE):
     initialize_trade_db(db_file)
     if partial_level not in (1, 2):
@@ -311,7 +330,8 @@ def record_recommendation(position_id, recommendation, db_file=DB_FILE):
     if previous:
         same_score = int(previous["exit_score"]) == int(recommendation["exit_score"])
         same_action = previous["coach_action"] == recommendation["coach_action"]
-        if same_score and same_action:
+        same_stop = previous.get("suggested_stop") == recommendation.get("suggested_stop")
+        if same_score and same_action and same_stop:
             return previous["id"]
 
     with connect(db_file) as connection:
@@ -327,9 +347,11 @@ def record_recommendation(position_id, recommendation, db_file=DB_FILE):
                 current_profit_percent,
                 peak_profit_percent,
                 profit_giveback_percent,
+                suggested_stop,
+                suggested_stop_reason,
                 reasons_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 position_id,
@@ -341,6 +363,8 @@ def record_recommendation(position_id, recommendation, db_file=DB_FILE):
                 recommendation.get("current_profit_percent"),
                 recommendation.get("peak_profit_percent"),
                 recommendation.get("profit_giveback_percent"),
+                recommendation.get("suggested_stop"),
+                recommendation.get("suggested_stop_reason"),
                 json.dumps(recommendation.get("exit_reasons", []), sort_keys=True),
             ),
         )

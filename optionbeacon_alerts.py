@@ -89,6 +89,7 @@ def format_trade_coach_alert(position, recommendation, previous_action=None):
     score = recommendation.get("exit_score", "N/A")
     current_profit = recommendation.get("current_profit_percent")
     peak_profit = recommendation.get("peak_profit_percent")
+    suggested_stop = recommendation.get("suggested_stop")
     next_step = recommendation.get("coach_next_step", "Review the trade plan.")
 
     if current_profit is None:
@@ -106,9 +107,13 @@ def format_trade_coach_alert(position, recommendation, previous_action=None):
     else:
         change_label = action
 
+    stop_label = ""
+    if suggested_stop:
+        stop_label = f" Suggested stop ${suggested_stop}."
+
     return (
         f"Option Beacon trade coach: {symbol} {direction} {change_label}. "
-        f"Exit score {score}/100, {profit_label}, {peak_label}. {next_step}"
+        f"Exit score {score}/100, {profit_label}, {peak_label}.{stop_label} {next_step}"
     )
 
 

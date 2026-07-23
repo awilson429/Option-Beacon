@@ -34,6 +34,59 @@ def premium_metrics(position, current_premium=None):
     }
 
 
+def _protective_stop(position, candidates):
+    bullish = position.get("direction") == "Bullish" or position.get("option_type") == "CALL"
+    current_stop = _number(position.get("current_stop"))
+    valid_candidates = [_number(candidate) for candidate in candidates if _number(candidate)]
+
+    if current_stop:
+        valid_candidates.append(current_stop)
+
+    if not valid_candidates:
+        return None
+
+    stop = max(valid_candidates) if bullish else min(valid_candidates)
+    return round(stop, 2)
+
+
+def stop_guidance(position, metrics):
+    current_profit = metrics.get("current_profit_percent")
+    if current_profit is None or current_profit < 20:
+        return {
+            "suggested_stop": None,
+            "suggested_stop_reason": None,
+        }
+
+    entry_underlying = _number(position.get("entry_underlying_price"))
+    target_1 = _number(position.get("target_1"))
+    target_2 = _number(position.get("target_2"))
+    partial_1_taken = bool(position.get("partial_1_taken"))
+    partial_2_taken = bool(position.get("partial_2_taken"))
+
+    if partial_1_taken and partial_2_taken and target_2:
+        return {
+            "suggested_stop": _protective_stop(position, [entry_underlying, target_1, target_2]),
+            "suggested_stop_reason": "Both partials are marked taken; consider trailing near Target 2.",
+        }
+
+    if partial_1_taken and target_1:
+        return {
+            "suggested_stop": _protective_stop(position, [entry_underlying, target_1]),
+            "suggested_stop_reason": "First partial is marked taken; consider protecting near Target 1.",
+        }
+
+    if entry_underlying:
+        return {
+            "suggested_stop": _protective_stop(position, [entry_underlying]),
+            "suggested_stop_reason": "Premium is up at least 20%; consider protecting around breakeven.",
+        }
+
+    return {
+        "suggested_stop": None,
+        "suggested_stop_reason": None,
+    }
+
+
 def phase_two_guidance(position, current_premium=None):
     metrics = premium_metrics(position, current_premium)
     current_profit = metrics["current_profit_percent"]
@@ -101,6 +154,7 @@ def coach_recommendation(position, scanner_result=None, current_premium=None):
     current_premium = current_premium if current_premium is not None else position.get("current_premium")
     exit_payload = calculate_exit_score(position, scanner_result, current_premium)
     phase_two, metrics = phase_two_guidance(position, current_premium)
+    stop_payload = stop_guidance(position, metrics)
     score = exit_payload["exit_score"]
 
     if phase_two and score < 75:
@@ -129,6 +183,7 @@ def coach_recommendation(position, scanner_result=None, current_premium=None):
     return {
         **exit_payload,
         **metrics,
+        **stop_payload,
         "coach_action": action,
         "coach_next_step": next_step,
     }

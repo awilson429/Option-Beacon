@@ -25,7 +25,8 @@ Build OptionBeacon into a trade planning and management system, not just a scann
 - [x] Add timeline of recommendation changes.
 - [x] Add alert rules for trade-coach changes.
 - [x] Add manual buttons for marking partial profits taken.
+- [x] Add suggested stop updates after profit milestones.
 
 ## Resume Here
 
-Next implementation step: add suggested stop updates after breakeven, first partial, and second partial milestones.
+Next implementation step: add a compact active-trade summary showing risk locked, remaining runner status, and next planned action.

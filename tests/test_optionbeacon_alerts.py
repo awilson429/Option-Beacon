@@ -11,6 +11,7 @@ def test_trade_coach_alert_includes_action_change_and_profit():
         "exit_score": 35,
         "current_profit_percent": 31.25,
         "peak_profit_percent": 31.25,
+        "suggested_stop": 601.5,
         "coach_next_step": "Consider selling 25% of the position.",
     }
 
@@ -23,3 +24,4 @@ def test_trade_coach_alert_includes_action_change_and_profit():
     assert "SPY Bullish Hold -> Take partial profit" in message
     assert "Exit score 35/100" in message
     assert "P/L 31.25%" in message
+    assert "Suggested stop $601.5" in message

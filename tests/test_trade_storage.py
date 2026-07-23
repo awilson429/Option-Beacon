@@ -7,6 +7,7 @@ from trade_storage import (
     mark_partial_profit,
     record_recommendation,
     update_position_premium,
+    update_position_stop,
 )
 
 
@@ -177,3 +178,27 @@ def test_mark_partial_profit_updates_position(tmp_path):
 
     assert updated["partial_1_taken"] == 1
     assert reset["partial_1_taken"] == 0
+
+
+def test_update_position_stop_changes_current_stop(tmp_path):
+    db_file = tmp_path / "trades.db"
+    position_id = create_position(
+        symbol="SPY",
+        direction="Bullish",
+        option_type="CALL",
+        strike=600,
+        expiration="2026-08-21",
+        entry_premium=4.0,
+        contracts=1,
+        entry_underlying_price=601.5,
+        current_stop=599.0,
+        target_1=604.0,
+        target_2=606.0,
+        target_3=608.0,
+        original_plan={"trigger_price": 601.0},
+        db_file=str(db_file),
+    )
+
+    updated = update_position_stop(position_id, 601.5, db_file=str(db_file))
+
+    assert updated["current_stop"] == 601.5

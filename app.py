@@ -30,6 +30,7 @@ from trade_storage import (
     mark_partial_profit,
     record_recommendation,
     update_position_premium,
+    update_position_stop,
 )
 
 
@@ -1118,6 +1119,7 @@ def render_active_trades(latest_results):
                 "Contracts": contracts,
                 "Underlying Entry": position.get("entry_underlying_price"),
                 "Stop": position.get("current_stop"),
+                "Suggested Stop": recommendation.get("suggested_stop"),
                 "Target 1": position.get("target_1"),
                 "Target 2": position.get("target_2"),
                 "Exit Score": recommendation["exit_score"],
@@ -1143,9 +1145,33 @@ def render_active_trades(latest_results):
                 f"peak {recommendation.get('peak_profit_percent')}%, "
                 f"giveback {recommendation.get('profit_giveback_percent')}%"
             )
+            if recommendation.get("suggested_stop"):
+                st.write(
+                    f"Suggested Stop: ${recommendation['suggested_stop']:.2f} - "
+                    f"{recommendation.get('suggested_stop_reason')}"
+                )
             st.write(recommendation["coach_next_step"])
             for reason in recommendation["exit_reasons"]:
                 st.write(f"- {reason}")
+
+    with st.expander("Stop Management"):
+        for position in positions:
+            recommendation = recommendations[position["id"]]
+            suggested_stop = recommendation.get("suggested_stop")
+            st.markdown(
+                f"**#{position['id']} {position['symbol']} {position['option_type']}**"
+            )
+            s1, s2, s3 = st.columns(3)
+            s1.metric("Current Stop", position.get("current_stop") or "N/A")
+            s2.metric("Suggested Stop", suggested_stop if suggested_stop else "N/A")
+
+            if suggested_stop and s3.button(
+                "Apply Suggested Stop",
+                key=f"apply_stop_{position['id']}",
+            ):
+                update_position_stop(position["id"], suggested_stop)
+                st.success("Stop updated.")
+                st.rerun()
 
     with st.expander("Partial Profit Tracker"):
         for position in positions:
@@ -1292,6 +1318,8 @@ def recommendation_rows(recommendations):
                 "Current P/L %": recommendation.get("current_profit_percent"),
                 "Peak P/L %": recommendation.get("peak_profit_percent"),
                 "Giveback %": recommendation.get("profit_giveback_percent"),
+                "Suggested Stop": recommendation.get("suggested_stop"),
+                "Stop Reason": recommendation.get("suggested_stop_reason"),
                 "Reasons": reasons,
             }
         )
