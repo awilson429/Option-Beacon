@@ -16,6 +16,7 @@ from optionbeacon_history import (
     eastern_now,
     load_high_score_history,
 )
+from live_coach_alerts import load_live_coach_alerts
 from live_trade_coach import coach_live_setup, coach_rows
 from market_intelligence import (
     chase_risk,
@@ -33,7 +34,6 @@ from trade_journal import (
 )
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
-from optionbeacon_alerts import send_trade_coach_alert, twilio_configured
 from trade_management import coach_recommendation, trade_summary
 from trade_replay import (
     DEFAULT_MAX_HOLD_CANDLES,
@@ -1221,6 +1221,53 @@ def render_live_trade_coach(latest_results, high_score_history=None):
             st.write(row["Risk Note"])
 
 
+def render_live_coach_alerts():
+    render_section_header(
+        "Recent Coach Alerts",
+        "Meaningful setup changes logged by the scheduled scanner",
+    )
+    alerts = load_live_coach_alerts()
+
+    if alerts.empty:
+        render_empty_state("No coach alerts logged yet.")
+        return
+
+    display = alerts.tail(50).sort_index(ascending=False).rename(
+        columns={
+            "timestamp": "Time",
+            "symbol": "Symbol",
+            "bias": "Bias",
+            "score": "Score",
+            "action": "Action",
+            "live_read": "Live Read",
+            "exit_score": "Exit Score",
+            "exit_label": "Exit Label",
+            "chase_risk": "Chase Risk",
+            "headline": "Headline",
+            "next_step": "Next Step",
+            "reason": "Reason",
+        }
+    )
+    st.dataframe(
+        display[
+            [
+                "Time",
+                "Symbol",
+                "Action",
+                "Live Read",
+                "Score",
+                "Exit Score",
+                "Chase Risk",
+                "Headline",
+                "Next Step",
+                "Reason",
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
 def render_signal_card(symbol, result):
     with st.container(border=True):
         st.markdown(f'<div class="ticker-title">{symbol}</div>', unsafe_allow_html=True)
@@ -1338,18 +1385,6 @@ def render_active_trades(latest_results):
             if previous_recommendation
             else None
         )
-        if (
-            previous_action
-            and previous_action != recommendation["coach_action"]
-            and twilio_configured()
-        ):
-            sent, status = send_trade_coach_alert(
-                position,
-                recommendation,
-                previous_action=previous_action,
-            )
-            if not sent:
-                st.warning(f"Trade coach alert was not sent: {status}")
         recommendations[position["id"]] = recommendation
         entry_premium = position.get("entry_premium") or 0
         current_premium = position.get("current_premium") or entry_premium
@@ -2059,6 +2094,8 @@ def main():
     render_top_opportunities(latest_results, high_score_history)
     st.divider()
     render_live_trade_coach(latest_results, high_score_history)
+    st.divider()
+    render_live_coach_alerts()
     st.divider()
     render_active_trades(latest_results)
     st.divider()

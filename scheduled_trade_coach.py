@@ -1,4 +1,3 @@
-from optionbeacon_alerts import send_trade_coach_alert, twilio_configured
 from trade_management import coach_recommendation
 from trade_storage import (
     DB_FILE,
@@ -44,7 +43,6 @@ def run_active_trade_coaching(
     alerts_enabled=None,
 ):
     positions = load_open_positions(db_file=db_file)
-    alerts_enabled = twilio_configured() if alerts_enabled is None else alerts_enabled
     rows = []
 
     for position in positions:
@@ -57,21 +55,6 @@ def run_active_trade_coaching(
             db_file=db_file,
         )
         previous_action = previous.get("coach_action") if previous else None
-        alert_status = "not needed"
-
-        if (
-            alerts_enabled
-            and previous_action
-            and previous_action != recommendation["coach_action"]
-        ):
-            sent, alert_status = send_trade_coach_alert(
-                position,
-                recommendation,
-                previous_action=previous_action,
-            )
-            if not sent:
-                alert_status = f"not sent: {alert_status}"
-
         rows.append(
             {
                 "position_id": position["id"],
@@ -80,7 +63,7 @@ def run_active_trade_coaching(
                 "exit_score": recommendation["exit_score"],
                 "recommendation_id": recommendation_id,
                 "previous_action": previous_action,
-                "alert_status": alert_status,
+                "alert_status": "in-app only",
             }
         )
 

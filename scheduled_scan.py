@@ -4,12 +4,11 @@ from datetime import time
 import pandas as pd
 
 from finnhub_universe import active_symbol_groups, flatten_symbol_groups
-from optionbeacon_alerts import send_high_score_alert, send_sms_message, twilio_configured
+from live_coach_alerts import load_live_coach_alerts, record_live_coach_alert
 from optionbeacon_history import (
     add_high_score_snapshot,
     eastern_now,
     load_high_score_history,
-    previous_symbol_bias,
 )
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import save_latest_results
@@ -65,11 +64,7 @@ def scanner_unavailable(symbol, message):
 
 def main():
     if os.getenv("OPTION_BEACON_TEST_ALERT", "").lower() == "true":
-        test_time = eastern_now().strftime("%I:%M %p ET")
-        sent, status = send_sms_message(f"Option Beacon test alert: SPY-Bullish 92/100 @ {test_time}")
-        print(f"Test alert: {status}")
-        if not sent:
-            raise RuntimeError(status)
+        print("External test alerts are disabled. Option Beacon now uses in-app coach alerts.")
         return
 
     if not is_market_open_now():
@@ -78,7 +73,7 @@ def main():
 
     latest_results = {}
     high_score_history = load_high_score_history()
-    alerts_enabled = twilio_configured()
+    live_alerts = load_live_coach_alerts()
     symbol_groups, source, error = active_symbol_groups()
     symbols = flatten_symbol_groups(symbol_groups)
 
@@ -102,25 +97,26 @@ def main():
         latest_results[symbol] = result
 
         if result.get("signal") != "DATA UNAVAILABLE":
-            previous_bias = previous_symbol_bias(high_score_history, symbol)
             added, row = add_high_score_snapshot(result)
+
+            alert_added, alert = record_live_coach_alert(
+                result,
+                history=high_score_history,
+                alerts=live_alerts,
+            )
+            if alert_added:
+                live_alerts = load_live_coach_alerts()
+                print(f"{symbol} coach alert logged: {alert['headline']}")
 
             if added:
                 high_score_history = load_high_score_history()
-
-                should_alert = previous_bias is None or previous_bias != row["bias"]
-                if alerts_enabled and should_alert:
-                    sent, status = send_high_score_alert(row, previous_bias=previous_bias)
-                    print(f"{symbol} alert: {status}")
-                elif should_alert:
-                    print(f"{symbol} alert skipped: Twilio not configured")
 
     save_latest_results(latest_results)
     print(f"Saved scheduled scan for {len(latest_results)} symbols.")
 
     coach_rows = run_active_trade_coaching(
         latest_results=latest_results,
-        alerts_enabled=alerts_enabled,
+        alerts_enabled=False,
     )
     if coach_rows:
         print(f"Coached {len(coach_rows)} open paper trade(s).")

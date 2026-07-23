@@ -26,24 +26,20 @@ The workflow is defined in `.github/workflows/scheduled-scan.yml` and runs every
 
 Scanner data is published to a separate `scanner-data` branch so the protected app code on `main` does not need automated data commits. If the repository is private and Streamlit cannot read raw files from that branch, move the data store to a small database later.
 
-## Scheduled SMS alerts
+## Scheduled coach alerts
 
-The scheduled scanner can send Twilio SMS alerts for new high-score symbols and bias reversals. Add these as GitHub Actions repository secrets, not committed files:
+The scheduled scanner logs in-app coach alerts for meaningful setup changes. It does not send SMS alerts.
 
-```toml
-TWILIO_ACCOUNT_SID = "your-account-sid"
-TWILIO_AUTH_TOKEN = "your-auth-token"
-TWILIO_PHONE_NUMBER = "+15555550100"
-ALERT_TO_PHONE_NUMBER = "+15555550101"
-```
+Alerts are saved to `live_coach_alerts.csv` on the `scanner-data` branch and displayed in the dashboard under **Recent Coach Alerts**.
 
-To alert multiple phones, separate the destination numbers with commas:
+Alerts are intentionally limited. A symbol can log when:
 
-```toml
-ALERT_TO_PHONE_NUMBER = "+15555550101,+15555550102"
-```
-
-Alerts are intentionally limited. A symbol can text when it first becomes a high-score reading, then again when its high-score bias flips between Bullish and Bearish.
+- a live entry zone becomes active
+- a setup becomes worth watching
+- bias flips
+- the setup starts weakening or improving
+- exit score reaches caution levels
+- chase risk turns high
 
 ## Threshold optimizer
 
