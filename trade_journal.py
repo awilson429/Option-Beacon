@@ -1,5 +1,6 @@
 import re
 from collections import Counter
+from datetime import datetime
 from math import isnan
 
 
@@ -53,6 +54,63 @@ def _number_or_none(value):
         return None
 
     return None if isnan(number) else number
+
+
+def _date_or_none(value):
+    if value is None:
+        return None
+
+    try:
+        if isnan(value):
+            return None
+    except TypeError:
+        pass
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    for fmt in ("%Y-%m-%d %I:%M:%S %p ET", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            pass
+
+    return None
+
+
+def filter_journal_rows(
+    journal_rows,
+    tickers=None,
+    directions=None,
+    outcomes=None,
+    start_date=None,
+    end_date=None,
+):
+    tickers = set(tickers or [])
+    directions = set(directions or [])
+    outcomes = set(outcomes or [])
+    filtered = []
+
+    for row in journal_rows:
+        if tickers and row.get("Ticker") not in tickers:
+            continue
+        if directions and row.get("Direction") not in directions:
+            continue
+        if outcomes and _clean_text(row.get("Outcome")) not in outcomes:
+            continue
+
+        closed_date = _date_or_none(row.get("Closed"))
+        if (start_date or end_date) and closed_date is None:
+            continue
+        if start_date and closed_date and closed_date < start_date:
+            continue
+        if end_date and closed_date and closed_date > end_date:
+            continue
+
+        filtered.append(row)
+
+    return filtered
 
 
 def outcome_review_rows(journal_rows):

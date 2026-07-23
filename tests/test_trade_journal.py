@@ -1,4 +1,7 @@
+from datetime import date
+
 from trade_journal import (
+    filter_journal_rows,
     lesson_pattern_rows,
     outcome_review_rows,
     review_dashboard_rows,
@@ -126,3 +129,46 @@ def test_review_dashboard_rows_prefers_structured_review_fields():
         "Trades": 1,
         "Share %": 100.0,
     } in dashboard
+
+
+def test_filter_journal_rows_filters_by_ticker_direction_outcome_and_date():
+    rows = [
+        {
+            "Ticker": "SPY",
+            "Direction": "Bullish",
+            "Outcome": "Good setup / good management",
+            "Closed": "2026-07-20 03:30:00 PM ET",
+        },
+        {
+            "Ticker": "QQQ",
+            "Direction": "Bearish",
+            "Outcome": "Rule break",
+            "Closed": "2026-07-21 03:30:00 PM ET",
+        },
+    ]
+
+    filtered = filter_journal_rows(
+        rows,
+        tickers=["SPY"],
+        directions=["Bullish"],
+        outcomes=["Good setup / good management"],
+        start_date=date(2026, 7, 20),
+        end_date=date(2026, 7, 20),
+    )
+
+    assert filtered == [rows[0]]
+
+
+def test_filter_journal_rows_excludes_missing_dates_when_date_filter_is_active():
+    rows = [
+        {
+            "Ticker": "SPY",
+            "Direction": "Bullish",
+            "Outcome": "Unreviewed",
+            "Closed": None,
+        }
+    ]
+
+    filtered = filter_journal_rows(rows, start_date=date(2026, 7, 20))
+
+    assert filtered == []

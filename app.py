@@ -17,6 +17,7 @@ from optionbeacon_history import (
     load_high_score_history,
 )
 from trade_journal import (
+    filter_journal_rows,
     lesson_pattern_rows,
     outcome_review_rows,
     review_dashboard_rows,
@@ -1399,9 +1400,37 @@ def render_trade_journal():
         render_empty_state("No closed paper trades yet.")
     else:
         journal_df = pd.DataFrame(position_journal_rows(closed_positions))
-        review_df = pd.DataFrame(review_dashboard_rows(journal_df.to_dict("records")))
-        outcome_df = pd.DataFrame(outcome_review_rows(journal_df.to_dict("records")))
-        lesson_df = pd.DataFrame(lesson_pattern_rows(journal_df.to_dict("records")))
+        journal_records = journal_df.to_dict("records")
+        filter_1, filter_2, filter_3, filter_4, filter_5 = st.columns(5)
+        tickers = filter_1.multiselect(
+            "Ticker",
+            sorted(journal_df["Ticker"].dropna().unique()),
+        )
+        directions = filter_2.multiselect(
+            "Direction",
+            sorted(journal_df["Direction"].dropna().unique()),
+        )
+        outcomes = filter_3.multiselect(
+            "Outcome",
+            sorted(journal_df["Outcome"].fillna("Unreviewed").unique()),
+        )
+        start_date = filter_4.date_input("From", value=None)
+        end_date = filter_5.date_input("To", value=None)
+
+        filtered_records = filter_journal_rows(
+            journal_records,
+            tickers=tickers,
+            directions=directions,
+            outcomes=outcomes,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        filtered_journal_df = pd.DataFrame(filtered_records)
+        review_df = pd.DataFrame(review_dashboard_rows(filtered_records))
+        outcome_df = pd.DataFrame(outcome_review_rows(filtered_records))
+        lesson_df = pd.DataFrame(lesson_pattern_rows(filtered_records))
+
+        st.caption(f"Showing {len(filtered_records)} of {len(journal_records)} closed trades")
 
         if not review_df.empty:
             st.markdown("**Trade Review Dashboard**")
@@ -1416,10 +1445,10 @@ def render_trade_journal():
             st.dataframe(lesson_df, use_container_width=True, hide_index=True)
 
         st.markdown("**Closed Trade Journal**")
-        st.dataframe(journal_df, use_container_width=True, hide_index=True)
+        st.dataframe(filtered_journal_df, use_container_width=True, hide_index=True)
         st.download_button(
             "Download Trade Journal CSV",
-            journal_df.to_csv(index=False),
+            filtered_journal_df.to_csv(index=False),
             file_name="optionbeacon_trade_journal.csv",
             mime="text/csv",
         )
