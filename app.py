@@ -19,7 +19,7 @@ from optionbeacon_history import (
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
 from optionbeacon_alerts import send_trade_coach_alert, twilio_configured
-from trade_management import coach_recommendation
+from trade_management import coach_recommendation, trade_summary
 from trade_storage import (
     close_position,
     create_position,
@@ -1072,6 +1072,7 @@ def render_active_trades(latest_results):
         return
 
     rows = []
+    summary_rows = []
     recommendations = {}
     for position in positions:
         scanner_result = latest_results.get(position["symbol"], {})
@@ -1101,6 +1102,18 @@ def render_active_trades(latest_results):
         peak_premium = position.get("peak_premium") or current_premium
         contracts = position.get("contracts") or 0
         main_reason = recommendation["exit_reasons"][0] if recommendation["exit_reasons"] else ""
+        summary = trade_summary(position, recommendation)
+        summary_rows.append(
+            {
+                "Ticker": position["symbol"],
+                "Direction": position["direction"],
+                "P/L Status": summary["profit_label"],
+                "Risk": summary["risk_status"],
+                "Runner": summary["runner_status"],
+                "Next Action": summary["next_action"],
+                "Suggested Stop": recommendation.get("suggested_stop") or "N/A",
+            }
+        )
         rows.append(
             {
                 "ID": position["id"],
@@ -1128,6 +1141,10 @@ def render_active_trades(latest_results):
             }
         )
 
+    st.markdown("**Active Trade Summary**")
+    st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+
+    st.markdown("**Active Trade Details**")
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
     with st.expander("Trade Coach Details"):

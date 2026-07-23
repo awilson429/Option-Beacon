@@ -87,6 +87,42 @@ def stop_guidance(position, metrics):
     }
 
 
+def trade_summary(position, recommendation):
+    current_profit = recommendation.get("current_profit_percent")
+    current_stop = _number(position.get("current_stop"))
+    entry_underlying = _number(position.get("entry_underlying_price"))
+    partial_1_taken = bool(position.get("partial_1_taken"))
+    partial_2_taken = bool(position.get("partial_2_taken"))
+    bullish = position.get("direction") == "Bullish" or position.get("option_type") == "CALL"
+
+    if current_profit is None:
+        profit_label = "Premium P/L unavailable"
+    elif current_profit >= 0:
+        profit_label = f"Premium up {current_profit}%"
+    else:
+        profit_label = f"Premium down {abs(current_profit)}%"
+
+    if partial_1_taken and partial_2_taken:
+        runner_status = "Runner only"
+    elif partial_1_taken:
+        runner_status = "First partial banked"
+    else:
+        runner_status = "Full position"
+
+    risk_locked = False
+    if current_stop and entry_underlying:
+        risk_locked = current_stop >= entry_underlying if bullish else current_stop <= entry_underlying
+
+    risk_status = "Risk locked" if risk_locked else "Original risk active"
+
+    return {
+        "profit_label": profit_label,
+        "runner_status": runner_status,
+        "risk_status": risk_status,
+        "next_action": recommendation.get("coach_action", "Review"),
+    }
+
+
 def phase_two_guidance(position, current_premium=None):
     metrics = premium_metrics(position, current_premium)
     current_profit = metrics["current_profit_percent"]

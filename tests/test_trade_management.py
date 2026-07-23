@@ -1,4 +1,4 @@
-from trade_management import coach_recommendation
+from trade_management import coach_recommendation, trade_summary
 
 
 def test_exit_score_flags_stop_loss():
@@ -197,3 +197,26 @@ def test_trade_coach_flags_peak_profit_giveback():
 
     assert recommendation["coach_action"] == "Trail remaining position"
     assert recommendation["profit_giveback_percent"] == 50.0
+
+
+def test_trade_summary_shows_risk_locked_and_runner_status():
+    position = {
+        "symbol": "SPY",
+        "direction": "Bullish",
+        "option_type": "CALL",
+        "current_stop": 101,
+        "entry_underlying_price": 101,
+        "partial_1_taken": 1,
+        "partial_2_taken": 0,
+    }
+    recommendation = {
+        "current_profit_percent": 31.25,
+        "coach_action": "Hold protected runner",
+    }
+
+    summary = trade_summary(position, recommendation)
+
+    assert summary["profit_label"] == "Premium up 31.25%"
+    assert summary["risk_status"] == "Risk locked"
+    assert summary["runner_status"] == "First partial banked"
+    assert summary["next_action"] == "Hold protected runner"
