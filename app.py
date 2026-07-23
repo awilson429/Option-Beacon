@@ -16,6 +16,7 @@ from optionbeacon_history import (
     eastern_now,
     load_high_score_history,
 )
+from live_trade_coach import coach_live_setup, coach_rows
 from trade_journal import (
     filter_journal_rows,
     lesson_pattern_rows,
@@ -35,7 +36,6 @@ from trade_replay import (
 )
 from trade_storage import (
     close_position,
-    create_position,
     load_closed_positions,
     latest_recommendation,
     load_open_positions,
@@ -938,53 +938,51 @@ def render_score_guide():
     )
 
 
-def render_enter_trade_form(symbol, result, trade_plan):
-    with st.expander("Enter Trade"):
-        st.markdown(
-            "Record a trade plan from this setup. The original plan will be saved separately from your actual entry."
-        )
-        with st.form(f"enter_trade_{symbol}"):
-            option_type = st.selectbox(
-                "Option type",
-                ["CALL", "PUT"],
-                index=0 if result.get("bias") == "Bullish" else 1,
-            )
-            f1, f2 = st.columns(2)
-            strike = f1.number_input("Strike", min_value=0.0, value=0.0, step=0.5)
-            expiration = f2.text_input("Expiration", placeholder="YYYY-MM-DD")
+def render_live_trade_coach(latest_results):
+    render_section_header(
+        "Live Trade Coach",
+        "Current scanner ideas with entry, wait, and risk guidance",
+    )
+    rows = coach_rows(latest_results, min_score=75)
 
-            f3, f4 = st.columns(2)
-            entry_premium = f3.number_input("Entry premium", min_value=0.0, value=0.0, step=0.05)
-            contracts = f4.number_input("Contracts", min_value=1, value=1, step=1)
+    if not rows:
+        render_empty_state("No live trade ideas are ready yet.")
+        return
 
-            entry_underlying = st.number_input(
-                "Entry underlying price",
-                min_value=0.0,
-                value=float(result.get("price") or 0),
-                step=0.05,
-            )
-            notes = st.text_area("Notes", placeholder="Why are you entering? What would prove you wrong?")
-            submitted = st.form_submit_button("Save Trade Plan")
+    active_rows = [
+        row for row in rows
+        if row["Action"] in ["Entry zone active", "Watch for trigger", "Avoid chasing"]
+    ]
+    display_rows = active_rows or rows[:8]
+    display_df = pd.DataFrame(display_rows)
+    display_df["Price"] = pd.to_numeric(display_df["Price"], errors="coerce").round(2)
 
-        if submitted:
-            create_position(
-                symbol=symbol,
-                direction=trade_plan.get("direction", result.get("bias", "Neutral")),
-                option_type=option_type,
-                strike=strike or None,
-                expiration=expiration,
-                entry_premium=entry_premium or None,
-                contracts=int(contracts),
-                entry_underlying_price=entry_underlying or None,
-                current_stop=trade_plan.get("technical_stop"),
-                target_1=trade_plan.get("target_1"),
-                target_2=trade_plan.get("target_2"),
-                target_3=trade_plan.get("target_3"),
-                original_plan=trade_plan,
-                entry_notes=notes,
-            )
-            st.success(f"{symbol} trade plan saved.")
-            st.rerun()
+    st.dataframe(
+        display_df[
+            [
+                "Symbol",
+                "Action",
+                "Bias",
+                "Score",
+                "Contract",
+                "Price",
+                "Stage",
+                "Timing",
+                "Coach Summary",
+                "Next Step",
+                "Risk Note",
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    with st.expander("Coach Details"):
+        for row in display_rows[:6]:
+            st.markdown(f"**{row['Symbol']} - {row['Action']} ({row['Score']}/100)**")
+            st.write(row["Coach Summary"])
+            st.write(row["Next Step"])
+            st.write(row["Risk Note"])
 
 
 def render_signal_card(symbol, result):
@@ -1059,7 +1057,13 @@ def render_signal_card(symbol, result):
 
                 st.write(trade_plan.get("contract_guidance", "Use liquid contracts with tight spreads."))
 
-            render_enter_trade_form(symbol, result, trade_plan)
+        coach = coach_live_setup(result)
+        if coach["action"] != "Wait":
+            st.markdown(
+                f'<div class="notice"><strong>Live Coach: {escape(coach["action"])}</strong><br>'
+                f'{escape(coach["summary"])}<br>{escape(coach["next_step"])}</div>',
+                unsafe_allow_html=True,
+            )
 
         with st.expander("Signal Details"):
             checks = quality_summary(result)
@@ -1077,11 +1081,11 @@ def render_signal_card(symbol, result):
 
 
 def render_active_trades(latest_results):
-    render_section_header("Active Trades", "Trades currently being tracked")
+    render_section_header("Saved Trade Tracker", "Optional saved ideas and coach history")
     positions = load_open_positions()
 
     if not positions:
-        render_empty_state("No active trades yet.")
+        render_empty_state("No saved trades yet. The Live Trade Coach above does not require manual entry.")
         return
 
     rows = []
@@ -1814,6 +1818,8 @@ def main():
     latest_results, high_score_history, _, symbol_groups = scan_symbols()
 
     render_top_opportunities(latest_results)
+    st.divider()
+    render_live_trade_coach(latest_results)
     st.divider()
     render_active_trades(latest_results)
     st.divider()
