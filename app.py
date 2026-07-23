@@ -150,7 +150,7 @@ def score_value(result, key):
         return 0
 
 
-def opportunity_rows(latest_results, direction, limit=3):
+def opportunity_rows(latest_results, direction, limit=5):
     score_key = "bullish_score" if direction == "Bullish" else "bearish_score"
     signal_name = "BULLISH SETUP" if direction == "Bullish" else "BEARISH SETUP"
     rows = []
@@ -182,6 +182,56 @@ def opportunity_rows(latest_results, direction, limit=3):
         )
 
     return sorted(rows, key=lambda row: (row["is_active"], row["score"]), reverse=True)[:limit]
+
+
+def confirmation_count(result, latest_results=None):
+    direction = result.get("bias", "Neutral")
+    if direction not in ["Bullish", "Bearish"]:
+        return 0
+
+    confirmations = 0
+    for _, status in factor_status(result, direction, latest_results):
+        if status in ["Aligned", "Confirmed"]:
+            confirmations += 1
+    return confirmations
+
+
+def ranked_setup_rows(latest_results, min_score=70, limit=60):
+    rows = []
+    for symbol, result in latest_results.items():
+        if not result or result.get("signal") == "DATA UNAVAILABLE":
+            continue
+
+        bias = result.get("bias", "Neutral")
+        if bias not in ["Bullish", "Bearish"]:
+            continue
+
+        score = score_value(result, "confidence")
+        if score < min_score:
+            continue
+
+        rows.append(
+            {
+                "Symbol": symbol,
+                "Bias": bias,
+                "Score": score,
+                "Confirmations": confirmation_count(result, latest_results),
+                "State": result.get("signal", "WATCHLIST"),
+                "Timing": result.get("entry_timing", "Wait"),
+                "Price": money(result.get("price")),
+                "RVol": round(float(result.get("relative_volume") or 0), 2),
+                "RSI": round(float(result.get("rsi") or 0), 1),
+                "Trend": score_value(result, "trend_score"),
+                "Momentum": score_value(result, "momentum_score"),
+                "Volume": score_value(result, "volume_score"),
+                "Volatility": score_value(result, "volatility_score"),
+                "Price Action": score_value(result, "price_action_score"),
+                "Primary Reason": (result.get("reasons") or [""])[0],
+            }
+        )
+
+    rows.sort(key=lambda row: (row["Score"], row["Confirmations"], row["RVol"]), reverse=True)
+    return rows[:limit]
 
 
 def opportunity_grade(score):
@@ -1320,6 +1370,33 @@ def render_top_opportunities(latest_results, high_score_history=None):
 
     with bearish_column:
         render_opportunity_list("Top Bearish", bearish_rows, latest_results, high_score_history)
+
+
+def render_ranked_setup_table(latest_results):
+    render_section_header(
+        "Ranked Setup Screener",
+        "Broader scored universe with confirmation count and factor breakdown",
+    )
+
+    min_score = st.slider(
+        "Minimum score",
+        min_value=50,
+        max_value=95,
+        value=70,
+        step=5,
+        help="Lower this to see more developing ideas; raise it to see only cleaner setups.",
+    )
+    rows = ranked_setup_rows(latest_results, min_score=min_score)
+
+    if not rows:
+        render_empty_state("No setups match the selected score filter yet.")
+        return
+
+    st.dataframe(
+        pd.DataFrame(rows),
+        use_container_width=True,
+        hide_index=True,
+    )
 
 
 def render_after_hours(latest_results):
@@ -2550,6 +2627,8 @@ def main():
 
     with opportunities_tab:
         render_top_opportunities(latest_results, high_score_history)
+        st.divider()
+        render_ranked_setup_table(latest_results)
         with st.expander("Full Scanner"):
             render_current_scanner(latest_results, symbol_groups)
 

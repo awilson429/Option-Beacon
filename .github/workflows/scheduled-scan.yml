@@ -46,6 +46,7 @@ jobs:
         env:
           OPTION_BEACON_TEST_ALERT: ${{ inputs.send_test_alert }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          OPTION_BEACON_TOP_MOVER_COUNT: ${{ secrets.OPTION_BEACON_TOP_MOVER_COUNT }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Publish scanner data

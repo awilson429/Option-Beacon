@@ -15,7 +15,8 @@ DEFAULT_SYMBOL_GROUPS = {
     "Single Stock Scanner": DEFAULT_STOCK_SYMBOLS,
 }
 
-TOP_MOVER_COUNT = 25
+DEFAULT_TOP_MOVER_COUNT = 30
+MAX_TOP_MOVER_COUNT = 50
 FINNHUB_BASE_URL = "https://finnhub.io/api/v1"
 FINNHUB_UNIVERSE_CACHE_FILE = "finnhub_movers_cache.json"
 
@@ -99,6 +100,15 @@ def finnhub_api_key():
     return os.getenv("FINNHUB_API_KEY", "").strip()
 
 
+def top_mover_count():
+    try:
+        requested_count = int(os.getenv("OPTION_BEACON_TOP_MOVER_COUNT", DEFAULT_TOP_MOVER_COUNT))
+    except (TypeError, ValueError):
+        return DEFAULT_TOP_MOVER_COUNT
+
+    return max(10, min(requested_count, MAX_TOP_MOVER_COUNT))
+
+
 def candidate_symbols():
     custom_symbols = os.getenv("OPTION_BEACON_SYMBOLS", "").strip()
     if custom_symbols:
@@ -172,11 +182,12 @@ def quote_symbol(symbol, api_key):
     }
 
 
-def rank_daily_movers(api_key=None, symbols=None, limit=TOP_MOVER_COUNT, pause_seconds=0.05):
+def rank_daily_movers(api_key=None, symbols=None, limit=None, pause_seconds=0.05):
     api_key = (api_key or finnhub_api_key()).strip()
     if not api_key:
         return None, "Finnhub API key not configured"
 
+    limit = limit or top_mover_count()
     quotes = []
     errors = []
 

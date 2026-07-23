@@ -51,6 +51,18 @@ FINNHUB_API_KEY = "your-finnhub-key"
 
 If the key is missing or Finnhub is unavailable, the app will still load and show the scanner data it already has.
 
+## Expanding scanner coverage
+
+When `FINNHUB_API_KEY` is configured in GitHub Actions, the scheduled scanner ranks a broad list of liquid symbols and scans the top movers. By default it keeps up to 30 bullish movers and 30 bearish movers.
+
+To tune that number, add this optional GitHub Actions secret:
+
+```toml
+OPTION_BEACON_TOP_MOVER_COUNT = "40"
+```
+
+The app caps this at 50 per side so scheduled scans stay stable.
+
 ## Threshold optimizer
 
 Run the optimizer locally to compare per-ticker call and put score thresholds before changing the live scanner:
