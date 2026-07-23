@@ -14,8 +14,8 @@ Build OptionBeacon into a trade planning and management system, not just a scann
 - [x] Add manual trade entry.
 - [x] Add active position tracking.
 - [x] Add basic exit score.
-- [ ] Add trade journal storage.
+- [x] Add trade journal storage.
 
 ## Resume Here
 
-Next implementation step: add trade journal storage for closed trades, including recommendation history and CSV export.
+Next implementation step: begin Phase 2 by adding peak-profit tracking, partial-profit logic, and breakeven/trailing-stop recommendations.

@@ -1,4 +1,11 @@
-from trade_storage import close_position, create_position, load_open_positions, load_positions
+from trade_storage import (
+    close_position,
+    create_position,
+    load_open_positions,
+    load_positions,
+    load_recommendations,
+    record_recommendation,
+)
 
 
 def test_create_and_close_position(tmp_path):
@@ -32,3 +39,36 @@ def test_create_and_close_position(tmp_path):
     closed = load_positions(status="CLOSED", db_file=str(db_file))
     assert len(closed) == 1
     assert closed[0]["exit_premium"] == 5.1
+
+
+def test_record_recommendation_skips_duplicate_score_and_action(tmp_path):
+    db_file = tmp_path / "trades.db"
+    position_id = create_position(
+        symbol="SPY",
+        direction="Bullish",
+        option_type="CALL",
+        strike=600,
+        expiration="2026-08-21",
+        entry_premium=4.25,
+        contracts=1,
+        entry_underlying_price=601.5,
+        current_stop=599.0,
+        target_1=604.0,
+        target_2=606.0,
+        target_3=608.0,
+        original_plan={"trigger_price": 601.0},
+        db_file=str(db_file),
+    )
+    recommendation = {
+        "exit_score": 20,
+        "exit_label": "Hold",
+        "coach_action": "Hold",
+        "coach_next_step": "Continue following the plan.",
+        "exit_reasons": ["No major exit flags."],
+    }
+
+    first_id = record_recommendation(position_id, recommendation, db_file=str(db_file))
+    second_id = record_recommendation(position_id, recommendation, db_file=str(db_file))
+
+    assert first_id == second_id
+    assert len(load_recommendations(position_id, db_file=str(db_file))) == 1

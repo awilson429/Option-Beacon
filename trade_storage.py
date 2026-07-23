@@ -45,6 +45,21 @@ def initialize_trade_db(db_file=DB_FILE):
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS recommendations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                position_id INTEGER NOT NULL,
+                timestamp TEXT NOT NULL,
+                exit_score INTEGER NOT NULL,
+                exit_label TEXT NOT NULL,
+                coach_action TEXT NOT NULL,
+                coach_next_step TEXT NOT NULL,
+                reasons_json TEXT NOT NULL,
+                FOREIGN KEY(position_id) REFERENCES positions(id)
+            )
+            """
+        )
 
 
 def create_position(
@@ -132,6 +147,10 @@ def load_open_positions(db_file=DB_FILE):
     return load_positions(status="OPEN", db_file=db_file)
 
 
+def load_closed_positions(db_file=DB_FILE):
+    return load_positions(status="CLOSED", db_file=db_file)
+
+
 def close_position(position_id, exit_premium=None, exit_notes="", db_file=DB_FILE):
     initialize_trade_db(db_file)
     with connect(db_file) as connection:
@@ -143,3 +162,73 @@ def close_position(position_id, exit_premium=None, exit_notes="", db_file=DB_FIL
             """,
             ("CLOSED", eastern_timestamp(), exit_premium, exit_notes, position_id),
         )
+
+
+def latest_recommendation(position_id, db_file=DB_FILE):
+    initialize_trade_db(db_file)
+    with connect(db_file) as connection:
+        row = connection.execute(
+            """
+            SELECT * FROM recommendations
+            WHERE position_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (position_id,),
+        ).fetchone()
+
+    return dict(row) if row else None
+
+
+def record_recommendation(position_id, recommendation, db_file=DB_FILE):
+    initialize_trade_db(db_file)
+    previous = latest_recommendation(position_id, db_file=db_file)
+
+    if previous:
+        same_score = int(previous["exit_score"]) == int(recommendation["exit_score"])
+        same_action = previous["coach_action"] == recommendation["coach_action"]
+        if same_score and same_action:
+            return previous["id"]
+
+    with connect(db_file) as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO recommendations (
+                position_id,
+                timestamp,
+                exit_score,
+                exit_label,
+                coach_action,
+                coach_next_step,
+                reasons_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                position_id,
+                eastern_timestamp(),
+                int(recommendation["exit_score"]),
+                recommendation["exit_label"],
+                recommendation["coach_action"],
+                recommendation["coach_next_step"],
+                json.dumps(recommendation.get("exit_reasons", []), sort_keys=True),
+            ),
+        )
+        return cursor.lastrowid
+
+
+def load_recommendations(position_id=None, db_file=DB_FILE):
+    initialize_trade_db(db_file)
+    query = "SELECT * FROM recommendations"
+    params = []
+
+    if position_id:
+        query += " WHERE position_id = ?"
+        params.append(position_id)
+
+    query += " ORDER BY timestamp DESC, id DESC"
+
+    with connect(db_file) as connection:
+        rows = connection.execute(query, params).fetchall()
+
+    return [dict(row) for row in rows]

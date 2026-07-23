@@ -1,3 +1,4 @@
+import json
 from datetime import time
 from html import escape
 
@@ -18,7 +19,14 @@ from optionbeacon_history import (
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
 from trade_management import coach_recommendation
-from trade_storage import close_position, create_position, load_open_positions
+from trade_storage import (
+    close_position,
+    create_position,
+    load_closed_positions,
+    load_open_positions,
+    load_recommendations,
+    record_recommendation,
+)
 
 
 SYMBOL_GROUPS = DEFAULT_SYMBOL_GROUPS
@@ -1059,9 +1067,12 @@ def render_active_trades(latest_results):
         return
 
     rows = []
+    recommendations = {}
     for position in positions:
         scanner_result = latest_results.get(position["symbol"], {})
         recommendation = coach_recommendation(position, scanner_result)
+        record_recommendation(position["id"], recommendation)
+        recommendations[position["id"]] = recommendation
         entry_premium = position.get("entry_premium") or 0
         contracts = position.get("contracts") or 0
         main_reason = recommendation["exit_reasons"][0] if recommendation["exit_reasons"] else ""
@@ -1088,8 +1099,7 @@ def render_active_trades(latest_results):
 
     with st.expander("Trade Coach Details"):
         for position in positions:
-            scanner_result = latest_results.get(position["symbol"], {})
-            recommendation = coach_recommendation(position, scanner_result)
+            recommendation = recommendations[position["id"]]
             st.markdown(
                 f"**#{position['id']} {position['symbol']} - {recommendation['coach_action']}**"
             )
@@ -1117,6 +1127,97 @@ def render_active_trades(latest_results):
             )
             st.success("Paper trade closed.")
             st.rerun()
+
+
+def position_journal_rows(positions):
+    rows = []
+    for position in positions:
+        entry_premium = position.get("entry_premium") or 0
+        exit_premium = position.get("exit_premium") or 0
+        contracts = position.get("contracts") or 0
+        premium_pnl = None
+        pnl_percent = None
+
+        if entry_premium and exit_premium and contracts:
+            premium_pnl = round((exit_premium - entry_premium) * contracts * 100, 2)
+            pnl_percent = round(((exit_premium - entry_premium) / entry_premium) * 100, 2)
+
+        rows.append(
+            {
+                "ID": position["id"],
+                "Status": position["status"],
+                "Entered": position["entered_at"],
+                "Closed": position.get("closed_at"),
+                "Ticker": position["symbol"],
+                "Direction": position["direction"],
+                "Contract": f"{position['option_type']} {position.get('strike') or ''} {position.get('expiration') or ''}",
+                "Entry Premium": entry_premium,
+                "Exit Premium": exit_premium or None,
+                "Contracts": contracts,
+                "Premium P/L": premium_pnl,
+                "P/L %": pnl_percent,
+                "Entry Notes": position.get("entry_notes"),
+                "Exit Notes": position.get("exit_notes"),
+            }
+        )
+
+    return rows
+
+
+def recommendation_rows(recommendations):
+    rows = []
+    for recommendation in recommendations:
+        try:
+            reasons = ", ".join(json.loads(recommendation["reasons_json"]))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            reasons = recommendation.get("reasons_json", "")
+
+        rows.append(
+            {
+                "ID": recommendation["id"],
+                "Position ID": recommendation["position_id"],
+                "Time": recommendation["timestamp"],
+                "Exit Score": recommendation["exit_score"],
+                "Exit Label": recommendation["exit_label"],
+                "Coach Action": recommendation["coach_action"],
+                "Next Step": recommendation["coach_next_step"],
+                "Reasons": reasons,
+            }
+        )
+
+    return rows
+
+
+def render_trade_journal():
+    render_section_header("Trade Journal", "Closed paper trades and coach history")
+    closed_positions = load_closed_positions()
+    recommendations = load_recommendations()
+
+    if not closed_positions:
+        render_empty_state("No closed paper trades yet.")
+    else:
+        journal_df = pd.DataFrame(position_journal_rows(closed_positions))
+        st.dataframe(journal_df, use_container_width=True, hide_index=True)
+        st.download_button(
+            "Download Trade Journal CSV",
+            journal_df.to_csv(index=False),
+            file_name="optionbeacon_trade_journal.csv",
+            mime="text/csv",
+        )
+
+    with st.expander("Recommendation History"):
+        if not recommendations:
+            render_empty_state("No trade-coach recommendations logged yet.")
+            return
+
+        recommendation_df = pd.DataFrame(recommendation_rows(recommendations))
+        st.dataframe(recommendation_df, use_container_width=True, hide_index=True)
+        st.download_button(
+            "Download Recommendation History CSV",
+            recommendation_df.to_csv(index=False),
+            file_name="optionbeacon_recommendation_history.csv",
+            mime="text/csv",
+        )
 
 
 def render_current_scanner(latest_results, symbol_groups):
@@ -1188,6 +1289,8 @@ def main():
     render_top_opportunities(latest_results)
     st.divider()
     render_active_trades(latest_results)
+    st.divider()
+    render_trade_journal()
     st.divider()
     render_recent_high_scores(high_score_history)
     st.divider()
