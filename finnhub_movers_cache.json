@@ -1,0 +1,310 @@
+{
+  "date": "2026-07-23",
+  "source": "Finnhub daily movers",
+  "movers": {
+    "bullish": [
+      {
+        "symbol": "MU",
+        "price": 990.58,
+        "change": 31.1,
+        "percent_change": 3.2413
+      },
+      {
+        "symbol": "MRK",
+        "price": 130.93,
+        "change": 3.46,
+        "percent_change": 2.7144
+      },
+      {
+        "symbol": "SMCI",
+        "price": 31.36,
+        "change": 0.8,
+        "percent_change": 2.6178
+      },
+      {
+        "symbol": "LLY",
+        "price": 1187.73,
+        "change": 24.72,
+        "percent_change": 2.1255
+      },
+      {
+        "symbol": "CVX",
+        "price": 197.03,
+        "change": 4.05,
+        "percent_change": 2.0987
+      },
+      {
+        "symbol": "CAT",
+        "price": 905.52,
+        "change": 16.21,
+        "percent_change": 1.8228
+      },
+      {
+        "symbol": "ABBV",
+        "price": 257.46,
+        "change": 4.16,
+        "percent_change": 1.6423
+      },
+      {
+        "symbol": "BMY",
+        "price": 61.71,
+        "change": 0.95,
+        "percent_change": 1.5635
+      },
+      {
+        "symbol": "PFE",
+        "price": 25.05,
+        "change": 0.23,
+        "percent_change": 0.9267
+      },
+      {
+        "symbol": "NFLX",
+        "price": 68.77,
+        "change": 0.24,
+        "percent_change": 0.3502
+      },
+      {
+        "symbol": "PYPL",
+        "price": 55.65,
+        "change": 0.14,
+        "percent_change": 0.2522
+      },
+      {
+        "symbol": "BA",
+        "price": 209.13,
+        "change": 0.48,
+        "percent_change": 0.2301
+      },
+      {
+        "symbol": "JPM",
+        "price": 348.59,
+        "change": 0.38,
+        "percent_change": 0.1091
+      },
+      {
+        "symbol": "C",
+        "price": 132.0,
+        "change": -0.25,
+        "percent_change": -0.189
+      },
+      {
+        "symbol": "PEP",
+        "price": 135.04,
+        "change": -0.61,
+        "percent_change": -0.4497
+      },
+      {
+        "symbol": "TLT",
+        "price": 83.04,
+        "change": -0.4,
+        "percent_change": -0.4794
+      },
+      {
+        "symbol": "ROKU",
+        "price": 142.33,
+        "change": -0.75,
+        "percent_change": -0.5242
+      },
+      {
+        "symbol": "IWM",
+        "price": 292.07,
+        "change": -1.72,
+        "percent_change": -0.5855
+      },
+      {
+        "symbol": "KO",
+        "price": 81.65,
+        "change": -0.55,
+        "percent_change": -0.6691
+      },
+      {
+        "symbol": "INTC",
+        "price": 101.87,
+        "change": -0.75,
+        "percent_change": -0.7309
+      },
+      {
+        "symbol": "BIDU",
+        "price": 106.69,
+        "change": -0.83,
+        "percent_change": -0.7719
+      },
+      {
+        "symbol": "T",
+        "price": 22.84,
+        "change": -0.2,
+        "percent_change": -0.8681
+      },
+      {
+        "symbol": "DIA",
+        "price": 516.77,
+        "change": -4.7,
+        "percent_change": -0.9013
+      },
+      {
+        "symbol": "BAC",
+        "price": 61.01,
+        "change": -0.61,
+        "percent_change": -0.9899
+      },
+      {
+        "symbol": "DKNG",
+        "price": 22.58,
+        "change": -0.25,
+        "percent_change": -1.0951
+      }
+    ],
+    "bearish": [
+      {
+        "symbol": "TSLA",
+        "price": 323.53,
+        "change": -50.48,
+        "percent_change": -13.497
+      },
+      {
+        "symbol": "GOOGL",
+        "price": 317.3,
+        "change": -24.79,
+        "percent_change": -7.2466
+      },
+      {
+        "symbol": "MSTR",
+        "price": 93.53,
+        "change": -6.48,
+        "percent_change": -6.4794
+      },
+      {
+        "symbol": "AMZN",
+        "price": 232.63,
+        "change": -12.22,
+        "percent_change": -4.9908
+      },
+      {
+        "symbol": "SHOP",
+        "price": 112.9,
+        "change": -5.52,
+        "percent_change": -4.6614
+      },
+      {
+        "symbol": "CRM",
+        "price": 155.73,
+        "change": -7.27,
+        "percent_change": -4.4601
+      },
+      {
+        "symbol": "META",
+        "price": 602.24,
+        "change": -24.93,
+        "percent_change": -3.975
+      },
+      {
+        "symbol": "ORCL",
+        "price": 121.38,
+        "change": -4.46,
+        "percent_change": -3.5442
+      },
+      {
+        "symbol": "COIN",
+        "price": 160.33,
+        "change": -5.79,
+        "percent_change": -3.4854
+      },
+      {
+        "symbol": "DIS",
+        "price": 92.74,
+        "change": -3.13,
+        "percent_change": -3.2648
+      },
+      {
+        "symbol": "SLV",
+        "price": 52.24,
+        "change": -1.68,
+        "percent_change": -3.1157
+      },
+      {
+        "symbol": "RIVN",
+        "price": 16.67,
+        "change": -0.51,
+        "percent_change": -2.9686
+      },
+      {
+        "symbol": "ABNB",
+        "price": 136.04,
+        "change": -4.01,
+        "percent_change": -2.8633
+      },
+      {
+        "symbol": "ARKK",
+        "price": 73.87,
+        "change": -2.16,
+        "percent_change": -2.841
+      },
+      {
+        "symbol": "MSFT",
+        "price": 379.36,
+        "change": -10.98,
+        "percent_change": -2.8129
+      },
+      {
+        "symbol": "QCOM",
+        "price": 170.77,
+        "change": -4.86,
+        "percent_change": -2.7672
+      },
+      {
+        "symbol": "PLTR",
+        "price": 121.45,
+        "change": -3.12,
+        "percent_change": -2.5046
+      },
+      {
+        "symbol": "NKE",
+        "price": 41.16,
+        "change": -1.05,
+        "percent_change": -2.4876
+      },
+      {
+        "symbol": "SOFI",
+        "price": 16.68,
+        "change": -0.39,
+        "percent_change": -2.2847
+      },
+      {
+        "symbol": "NVDA",
+        "price": 207.35,
+        "change": -4.71,
+        "percent_change": -2.2211
+      },
+      {
+        "symbol": "GS",
+        "price": 1074.98,
+        "change": -23.22,
+        "percent_change": -2.1144
+      },
+      {
+        "symbol": "UBER",
+        "price": 68.85,
+        "change": -1.48,
+        "percent_change": -2.1044
+      },
+      {
+        "symbol": "F",
+        "price": 14.13,
+        "change": -0.29,
+        "percent_change": -2.0111
+      },
+      {
+        "symbol": "QQQ",
+        "price": 691.86,
+        "change": -13.49,
+        "percent_change": -1.9125
+      },
+      {
+        "symbol": "HD",
+        "price": 325.41,
+        "change": -6.04,
+        "percent_change": -1.8223
+      }
+    ]
+  }
+}
