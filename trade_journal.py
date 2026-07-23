@@ -206,6 +206,25 @@ def _rule_bucket(score):
     return "Rule break"
 
 
+def _review_lenses(row):
+    fallback_setup, fallback_management, fallback_discipline = _quality_labels(
+        row.get("Outcome")
+    )
+    setup_quality = _grade_bucket(
+        row.get("Setup Grade"),
+        "Good setup",
+        "Bad setup",
+    ) or fallback_setup
+    management_quality = _grade_bucket(
+        row.get("Management Grade"),
+        "Good management",
+        "Poor management",
+    ) or fallback_management
+    rule_discipline = _rule_bucket(row.get("Rule Score")) or fallback_discipline
+
+    return setup_quality, management_quality, rule_discipline
+
+
 def review_dashboard_rows(journal_rows):
     buckets = {
         "Setup Quality": Counter(),
@@ -214,20 +233,7 @@ def review_dashboard_rows(journal_rows):
     }
 
     for row in journal_rows:
-        fallback_setup, fallback_management, fallback_discipline = _quality_labels(
-            row.get("Outcome")
-        )
-        setup_quality = _grade_bucket(
-            row.get("Setup Grade"),
-            "Good setup",
-            "Bad setup",
-        ) or fallback_setup
-        management_quality = _grade_bucket(
-            row.get("Management Grade"),
-            "Good management",
-            "Poor management",
-        ) or fallback_management
-        rule_discipline = _rule_bucket(row.get("Rule Score")) or fallback_discipline
+        setup_quality, management_quality, rule_discipline = _review_lenses(row)
         buckets["Setup Quality"][setup_quality] += 1
         buckets["Management Quality"][management_quality] += 1
         buckets["Rule Discipline"][rule_discipline] += 1
@@ -247,6 +253,61 @@ def review_dashboard_rows(journal_rows):
             )
 
     return rows
+
+
+def review_trend_rows(journal_rows):
+    buckets = {}
+    for row in journal_rows:
+        closed_date = _date_or_none(row.get("Closed"))
+        if not closed_date:
+            continue
+
+        period = closed_date.strftime("%Y-%m")
+        setup_quality, management_quality, rule_discipline = _review_lenses(row)
+        pnl = _number_or_none(row.get("Premium P/L")) or 0
+        rule_score = _number_or_none(row.get("Rule Score"))
+
+        if period not in buckets:
+            buckets[period] = {
+                "Period": period,
+                "Trades": 0,
+                "Good Setups": 0,
+                "Good Management": 0,
+                "Rules Followed": 0,
+                "Rule Score Total": 0,
+                "Rule Score Count": 0,
+                "Total P/L": 0,
+            }
+
+        bucket = buckets[period]
+        bucket["Trades"] += 1
+        bucket["Good Setups"] += 1 if setup_quality == "Good setup" else 0
+        bucket["Good Management"] += 1 if management_quality == "Good management" else 0
+        bucket["Rules Followed"] += 1 if rule_discipline == "Rules followed" else 0
+        bucket["Total P/L"] += pnl
+        if rule_score is not None:
+            bucket["Rule Score Total"] += rule_score
+            bucket["Rule Score Count"] += 1
+
+    rows = []
+    for bucket in buckets.values():
+        trades = bucket["Trades"]
+        rule_score_count = bucket["Rule Score Count"]
+        rows.append(
+            {
+                "Period": bucket["Period"],
+                "Trades": trades,
+                "Good Setup %": round((bucket["Good Setups"] / trades) * 100, 2),
+                "Good Management %": round((bucket["Good Management"] / trades) * 100, 2),
+                "Rules Followed %": round((bucket["Rules Followed"] / trades) * 100, 2),
+                "Avg Rule Score": round(bucket["Rule Score Total"] / rule_score_count, 2)
+                if rule_score_count
+                else None,
+                "Total P/L": round(bucket["Total P/L"], 2),
+            }
+        )
+
+    return sorted(rows, key=lambda row: row["Period"])
 
 
 def lesson_pattern_rows(journal_rows, limit=10):

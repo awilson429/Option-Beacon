@@ -5,6 +5,7 @@ from trade_journal import (
     lesson_pattern_rows,
     outcome_review_rows,
     review_dashboard_rows,
+    review_trend_rows,
 )
 
 
@@ -172,3 +173,38 @@ def test_filter_journal_rows_excludes_missing_dates_when_date_filter_is_active()
     filtered = filter_journal_rows(rows, start_date=date(2026, 7, 20))
 
     assert filtered == []
+
+
+def test_review_trend_rows_groups_review_quality_by_month():
+    rows = [
+        {
+            "Closed": "2026-07-20 03:30:00 PM ET",
+            "Outcome": "Good setup / good management",
+            "Setup Grade": "A",
+            "Management Grade": "B",
+            "Rule Score": 9,
+            "Premium P/L": 150,
+        },
+        {
+            "Closed": "2026-07-21 03:30:00 PM ET",
+            "Outcome": "Rule break",
+            "Setup Grade": "D",
+            "Management Grade": "F",
+            "Rule Score": 3,
+            "Premium P/L": -50,
+        },
+    ]
+
+    trend = review_trend_rows(rows)
+
+    assert trend == [
+        {
+            "Period": "2026-07",
+            "Trades": 2,
+            "Good Setup %": 50.0,
+            "Good Management %": 50.0,
+            "Rules Followed %": 50.0,
+            "Avg Rule Score": 6.0,
+            "Total P/L": 100.0,
+        }
+    ]

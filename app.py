@@ -21,6 +21,7 @@ from trade_journal import (
     lesson_pattern_rows,
     outcome_review_rows,
     review_dashboard_rows,
+    review_trend_rows,
 )
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
@@ -1427,10 +1428,21 @@ def render_trade_journal():
         )
         filtered_journal_df = pd.DataFrame(filtered_records)
         review_df = pd.DataFrame(review_dashboard_rows(filtered_records))
+        trend_df = pd.DataFrame(review_trend_rows(filtered_records))
         outcome_df = pd.DataFrame(outcome_review_rows(filtered_records))
         lesson_df = pd.DataFrame(lesson_pattern_rows(filtered_records))
 
         st.caption(f"Showing {len(filtered_records)} of {len(journal_records)} closed trades")
+
+        if not trend_df.empty:
+            st.markdown("**Review Trend**")
+            st.dataframe(trend_df, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download Review Trend CSV",
+                trend_df.to_csv(index=False),
+                file_name="optionbeacon_review_trend.csv",
+                mime="text/csv",
+            )
 
         if not review_df.empty:
             st.markdown("**Trade Review Dashboard**")
