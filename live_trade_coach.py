@@ -4,6 +4,8 @@ ACTION_HOLD = "Manage active idea"
 ACTION_AVOID = "Avoid chasing"
 ACTION_WAIT = "Wait"
 
+from market_intelligence import chase_risk, confidence_explanation, missing_confirmations
+
 
 def exit_score_for_live_setup(result, coach=None):
     if not result:
@@ -31,6 +33,14 @@ def exit_score_for_live_setup(result, coach=None):
     if coach["action"] == ACTION_AVOID:
         exit_score += 65
         reasons.append("The setup is extended; chasing risk is elevated.")
+
+    chase = chase_risk(result)
+    if chase["label"] == "High" and coach["action"] != ACTION_AVOID:
+        exit_score += 25
+        reasons.append(chase["reason"])
+    elif chase["label"] == "Moderate":
+        exit_score += 10
+        reasons.append(chase["reason"])
 
     if timing in ["Do not chase", "Setup invalidated"]:
         exit_score += 25
@@ -142,6 +152,10 @@ def coach_live_setup(result):
             "next_step": "Wait for fresh 5-minute scanner data.",
             "risk_note": "No trade idea is active.",
             "contract": "N/A",
+            "chase_risk": "Unknown",
+            "chase_reason": "No scanner data is available yet.",
+            "missing_confirmations": ["scanner data"],
+            "confidence_note": "Missing: scanner data.",
         }
         payload.update(exit_score_for_live_setup(result, payload))
         return payload
@@ -157,6 +171,9 @@ def coach_live_setup(result):
     invalidation = _format_price(plan.get("invalidation_level") or result.get("stop"))
     max_entry = _format_price(plan.get("max_entry_price"))
     contract = _option_type(direction)
+    chase = chase_risk(result)
+    missing = missing_confirmations(result)
+    confidence_note = confidence_explanation(result)
 
     if signal in ["MARKET CLOSED / WAIT", "WAITING FOR CANDLE"]:
         payload = {
@@ -166,6 +183,10 @@ def coach_live_setup(result):
             "next_step": "Wait for the next completed 5-minute candle.",
             "risk_note": "Do not force an entry while the scanner is waiting.",
             "contract": contract,
+            "chase_risk": chase["label"],
+            "chase_reason": chase["reason"],
+            "missing_confirmations": missing,
+            "confidence_note": confidence_note,
         }
         payload.update(exit_score_for_live_setup(result, payload))
         return payload
@@ -178,6 +199,10 @@ def coach_live_setup(result):
             "next_step": "Skip this ticker until fresh data returns.",
             "risk_note": "No trade idea should be evaluated without data.",
             "contract": contract,
+            "chase_risk": chase["label"],
+            "chase_reason": chase["reason"],
+            "missing_confirmations": missing,
+            "confidence_note": confidence_note,
         }
         payload.update(exit_score_for_live_setup(result, payload))
         return payload
@@ -190,6 +215,10 @@ def coach_live_setup(result):
             "next_step": f"Do not chase past {max_entry}. Wait for a reset or a new setup.",
             "risk_note": f"Invalidation remains {invalidation}.",
             "contract": contract,
+            "chase_risk": chase["label"],
+            "chase_reason": chase["reason"],
+            "missing_confirmations": missing,
+            "confidence_note": confidence_note,
         }
         payload.update(exit_score_for_live_setup(result, payload))
         return payload
@@ -202,6 +231,10 @@ def coach_live_setup(result):
             "next_step": f"Entry is valid near {trigger} if price remains inside the plan.",
             "risk_note": _management_text(result),
             "contract": contract,
+            "chase_risk": chase["label"],
+            "chase_reason": chase["reason"],
+            "missing_confirmations": missing,
+            "confidence_note": confidence_note,
         }
         payload.update(exit_score_for_live_setup(result, payload))
         return payload
@@ -214,6 +247,10 @@ def coach_live_setup(result):
             "next_step": f"Watch for confirmation through {trigger} with volume.",
             "risk_note": f"Do not act if price violates {invalidation}.",
             "contract": contract,
+            "chase_risk": chase["label"],
+            "chase_reason": chase["reason"],
+            "missing_confirmations": missing,
+            "confidence_note": confidence_note,
         }
         payload.update(exit_score_for_live_setup(result, payload))
         return payload
@@ -226,6 +263,10 @@ def coach_live_setup(result):
             "next_step": result.get("what_next_reason") or "Wait for cleaner timing.",
             "risk_note": f"Use {invalidation} as the thesis failure area.",
             "contract": contract,
+            "chase_risk": chase["label"],
+            "chase_reason": chase["reason"],
+            "missing_confirmations": missing,
+            "confidence_note": confidence_note,
         }
         payload.update(exit_score_for_live_setup(result, payload))
         return payload
@@ -237,6 +278,10 @@ def coach_live_setup(result):
         "next_step": result.get("what_next_reason") or "Wait for stronger alignment.",
         "risk_note": "No live trade idea is active yet.",
         "contract": contract,
+        "chase_risk": chase["label"],
+        "chase_reason": chase["reason"],
+        "missing_confirmations": missing,
+        "confidence_note": confidence_note,
     }
     payload.update(exit_score_for_live_setup(result, payload))
     return payload
@@ -263,6 +308,8 @@ def coach_rows(latest_results, min_score=80):
                 "Next Step": coach["next_step"],
                 "Exit Score": coach["exit_score"],
                 "Exit Label": coach["exit_label"],
+                "Chase Risk": coach["chase_risk"],
+                "Missing": ", ".join(coach["missing_confirmations"]) or "None",
                 "Risk Note": coach["risk_note"],
             }
         )

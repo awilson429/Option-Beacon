@@ -17,6 +17,12 @@ from optionbeacon_history import (
     load_high_score_history,
 )
 from live_trade_coach import coach_live_setup, coach_rows
+from market_intelligence import (
+    chase_risk,
+    confidence_explanation,
+    market_regime,
+    setup_market_support,
+)
 from trade_journal import (
     filter_journal_rows,
     lesson_pattern_rows,
@@ -196,16 +202,7 @@ def factor_status(result, direction, latest_results=None):
     momentum = score_value(result, "momentum_score")
     volume = score_value(result, "volume_score")
     price_action = score_value(result, "price_action_score")
-
-    market_support = "Waiting"
-    market_scores = []
-    for symbol in ["SPY", "QQQ"]:
-        market_result = latest_results.get(symbol)
-        if market_result:
-            market_scores.append(market_result.get("bias") == direction)
-
-    if market_scores:
-        market_support = "Aligned" if any(market_scores) else "Mixed"
+    market_support = setup_market_support(result, latest_results)
 
     return [
         ("Trend", "Aligned" if trend >= 18 else "Developing"),
@@ -1023,6 +1020,8 @@ def render_opportunity_card(row, latest_results):
     grade = opportunity_grade(score)
     direction = result.get("bias", "Neutral")
     coach = coach_live_setup(result)
+    chase = chase_risk(result)
+    confidence_note = confidence_explanation(result, latest_results)
     exit_reasons = coach.get("exit_reasons", [])
     factors = factor_status(result, direction, latest_results)
     factor_html = ""
@@ -1076,12 +1075,27 @@ def render_opportunity_card(row, latest_results):
                 <div class="coach-metric"><div class="coach-label">Exit Score</div><div class="coach-value">{coach["exit_score"]}/100</div></div>
             </div>
             <div class="notice notice-info"><strong>What should I do next?</strong><br>{escape(coach["summary"])} {escape(coach["next_step"])}</div>
+            <div class="notice"><strong>Chase Risk: {escape(chase["label"])}</strong><br>{escape(chase["reason"])}<br>{escape(confidence_note)}</div>
             <div class="content-kicker">Why?</div>
             <ul class="why-list">{reasons_html}</ul>
             <div class="content-kicker">Exit / Reversal Watch</div>
             <ul class="why-list">{exit_reasons_html}</ul>
         </div>
         """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_market_regime(latest_results):
+    regime = market_regime(latest_results)
+    render_section_header("Market Regime", "Simple read on whether the market supports new ideas")
+    cols = st.columns(4)
+    cols[0].metric("Regime", regime["regime"])
+    cols[1].metric("Bullish ETFs", regime["bullish_count"])
+    cols[2].metric("Bearish ETFs", regime["bearish_count"])
+    cols[3].metric("Avg ETF Score", regime["average_score"])
+    st.markdown(
+        f'<div class="notice notice-info"><strong>{escape(regime["support"])}</strong><br>{escape(regime["best_strategy"])}</div>',
         unsafe_allow_html=True,
     )
 
@@ -1179,6 +1193,8 @@ def render_live_trade_coach(latest_results):
                 "Next Step",
                 "Exit Score",
                 "Exit Label",
+                "Chase Risk",
+                "Missing",
                 "Risk Note",
             ]
         ],
@@ -1190,6 +1206,8 @@ def render_live_trade_coach(latest_results):
         for row in display_rows[:6]:
             st.markdown(f"**{row['Symbol']} - {row['Action']} ({row['Score']}/100)**")
             st.write(f"Exit Score: {row['Exit Score']}/100 - {row['Exit Label']}")
+            st.write(f"Chase Risk: {row['Chase Risk']}")
+            st.write(f"Missing: {row['Missing']}")
             st.write(row["Coach Summary"])
             st.write(row["Next Step"])
             st.write(row["Risk Note"])
@@ -2028,6 +2046,8 @@ def main():
 
     latest_results, high_score_history, _, symbol_groups = scan_symbols()
 
+    render_market_regime(latest_results)
+    st.divider()
     render_top_opportunities(latest_results)
     st.divider()
     render_live_trade_coach(latest_results)
