@@ -258,6 +258,21 @@ def ranked_setup_rows(latest_results, min_score=70, limit=60):
     return rows[:limit]
 
 
+def market_snapshot_values(latest_results):
+    regime = market_regime(latest_results)
+    ranked_rows = ranked_setup_rows(latest_results, min_score=65, limit=1)
+    sector_rows = sector_strength_rows(latest_results)
+
+    top_setup = ranked_rows[0] if ranked_rows else None
+    top_sector = sector_rows[0] if sector_rows else None
+
+    return {
+        "regime": regime,
+        "top_setup": top_setup,
+        "top_sector": top_sector,
+    }
+
+
 def opportunity_grade(score):
     if score >= 95:
         return "A+"
@@ -1006,6 +1021,44 @@ def configure_page():
             margin-top: 0.5rem;
         }
 
+        .snapshot-strip {
+            display: grid;
+            gap: 0.7rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin: 0.15rem 0 0.85rem;
+        }
+
+        .snapshot-tile {
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 8px;
+            min-height: 6.25rem;
+            padding: 0.8rem;
+        }
+
+        .snapshot-label {
+            color: var(--ob-muted);
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .snapshot-value {
+            color: var(--ob-text);
+            font-size: 1.25rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-top: 0.25rem;
+        }
+
+        .snapshot-detail {
+            color: var(--ob-muted);
+            font-size: 0.84rem;
+            line-height: 1.25;
+            margin-top: 0.35rem;
+        }
+
         hr {
             border-color: rgba(255, 255, 255, 0.10);
         }
@@ -1070,6 +1123,10 @@ def configure_page():
             }
 
             .beacon-board {
+                grid-template-columns: 1fr;
+            }
+
+            .snapshot-strip {
                 grid-template-columns: 1fr;
             }
 
@@ -1637,6 +1694,51 @@ def render_live_trade_coach(latest_results, high_score_history=None):
             st.write(row["Coach Summary"])
             st.write(row["Next Step"])
             st.write(row["Risk Note"])
+
+
+def render_market_snapshot(latest_results):
+    snapshot = market_snapshot_values(latest_results)
+    regime = snapshot["regime"]
+    top_setup = snapshot["top_setup"]
+    top_sector = snapshot["top_sector"]
+
+    setup_value = "No clean setup"
+    setup_detail = "Waiting for a higher-quality setup to separate from the list."
+    if top_setup:
+        setup_value = f'{top_setup["Symbol"]} {top_setup["Grade"]}'
+        setup_detail = (
+            f'{top_setup["Bias"]} | Quality {top_setup["Quality Score"]}/100 | '
+            f'{top_setup["Chase Risk"]} chase risk'
+        )
+
+    sector_value = "Sector data pending"
+    sector_detail = "Sector context appears after the scheduled scan includes sector ETFs."
+    if top_sector:
+        sector_value = f'{top_sector["ETF"]} {top_sector["Bias"]}'
+        sector_detail = f'{top_sector["Sector"]} | Score {top_sector["Score"]}/100 | RVol {top_sector["RVol"]}'
+
+    st.markdown(
+        f"""
+        <div class="snapshot-strip">
+            <div class="snapshot-tile">
+                <div class="snapshot-label">Market Read</div>
+                <div class="snapshot-value">{escape(regime["regime"])}</div>
+                <div class="snapshot-detail">{escape(regime["support"])}</div>
+            </div>
+            <div class="snapshot-tile">
+                <div class="snapshot-label">Top Quality Setup</div>
+                <div class="snapshot-value">{escape(setup_value)}</div>
+                <div class="snapshot-detail">{escape(setup_detail)}</div>
+            </div>
+            <div class="snapshot-tile">
+                <div class="snapshot-label">Sector Pulse</div>
+                <div class="snapshot-value">{escape(sector_value)}</div>
+                <div class="snapshot-detail">{escape(sector_detail)}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_beacon_board(latest_results, high_score_history=None):
@@ -2694,6 +2796,7 @@ def main():
     )
 
     with live_tab:
+        render_market_snapshot(latest_results)
         render_beacon_board(latest_results, high_score_history)
         with st.expander("Detailed Live Coach"):
             render_live_trade_coach(latest_results, high_score_history)
