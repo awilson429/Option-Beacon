@@ -1426,7 +1426,7 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
                 <div class="coach-metric"><div class="coach-label">Risk/Reward</div><div class="coach-value">{risk_reward_label}</div></div>
                 <div class="coach-metric"><div class="coach-label">Target 2</div><div class="coach-value">{target_2}</div></div>
                 <div class="coach-metric"><div class="coach-label">Target 3</div><div class="coach-value">{target_3}</div></div>
-                <div class="coach-metric"><div class="coach-label">Live Coach</div><div class="coach-value">{escape(coach["action"])}</div></div>
+                <div class="coach-metric"><div class="coach-label">Live Guide</div><div class="coach-value">{escape(coach["action"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Exit Score</div><div class="coach-value">{coach["exit_score"]}/100</div></div>
                 <div class="coach-metric"><div class="coach-label">Liquidity</div><div class="coach-value">{escape(liquidity["label"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Sector</div><div class="coach-value">{escape(sector["status"])}</div></div>
@@ -1642,7 +1642,7 @@ def render_score_guide():
 
 def render_live_trade_coach(latest_results, high_score_history=None):
     render_section_header(
-        "Live Trade Coach",
+        "Live Trade Guide",
         "Current scanner ideas with entry, wait, and risk guidance",
     )
     rows = coach_rows(latest_results, min_score=75, history=high_score_history)
@@ -1658,6 +1658,7 @@ def render_live_trade_coach(latest_results, high_score_history=None):
     display_rows = active_rows or rows[:8]
     display_df = pd.DataFrame(display_rows)
     display_df["Price"] = pd.to_numeric(display_df["Price"], errors="coerce").round(2)
+    display_df = display_df.rename(columns={"Coach Summary": "Guide Summary"})
 
     st.dataframe(
         display_df[
@@ -1670,7 +1671,7 @@ def render_live_trade_coach(latest_results, high_score_history=None):
                 "Price",
                 "Stage",
                 "Timing",
-                "Coach Summary",
+                "Guide Summary",
                 "Next Step",
                 "Exit Score",
                 "Exit Label",
@@ -1684,7 +1685,7 @@ def render_live_trade_coach(latest_results, high_score_history=None):
         hide_index=True,
     )
 
-    with st.expander("Coach Details"):
+    with st.expander("Guide Details"):
         for row in display_rows[:6]:
             st.markdown(f"**{row['Symbol']} - {row['Action']} ({row['Score']}/100)**")
             st.write(f"Exit Score: {row['Exit Score']}/100 - {row['Exit Label']}")
@@ -1779,7 +1780,7 @@ def render_beacon_board(latest_results, high_score_history=None):
             '</div>'
         )
     if not coach_html:
-        coach_html = '<div class="board-note">No coach ideas are active yet.</div>'
+        coach_html = '<div class="board-note">No guide ideas are active yet.</div>'
 
     def setup_rows(rows):
         html = ""
@@ -1822,7 +1823,7 @@ def render_beacon_board(latest_results, high_score_history=None):
                 '</div>'
             )
     if not alert_html:
-        alert_html = '<div class="board-note">No recent coach alerts logged yet.</div>'
+        alert_html = '<div class="board-note">No recent guide alerts logged yet.</div>'
 
     st.markdown(
         f"""
@@ -1835,7 +1836,7 @@ def render_beacon_board(latest_results, high_score_history=None):
                 </div>
             </div>
             <div class="board-panel board-panel-wide">
-                <div class="board-header"><span>Coach Queue</span><span>What matters now</span></div>
+                <div class="board-header"><span>Guide Queue</span><span>What matters now</span></div>
                 <div class="board-body">{coach_html}</div>
             </div>
             <div class="board-panel">
@@ -1862,13 +1863,13 @@ def render_beacon_board(latest_results, high_score_history=None):
 
 def render_live_coach_alerts():
     render_section_header(
-        "Recent Coach Alerts",
+        "Recent Guide Alerts",
         "Meaningful setup changes logged by the scheduled scanner",
     )
     alerts = load_live_coach_alerts()
 
     if alerts.empty:
-        render_empty_state("No coach alerts logged yet.")
+        render_empty_state("No guide alerts logged yet.")
         return
 
     display = alerts.tail(50).sort_index(ascending=False).rename(
@@ -1909,18 +1910,18 @@ def render_live_coach_alerts():
 
 def render_coach_timeline():
     render_section_header(
-        "Coach Timeline",
+        "Guide Timeline",
         "How a symbol's setup has changed through recent scanner reads",
     )
     alerts = load_live_coach_alerts()
 
     if alerts.empty:
-        render_empty_state("No coach timeline yet.")
+        render_empty_state("No guide timeline yet.")
         return
 
     symbols = sorted(alerts["symbol"].dropna().unique())
     if not symbols:
-        render_empty_state("No symbols have coach alerts yet.")
+        render_empty_state("No symbols have guide alerts yet.")
         return
 
     selected_symbol = st.selectbox("Symbol timeline", symbols)
@@ -2045,7 +2046,7 @@ def render_signal_card(symbol, result):
         coach = coach_live_setup(result)
         if coach["action"] != "Wait":
             st.markdown(
-                f'<div class="notice"><strong>Live Coach: {escape(coach["action"])}</strong><br>'
+                f'<div class="notice"><strong>Live Guide: {escape(coach["action"])}</strong><br>'
                 f'{escape(coach["summary"])}<br>{escape(coach["next_step"])}<br>'
                 f'Exit Score: {coach["exit_score"]}/100 - {escape(coach["exit_label"])}</div>',
                 unsafe_allow_html=True,
@@ -2067,11 +2068,11 @@ def render_signal_card(symbol, result):
 
 
 def render_active_trades(latest_results):
-    render_section_header("Saved Trade Tracker", "Optional saved ideas and coach history")
+    render_section_header("Saved Trade Tracker", "Optional saved ideas and guide history")
     positions = load_open_positions()
 
     if not positions:
-        render_empty_state("No saved trades yet. The Live Trade Coach above does not require manual entry.")
+        render_empty_state("No saved trades yet. The Live Trade Guide above does not require manual entry.")
         return
 
     rows = []
@@ -2127,7 +2128,7 @@ def render_active_trades(latest_results):
                 "Target 1": position.get("target_1"),
                 "Target 2": position.get("target_2"),
                 "Exit Score": recommendation["exit_score"],
-                "Coach": recommendation["coach_action"],
+                "Guide": recommendation["coach_action"],
                 "Main Reason": main_reason,
             }
         )
@@ -2138,7 +2139,7 @@ def render_active_trades(latest_results):
     st.markdown("**Active Trade Details**")
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-    with st.expander("Trade Coach Details"):
+    with st.expander("Trade Guide Details"):
         for position in positions:
             recommendation = recommendations[position["id"]]
             st.markdown(
@@ -2207,7 +2208,7 @@ def render_active_trades(latest_results):
                 mark_partial_profit(position["id"], 2, taken=not partial_2_taken)
                 st.rerun()
 
-    with st.expander("Trade Coach Timeline"):
+    with st.expander("Trade Guide Timeline"):
         position_options = {
             f"#{position['id']} {position['symbol']} {position['option_type']}": position["id"]
             for position in positions
@@ -2220,7 +2221,7 @@ def render_active_trades(latest_results):
         timeline = load_recommendations(position_options[selected])
 
         if not timeline:
-            render_empty_state("No coach changes logged for this trade yet.")
+            render_empty_state("No guide changes logged for this trade yet.")
         else:
             timeline_df = pd.DataFrame(recommendation_rows(timeline))
             st.dataframe(timeline_df, use_container_width=True, hide_index=True)
@@ -2362,7 +2363,7 @@ def recommendation_rows(recommendations):
                 "Time": recommendation["timestamp"],
                 "Exit Score": recommendation["exit_score"],
                 "Exit Label": recommendation["exit_label"],
-                "Coach Action": recommendation["coach_action"],
+                "Guide Action": recommendation["coach_action"],
                 "Next Step": recommendation["coach_next_step"],
                 "Current P/L %": recommendation.get("current_profit_percent"),
                 "Peak P/L %": recommendation.get("peak_profit_percent"),
@@ -2377,7 +2378,7 @@ def recommendation_rows(recommendations):
 
 
 def render_trade_journal():
-    render_section_header("Trade Journal", "Closed trades and coach history")
+    render_section_header("Trade Journal", "Closed trades and guide history")
     closed_positions = load_closed_positions()
     recommendations = load_recommendations()
 
@@ -2469,7 +2470,7 @@ def render_trade_journal():
 
     with st.expander("Recommendation History"):
         if not recommendations:
-            render_empty_state("No trade-coach recommendations logged yet.")
+            render_empty_state("No trade guide recommendations logged yet.")
             return
 
         recommendation_df = pd.DataFrame(recommendation_rows(recommendations))
@@ -2792,15 +2793,15 @@ def main():
     latest_results, high_score_history, _, symbol_groups = scan_symbols()
 
     live_tab, after_hours_tab, opportunities_tab, history_tab, tools_tab = st.tabs(
-        ["Live Coach", "After Hours", "Opportunities", "History", "Tools"]
+        ["Live Guide", "After Hours", "Opportunities", "History", "Tools"]
     )
 
     with live_tab:
         render_market_snapshot(latest_results)
         render_beacon_board(latest_results, high_score_history)
-        with st.expander("Detailed Live Coach"):
+        with st.expander("Detailed Live Guide"):
             render_live_trade_coach(latest_results, high_score_history)
-        with st.expander("Recent Coach Alert Table"):
+        with st.expander("Recent Guide Alert Table"):
             render_live_coach_alerts()
 
     with after_hours_tab:

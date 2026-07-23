@@ -73,7 +73,7 @@ def run_active_trade_coaching(
 def main():
     rows = run_active_trade_coaching()
     if not rows:
-        print("No open trades to coach.")
+        print("No open trades to guide.")
         return
 
     for row in rows:

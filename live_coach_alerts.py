@@ -168,7 +168,7 @@ def timeline_summary(alerts, symbol=None):
     if timeline.empty:
         return {
             "headline": "No timeline yet",
-            "detail": "No coach alerts have been logged for this symbol yet.",
+            "detail": "No guide alerts have been logged for this symbol yet.",
             "events": 0,
             "latest_action": "N/A",
             "latest_read": "N/A",
@@ -195,7 +195,7 @@ def timeline_summary(alerts, symbol=None):
     elif latest_action == "Watch for trigger":
         headline = "Setup on watch"
     else:
-        headline = "Coach updated"
+        headline = "Guide updated"
 
     detail = (
         f"{first.get('timestamp', 'First read')} -> {latest.get('timestamp', 'latest read')}. "

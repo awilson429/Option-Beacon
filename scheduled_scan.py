@@ -64,7 +64,7 @@ def scanner_unavailable(symbol, message):
 
 def main():
     if os.getenv("OPTION_BEACON_TEST_ALERT", "").lower() == "true":
-        print("External test alerts are disabled. Option Beacon now uses in-app coach alerts.")
+        print("External test alerts are disabled. Option Beacon now uses in-app guide alerts.")
         return
 
     if not is_market_open_now():
@@ -106,7 +106,7 @@ def main():
             )
             if alert_added:
                 live_alerts = load_live_coach_alerts()
-                print(f"{symbol} coach alert logged: {alert['headline']}")
+                print(f"{symbol} guide alert logged: {alert['headline']}")
 
             if added:
                 high_score_history = load_high_score_history()
@@ -119,7 +119,7 @@ def main():
         alerts_enabled=False,
     )
     if coach_rows:
-        print(f"Coached {len(coach_rows)} open paper trade(s).")
+        print(f"Guided {len(coach_rows)} open paper trade(s).")
         for row in coach_rows:
             previous = row["previous_action"] or "None"
             print(

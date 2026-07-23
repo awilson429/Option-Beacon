@@ -133,14 +133,14 @@ def _management_text(result):
 
     if direction == "Bullish":
         return (
-            f"Coach this as a call idea. First target is {_format_price(target_1)}. "
+            f"Use this as a call idea. First target is {_format_price(target_1)}. "
             f"If price pushes toward {_format_price(target_2)}, protect gains and trail. "
             f"If price loses {_format_price(stop)}, the bullish thesis is weakened."
         )
 
     if direction == "Bearish":
         return (
-            f"Coach this as a put idea. First target is {_format_price(target_1)}. "
+            f"Use this as a put idea. First target is {_format_price(target_1)}. "
             f"If price flushes toward {_format_price(target_2)}, protect gains and trail. "
             f"If price reclaims {_format_price(stop)}, the bearish thesis is weakened."
         )

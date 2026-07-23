@@ -26,11 +26,11 @@ The workflow is defined in `.github/workflows/scheduled-scan.yml` and runs every
 
 Scanner data is published to a separate `scanner-data` branch so the protected app code on `main` does not need automated data commits. If the repository is private and Streamlit cannot read raw files from that branch, move the data store to a small database later.
 
-## Scheduled coach alerts
+## Scheduled guide alerts
 
-The scheduled scanner logs in-app coach alerts for meaningful setup changes. It does not send SMS alerts.
+The scheduled scanner logs in-app guide alerts for meaningful setup changes. It does not send SMS alerts.
 
-Alerts are saved to `live_coach_alerts.csv` on the `scanner-data` branch and displayed in the dashboard under **Recent Coach Alerts**.
+Alerts are saved to `live_coach_alerts.csv` on the `scanner-data` branch and displayed in the dashboard under **Recent Guide Alerts**.
 
 Alerts are intentionally limited. A symbol can log when:
 
