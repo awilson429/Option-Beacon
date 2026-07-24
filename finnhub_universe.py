@@ -34,73 +34,145 @@ DEFAULT_SYMBOL_GROUPS = {
 
 DEFAULT_TOP_MOVER_COUNT = 30
 MAX_TOP_MOVER_COUNT = 50
+DEFAULT_ATTENTION_COUNT = 40
+MAX_ATTENTION_COUNT = 75
 FINNHUB_BASE_URL = "https://finnhub.io/api/v1"
 FINNHUB_UNIVERSE_CACHE_FILE = "finnhub_movers_cache.json"
 
 LIQUID_OPTIONS_CANDIDATES = [
     "AAPL",
+    "ADBE",
     "ABBV",
     "ABNB",
+    "AFRM",
     "AMD",
+    "AMAT",
     "AMZN",
+    "ARKG",
     "ARKK",
+    "ARM",
+    "ASML",
     "AVGO",
     "BA",
     "BAC",
     "BABA",
     "BIDU",
+    "BITO",
+    "BKNG",
+    "BKR",
     "BMY",
+    "BP",
+    "CAVA",
     "C",
     "CAT",
+    "CCL",
+    "CELH",
+    "CLF",
     "COIN",
+    "COST",
     "CRM",
+    "CRWD",
+    "CSCO",
     "CVX",
     "DIA",
     "DIS",
     "DKNG",
+    "DOCU",
+    "DOW",
+    "DUOL",
+    "ELF",
+    "ENPH",
+    "ETSY",
+    "EWZ",
     "F",
+    "FCX",
     "FDX",
+    "FXI",
+    "GDX",
+    "GME",
     "GLD",
     "GOOGL",
+    "GOOG",
     "GS",
     "HD",
+    "HOOD",
+    "HYG",
+    "IBM",
+    "IEF",
     "INTC",
+    "JETS",
     "IWM",
+    "JD",
     "JPM",
+    "KHC",
     "KO",
+    "KRE",
     "LLY",
+    "LULU",
+    "MARA",
+    "MCD",
     "META",
+    "MRNA",
     "MRK",
     "MS",
     "MSFT",
     "MSTR",
     "MU",
+    "NCLH",
+    "NET",
     "NFLX",
     "NKE",
+    "NIO",
+    "NOW",
     "NVDA",
+    "ON",
     "ORCL",
+    "OXY",
+    "PANW",
     "PEP",
     "PFE",
     "PLTR",
+    "PDD",
     "PYPL",
     "QCOM",
     "QQQ",
+    "RBLX",
+    "RCL",
     "RIVN",
+    "RIOT",
     "ROKU",
+    "SBUX",
+    "SHEL",
     "SHOP",
     "SLV",
     "SMCI",
+    "SNAP",
     "SNOW",
     "SOFI",
+    "SPXL",
+    "SPXS",
     "SPY",
+    "SQ",
+    "SQQQ",
     "T",
+    "TGT",
     "TLT",
+    "TNA",
+    "TQQQ",
+    "TTD",
     "TSLA",
+    "TWLO",
+    "U",
     "UBER",
+    "UNG",
     "UNH",
+    "UPST",
     "USO",
     "V",
+    "VIXY",
+    "VXX",
     "WMT",
+    "WYNN",
     "XLE",
     "XLF",
     "XLI",
@@ -110,6 +182,8 @@ LIQUID_OPTIONS_CANDIDATES = [
     "XLV",
     "XLY",
     "XOM",
+    "XOP",
+    "ZM",
 ]
 
 
@@ -126,13 +200,22 @@ def top_mover_count():
     return max(10, min(requested_count, MAX_TOP_MOVER_COUNT))
 
 
+def attention_count():
+    try:
+        requested_count = int(os.getenv("OPTION_BEACON_ATTENTION_COUNT", DEFAULT_ATTENTION_COUNT))
+    except (TypeError, ValueError):
+        return DEFAULT_ATTENTION_COUNT
+
+    return max(10, min(requested_count, MAX_ATTENTION_COUNT))
+
+
 def candidate_symbols():
     custom_symbols = os.getenv("OPTION_BEACON_SYMBOLS", "").strip()
     if custom_symbols:
         symbols = [symbol.strip().upper() for symbol in custom_symbols.split(",")]
         return sorted({symbol for symbol in symbols if symbol})
 
-    return LIQUID_OPTIONS_CANDIDATES
+    return sorted(set(LIQUID_OPTIONS_CANDIDATES))
 
 
 def _request_json(path, params, api_key):
@@ -163,7 +246,7 @@ def load_cached_movers():
     if not isinstance(movers, dict):
         return None
 
-    if not movers.get("bullish") or not movers.get("bearish"):
+    if not movers.get("attention") or not movers.get("bullish") or not movers.get("bearish"):
         return None
 
     return movers
@@ -172,7 +255,7 @@ def load_cached_movers():
 def save_cached_movers(movers):
     payload = {
         "date": today_label(),
-        "source": "Finnhub daily movers",
+        "source": "Finnhub attention + daily movers",
         "movers": movers,
     }
 
@@ -196,15 +279,17 @@ def quote_symbol(symbol, api_key):
         "price": current_price,
         "change": float(data.get("d") or 0),
         "percent_change": percent_change,
+        "attention_score": abs(percent_change),
     }
 
 
-def rank_daily_movers(api_key=None, symbols=None, limit=None, pause_seconds=0.05):
+def rank_daily_movers(api_key=None, symbols=None, limit=None, attention_limit=None, pause_seconds=0.05):
     api_key = (api_key or finnhub_api_key()).strip()
     if not api_key:
         return None, "Finnhub API key not configured"
 
     limit = limit or top_mover_count()
+    attention_limit = attention_limit or attention_count()
     quotes = []
     errors = []
 
@@ -222,7 +307,8 @@ def rank_daily_movers(api_key=None, symbols=None, limit=None, pause_seconds=0.05
 
     bullish = sorted(quotes, key=lambda row: row["percent_change"], reverse=True)[:limit]
     bearish = sorted(quotes, key=lambda row: row["percent_change"])[:limit]
-    return {"bullish": bullish, "bearish": bearish}, "; ".join(errors[:3])
+    attention = sorted(quotes, key=lambda row: row["attention_score"], reverse=True)[:attention_limit]
+    return {"attention": attention, "bullish": bullish, "bearish": bearish}, "; ".join(errors[:3])
 
 
 def active_symbol_groups(api_key=None):
@@ -239,16 +325,18 @@ def active_symbol_groups(api_key=None):
     if not movers:
         return DEFAULT_SYMBOL_GROUPS, "Original scanner universe", error
 
+    attention_symbols = [row["symbol"] for row in movers.get("attention", [])]
     bullish_symbols = [row["symbol"] for row in movers["bullish"]]
     bearish_symbols = [row["symbol"] for row in movers["bearish"]]
 
     return (
         {
             "Market Context": MARKET_CONTEXT_SYMBOLS,
+            "Attention Movers": attention_symbols,
             "Top Bullish Movers": bullish_symbols,
             "Top Bearish Movers": bearish_symbols,
         },
-        "Finnhub daily movers",
+        "Finnhub attention + daily movers",
         error,
     )
 

@@ -49,6 +49,7 @@ jobs:
           TRADIER_ACCESS_TOKEN: ${{ secrets.TRADIER_ACCESS_TOKEN }}
           TRADIER_API_BASE_URL: ${{ secrets.TRADIER_API_BASE_URL }}
           OPTION_BEACON_TOP_MOVER_COUNT: ${{ secrets.OPTION_BEACON_TOP_MOVER_COUNT }}
+          OPTION_BEACON_ATTENTION_COUNT: ${{ secrets.OPTION_BEACON_ATTENTION_COUNT }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Publish scanner data

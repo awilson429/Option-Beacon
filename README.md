@@ -53,11 +53,11 @@ If the key is missing or Finnhub is unavailable, the app will still load and sho
 
 ## Expanding scanner coverage
 
-When `FINNHUB_API_KEY` is configured in GitHub Actions, the scheduled scanner ranks a broad list of liquid symbols and scans the top movers. By default it keeps up to 30 bullish movers and 30 bearish movers.
+When `FINNHUB_API_KEY` is configured in GitHub Actions, the scheduled scanner ranks a broad list of liquid symbols and scans the top movers. By default it keeps up to 40 attention movers, 30 bullish movers, and 30 bearish movers.
 
-The scheduled scan also includes major market and sector ETFs so the dashboard can show whether individual stock setups are aligned with their sector.
+Attention movers are ranked by absolute daily percent movement, so the scanner can catch names getting unusual attention in either direction. The scheduled scan also includes major market and sector ETFs so the dashboard can show whether individual stock setups are aligned with their sector.
 
-Opportunities are ranked by a blended setup quality score that considers raw scanner score, market support, sector support, liquidity, and chase risk.
+Opportunities are ranked by a blended setup quality score that considers raw scanner score, market support, sector support, liquidity, and entry risk.
 
 ## Optional Tradier options data
 
@@ -81,7 +81,13 @@ To tune that number, add this optional GitHub Actions secret:
 OPTION_BEACON_TOP_MOVER_COUNT = "40"
 ```
 
-The app caps this at 50 per side so scheduled scans stay stable.
+To tune the attention list size, add this optional GitHub Actions secret:
+
+```toml
+OPTION_BEACON_ATTENTION_COUNT = "50"
+```
+
+The app caps top movers at 50 per side and attention movers at 75 so scheduled scans stay stable.
 
 ## Threshold optimizer
 
