@@ -317,6 +317,15 @@ def short_time(value):
         return str(value)
 
 
+def compact_callout_label(*parts):
+    labels = []
+    for part in parts:
+        text = str(part or "").strip()
+        if text:
+            labels.append(text.upper())
+    return " / ".join(labels) if labels else "WAIT"
+
+
 def factor_status(result, direction, latest_results=None):
     latest_results = latest_results or {}
     trend = score_value(result, "trend_score")
@@ -973,8 +982,11 @@ def configure_page():
 
         .board-symbol {
             color: var(--ob-text);
-            font-size: 1.05rem;
-            font-weight: 800;
+            font-family: "Arial Black", Impact, Inter, sans-serif;
+            font-size: 1.08rem;
+            font-weight: 900;
+            letter-spacing: -0.01em;
+            text-shadow: 0.08rem 0.08rem 0 var(--ob-blue);
         }
 
         .board-main {
@@ -982,6 +994,15 @@ def configure_page():
             font-size: 0.93rem;
             font-weight: 700;
             line-height: 1.15;
+        }
+
+        .board-callout {
+            color: var(--ob-text);
+            font-size: 0.84rem;
+            font-weight: 900;
+            letter-spacing: 0.06em;
+            line-height: 1.15;
+            text-transform: uppercase;
         }
 
         .board-sub {
@@ -2033,10 +2054,14 @@ def render_beacon_board(latest_results, high_score_history=None):
         for row in rows:
             result = row["result"]
             plan = result.get("trade_plan") or {}
+            callout = compact_callout_label(
+                result.get("bias", "Neutral"),
+                result.get("entry_timing", "Wait"),
+            )
             html += (
                 '<div class="board-row board-row-compact">'
                 f'<div class="board-symbol">{escape(row["symbol"])}</div>'
-                f'<div><div class="board-main">{escape(result.get("bias", "Neutral"))} {escape(result.get("entry_timing", "Wait"))}</div>'
+                f'<div><div class="board-callout">{escape(callout)}</div>'
                 f'<div class="board-sub">Entry {money(plan_value(plan, "trigger_price", result.get("entry")))} | Stop {money(plan_value(plan, "technical_stop", result.get("stop")))}</div></div>'
                 f'<div class="board-number">{escape(str(row["score"]))}</div>'
                 '</div>'
