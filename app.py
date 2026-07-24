@@ -1118,6 +1118,7 @@ def configure_page():
             color: var(--ob-text);
             font-size: 1rem;
             font-weight: 900;
+            text-shadow: 0.08rem 0.08rem 0 var(--ob-blue);
         }
 
         .tape-main {
