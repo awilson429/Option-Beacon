@@ -1100,12 +1100,6 @@ def configure_page():
             text-transform: uppercase;
         }
 
-        .tape-header span:last-child {
-            font-size: 0.68rem;
-            letter-spacing: 0.08em;
-            text-align: right;
-        }
-
         .tape-row {
             align-items: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.07);
@@ -1921,19 +1915,19 @@ def render_beacon_tape(latest_results):
         f"""
         <div class="beacon-tape">
             <div class="tape-panel">
-                <div class="tape-header"><span>Market Context</span><span>ETFs</span></div>
+                <div class="tape-header"><span>Market</span><span>Table</span></div>
                 {market_rows()}
             </div>
             <div class="tape-panel">
-                <div class="tape-header"><span>Setup Bias</span><span>Bull:Bear {escape(sentiment_label)}</span></div>
+                <div class="tape-header"><span>Setup Bias</span><span>{escape(sentiment_label)}</span></div>
                 {setup_rows()}
             </div>
             <div class="tape-panel">
-                <div class="tape-header"><span>Sector Pulse</span><span>Leaders</span></div>
+                <div class="tape-header"><span>Sectors</span><span>Leaders</span></div>
                 {sector_tape_rows()}
             </div>
             <div class="tape-panel">
-                <div class="tape-header"><span>Guide Alerts</span><span>Recent</span></div>
+                <div class="tape-header"><span>Alerts</span><span>Guide</span></div>
                 {alert_rows()}
             </div>
         </div>
