@@ -189,7 +189,7 @@ def timeline_summary(alerts, symbol=None):
     elif latest_read == "Weakening":
         headline = "Idea weakening"
     elif latest_action == "Avoid chasing":
-        headline = "Chase risk active"
+        headline = "Entry risk active"
     elif latest_action == "Entry zone active":
         headline = "Entry zone active"
     elif latest_action == "Watch for trigger":

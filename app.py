@@ -238,7 +238,7 @@ def ranked_setup_rows(latest_results, min_score=70, limit=60):
                 "Sector Bias": sector["sector_bias"],
                 "Market Support": quality["market_support"],
                 "Liquidity": quality["liquidity"],
-                "Chase Risk": quality["chase_risk"],
+                "Entry Risk": quality["chase_risk"],
                 "State": result.get("signal", "WATCHLIST"),
                 "Timing": result.get("entry_timing", "Wait"),
                 "Price": money(result.get("price")),
@@ -300,6 +300,21 @@ def money(value):
         return f"${float(value):.2f}" if value is not None else "N/A"
     except (TypeError, ValueError):
         return "N/A"
+
+
+def short_time(value):
+    if value in [None, ""]:
+        return eastern_now().strftime("%I:%M %p ET").lstrip("0")
+
+    try:
+        timestamp = pd.Timestamp(value)
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.tz_localize("America/New_York")
+        else:
+            timestamp = timestamp.tz_convert("America/New_York")
+        return timestamp.strftime("%I:%M %p ET").lstrip("0")
+    except Exception:
+        return str(value)
 
 
 def factor_status(result, direction, latest_results=None):
@@ -1472,6 +1487,7 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
     plan = result.get("trade_plan") or {}
     score = row["score"]
     direction = result.get("bias", "Neutral")
+    as_of = short_time(result.get("timestamp"))
     coach = coach_live_setup(result)
     chase = chase_risk(result)
     sector = setup_sector_support(result, latest_results)
@@ -1524,7 +1540,7 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
             <div class="coach-card-header">
                 <div>
                     <div class="coach-symbol">{escape(row["symbol"])}</div>
-                    <div class="content-kicker">{escape(direction)} {escape(contract)} idea</div>
+                    <div class="content-kicker">{escape(direction)} {escape(contract)} idea | As of {escape(as_of)}</div>
                 </div>
                 <div class="coach-grade">
                     Quality: {escape(quality["grade"])}<br>
@@ -1539,9 +1555,9 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
                 <div class="coach-metric"><div class="coach-label">Risk/Reward</div><div class="coach-value">{risk_reward_label}</div></div>
                 <div class="coach-metric"><div class="coach-label">Target 2</div><div class="coach-value">{target_2}</div></div>
                 <div class="coach-metric"><div class="coach-label">Target 3</div><div class="coach-value">{target_3}</div></div>
-                <div class="coach-metric"><div class="coach-label">Live Guide</div><div class="coach-value">{escape(coach["action"])}</div></div>
+                <div class="coach-metric"><div class="coach-label">Guide Action</div><div class="coach-value">{escape(coach["action"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Exit Score</div><div class="coach-value">{coach["exit_score"]}/100</div></div>
-                <div class="coach-metric"><div class="coach-label">Liquidity</div><div class="coach-value">{escape(liquidity["label"])}</div></div>
+                <div class="coach-metric"><div class="coach-label">Stock Liquidity</div><div class="coach-value">{escape(liquidity["label"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Sector</div><div class="coach-value">{escape(sector["status"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Option Chain</div><div class="coach-value">{escape(option_liquidity.get("label", "N/A"))}</div></div>
             </div>
@@ -1551,7 +1567,7 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
             <div class="notice"><strong>Liquidity: {escape(liquidity["label"])}</strong><br>{escape(liquidity["detail"])}</div>
             {option_liquidity_notice}
             <div class="notice"><strong>Live Read: {escape(momentum["label"])}</strong><br>{escape(momentum["detail"])}</div>
-            <div class="notice"><strong>Chase Risk: {escape(chase["label"])}</strong><br>{escape(chase["reason"])}<br>{escape(confidence_note)}</div>
+            <div class="notice"><strong>Entry Risk: {escape(chase["label"])}</strong><br>{escape(chase["reason"])}<br>{escape(confidence_note)}</div>
             <div class="content-kicker">Why?</div>
             <ul class="why-list">{reasons_html}</ul>
             <div class="content-kicker">Exit / Reversal Watch</div>
@@ -1773,12 +1789,35 @@ def render_live_trade_coach(latest_results, high_score_history=None):
     display_rows = active_rows or rows[:8]
     display_df = pd.DataFrame(display_rows)
     display_df["Price"] = pd.to_numeric(display_df["Price"], errors="coerce").round(2)
+    display_df["Time"] = display_df["Time"].apply(short_time)
     display_df = display_df.rename(columns={"Coach Summary": "Guide Summary"})
+
+    with st.expander("Guide Key"):
+        key_rows = [
+            {
+                "Field": "Guide Action",
+                "What it means": "The next practical step: enter, watch, wait, manage, or avoid.",
+            },
+            {
+                "Field": "Entry Risk",
+                "What it means": "How risky the current entry location is. High means the idea may be valid, but price is too extended to chase.",
+            },
+            {
+                "Field": "Exit Score",
+                "What it means": "Reversal/weakness risk after an idea is active. Higher means more caution.",
+            },
+            {
+                "Field": "Live Read",
+                "What it means": "Whether momentum is improving, fading, or holding based on recent scanner reads.",
+            },
+        ]
+        st.dataframe(pd.DataFrame(key_rows), use_container_width=True, hide_index=True)
 
     st.dataframe(
         display_df[
             [
                 "Symbol",
+                "Time",
                 "Action",
                 "Bias",
                 "Score",
@@ -1790,7 +1829,7 @@ def render_live_trade_coach(latest_results, high_score_history=None):
                 "Next Step",
                 "Exit Score",
                 "Exit Label",
-                "Chase Risk",
+                "Entry Risk",
                 "Live Read",
                 "Missing",
                 "Risk Note",
@@ -1802,9 +1841,9 @@ def render_live_trade_coach(latest_results, high_score_history=None):
 
     with st.expander("Guide Details"):
         for row in display_rows[:6]:
-            st.markdown(f"**{row['Symbol']} - {row['Action']} ({row['Score']}/100)**")
+            st.markdown(f"**{row['Symbol']} - {row['Action']} ({row['Score']}/100, as of {short_time(row.get('Time'))})**")
             st.write(f"Exit Score: {row['Exit Score']}/100 - {row['Exit Label']}")
-            st.write(f"Chase Risk: {row['Chase Risk']}")
+            st.write(f"Entry Risk: {row['Entry Risk']}")
             st.write(f"Live Read: {row['Live Read']} - {row['Live Detail']}")
             st.write(f"Missing: {row['Missing']}")
             st.write(row["Coach Summary"])
@@ -1824,7 +1863,7 @@ def render_market_snapshot(latest_results):
         setup_value = f'{top_setup["Symbol"]} {top_setup["Grade"]}'
         setup_detail = (
             f'{top_setup["Bias"]} | Quality {top_setup["Quality Score"]}/100 | '
-            f'{top_setup["Chase Risk"]} chase risk'
+            f'Entry risk: {top_setup["Entry Risk"]}'
         )
 
     sector_value = "Sector data pending"
@@ -1957,7 +1996,7 @@ def render_beacon_board(latest_results, high_score_history=None):
     bearish_rows = opportunity_rows(latest_results, "Bearish", limit=5)
     risk_rows = [
         row for row in coach_queue
-        if row["Chase Risk"] == "High" or int(row.get("Exit Score") or 0) >= 55
+        if row["Entry Risk"] == "High" or int(row.get("Exit Score") or 0) >= 55
     ][:6]
 
     market_tiles = ""
@@ -1981,9 +2020,9 @@ def render_beacon_board(latest_results, high_score_history=None):
             '<div class="board-row">'
             f'<div class="board-symbol">{escape(row["Symbol"])}</div>'
             f'<div><div class="board-main {action_color}">{escape(row["Action"])}</div>'
-            f'<div class="board-sub">{escape(row["Live Read"])} | {escape(row["Timing"])}</div></div>'
+            f'<div class="board-sub">{escape(row["Live Read"])} | {escape(row["Timing"])} | {escape(short_time(row.get("Time")))}</div></div>'
             f'<div class="board-number">{escape(str(row["Score"]))}</div>'
-            f'<div class="board-sub">{escape(row["Chase Risk"])} chase<br>Exit {escape(str(row["Exit Score"]))}</div>'
+            f'<div class="board-sub">Entry risk: {escape(row["Entry Risk"])}<br>Exit {escape(str(row["Exit Score"]))}</div>'
             '</div>'
         )
     if not coach_html:
@@ -2006,17 +2045,17 @@ def render_beacon_board(latest_results, high_score_history=None):
 
     risk_html = ""
     for row in risk_rows:
-        risk_color = board_color_class(row["Chase Risk"])
+        risk_color = board_color_class(row["Entry Risk"])
         risk_html += (
             '<div class="board-row board-row-compact">'
             f'<div class="board-symbol">{escape(row["Symbol"])}</div>'
-            f'<div><div class="board-main {risk_color}">{escape(row["Chase Risk"])} chase</div>'
-            f'<div class="board-sub">{escape(row["Exit Label"])} | {escape(row["Action"])}</div></div>'
+            f'<div><div class="board-main {risk_color}">Entry risk: {escape(row["Entry Risk"])}</div>'
+            f'<div class="board-sub">{escape(row["Exit Label"])} | {escape(row["Action"])} | {escape(short_time(row.get("Time")))}</div></div>'
             f'<div class="board-number">{escape(str(row["Exit Score"]))}</div>'
             '</div>'
         )
     if not risk_html:
-        risk_html = '<div class="board-note">No high chase-risk or elevated exit-score warnings.</div>'
+        risk_html = '<div class="board-note">No high entry-risk or elevated exit-score warnings.</div>'
 
     alert_html = ""
     if not alerts.empty:
@@ -2047,7 +2086,7 @@ def render_beacon_board(latest_results, high_score_history=None):
                 <div class="board-body">{coach_html}</div>
             </div>
             <div class="board-panel">
-                <div class="board-header"><span>Risk Watch</span><span>Exit / chase</span></div>
+                <div class="board-header"><span>Risk Watch</span><span>Entry / Exit</span></div>
                 <div class="board-body">{risk_html}</div>
             </div>
             <div class="board-panel">
@@ -2089,7 +2128,7 @@ def render_live_coach_alerts():
             "live_read": "Live Read",
             "exit_score": "Exit Score",
             "exit_label": "Exit Label",
-            "chase_risk": "Chase Risk",
+            "chase_risk": "Entry Risk",
             "headline": "Headline",
             "next_step": "Next Step",
             "reason": "Reason",
@@ -2104,7 +2143,7 @@ def render_live_coach_alerts():
                 "Live Read",
                 "Score",
                 "Exit Score",
-                "Chase Risk",
+                "Entry Risk",
                 "Headline",
                 "Next Step",
                 "Reason",
@@ -2154,7 +2193,7 @@ def render_coach_timeline():
             "live_read": "Live Read",
             "exit_score": "Exit Score",
             "exit_label": "Exit Label",
-            "chase_risk": "Chase Risk",
+            "chase_risk": "Entry Risk",
             "next_step": "Next Step",
             "reason": "Reason",
         }
@@ -2168,7 +2207,7 @@ def render_coach_timeline():
                 "Bias",
                 "Score",
                 "Exit Score",
-                "Chase Risk",
+                "Entry Risk",
                 "Next Step",
                 "Reason",
             ]
@@ -2267,9 +2306,9 @@ def render_signal_card(symbol, result):
         coach = coach_live_setup(result)
         if coach["action"] != "Wait":
             st.markdown(
-                f'<div class="notice"><strong>Live Guide: {escape(coach["action"])}</strong><br>'
+                f'<div class="notice"><strong>Guide Action: {escape(coach["action"])} | As of {escape(short_time(result.get("timestamp")))}</strong><br>'
                 f'{escape(coach["summary"])}<br>{escape(coach["next_step"])}<br>'
-                f'Exit Score: {coach["exit_score"]}/100 - {escape(coach["exit_label"])}</div>',
+                f'Entry Risk: {escape(coach["chase_risk"])} | Exit Score: {coach["exit_score"]}/100 - {escape(coach["exit_label"])}</div>',
                 unsafe_allow_html=True,
             )
 

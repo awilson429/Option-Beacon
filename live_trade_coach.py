@@ -303,6 +303,7 @@ def coach_rows(latest_results, min_score=80, history=None):
         rows.append(
             {
                 "Symbol": symbol,
+                "Time": (result or {}).get("timestamp", ""),
                 "Action": coach["action"],
                 "Bias": (result or {}).get("bias", "Neutral"),
                 "Score": coach["priority"],
@@ -314,7 +315,7 @@ def coach_rows(latest_results, min_score=80, history=None):
                 "Next Step": coach["next_step"],
                 "Exit Score": coach["exit_score"],
                 "Exit Label": coach["exit_label"],
-                "Chase Risk": coach["chase_risk"],
+                "Entry Risk": coach["chase_risk"],
                 "Live Read": momentum["label"],
                 "Live Detail": momentum["detail"],
                 "Missing": ", ".join(coach["missing_confirmations"]) or "None",
