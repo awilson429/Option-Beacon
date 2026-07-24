@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import time
 from html import escape
 from textwrap import dedent
@@ -47,6 +48,7 @@ from trade_journal import (
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
 from signal_outcomes import load_signal_outcomes, summarize_outcomes
+from tradier_options import tradier_configured
 from trade_management import coach_recommendation, trade_summary
 from trade_replay import (
     DEFAULT_MAX_HOLD_CANDLES,
@@ -683,6 +685,54 @@ def configure_page():
             background: rgba(255, 255, 255, 0.035);
         }
 
+        .health-grid {
+            display: grid;
+            gap: 0.7rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin-bottom: 0.9rem;
+        }
+
+        .health-card {
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 8px;
+            min-height: 6.1rem;
+            padding: 0.75rem;
+        }
+
+        .health-label {
+            color: var(--ob-muted);
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .health-state {
+            font-size: 1.05rem;
+            font-weight: 850;
+            margin-top: 0.25rem;
+        }
+
+        .health-detail {
+            color: var(--ob-muted);
+            font-size: 0.78rem;
+            line-height: 1.25;
+            margin-top: 0.25rem;
+        }
+
+        .health-good {
+            color: var(--ob-green);
+        }
+
+        .health-warn {
+            color: var(--ob-gold);
+        }
+
+        .health-bad {
+            color: var(--ob-red);
+        }
+
         .empty-state {
             background: rgba(255, 255, 255, 0.035);
             border: 1px dashed var(--ob-border-strong);
@@ -1297,7 +1347,8 @@ def configure_page():
             }
 
             .coach-grid,
-            .factor-list {
+            .factor-list,
+            .health-grid {
                 grid-template-columns: 1fr 1fr;
             }
 
@@ -1350,6 +1401,10 @@ def configure_page():
             .brand-logo {
                 width: 72px;
                 height: 72px;
+            }
+
+            .health-grid {
+                grid-template-columns: 1fr;
             }
         }
         </style>
@@ -1449,6 +1504,25 @@ def render_section_header(title, kicker=None):
 
 def render_empty_state(message):
     st.markdown(f'<div class="empty-state">{message}</div>', unsafe_allow_html=True)
+
+
+def secret_configured(name):
+    if os.getenv(name):
+        return True
+    try:
+        return bool(st.secrets.get(name))
+    except Exception:
+        return False
+
+
+def health_card(label, state, detail, level="warn"):
+    return (
+        '<div class="health-card">'
+        f'<div class="health-label">{escape(label)}</div>'
+        f'<div class="health-state health-{escape(level)}">{escape(state)}</div>'
+        f'<div class="health-detail">{escape(detail)}</div>'
+        '</div>'
+    )
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -3090,6 +3164,96 @@ def render_current_scanner(latest_results, symbol_groups):
                     render_signal_card(symbol, latest_results.get(symbol))
 
 
+def render_scanner_health(latest_results, snapshot_time, symbol_groups):
+    render_section_header(
+        "Scanner Health",
+        "Quick check of data freshness and connected services",
+    )
+
+    total_symbols = len(latest_results)
+    unavailable_count = sum(
+        1 for result in latest_results.values()
+        if (result or {}).get("signal") == "DATA UNAVAILABLE"
+    )
+    available_count = max(0, total_symbols - unavailable_count)
+    price_level = "good" if available_count else "bad"
+    price_state = "Working" if available_count else "No scanner data"
+    price_detail = (
+        f"{available_count} of {total_symbols} symbols have current scanner reads."
+        if total_symbols
+        else "No symbols are loaded yet."
+    )
+
+    if snapshot_time is not None:
+        snapshot_timestamp = pd.Timestamp(snapshot_time)
+        if snapshot_timestamp.tzinfo is None:
+            snapshot_timestamp = snapshot_timestamp.tz_localize("America/New_York")
+        else:
+            snapshot_timestamp = snapshot_timestamp.tz_convert("America/New_York")
+        age_minutes = max(
+            0,
+            int((pd.Timestamp.now(tz="America/New_York") - snapshot_timestamp).total_seconds() // 60),
+        )
+        scan_level = "good" if age_minutes <= 15 else "warn"
+        scan_state = "Fresh" if age_minutes <= 15 else "Stale"
+        scan_detail = f"Latest scheduled scan: {scan_stamp(snapshot_timestamp)} ({age_minutes} min old)."
+    else:
+        scan_level = "warn"
+        scan_state = "Local fallback"
+        scan_detail = "No scanner-data snapshot was loaded; the app is using direct local reads."
+
+    finnhub_configured = secret_configured("FINNHUB_API_KEY")
+    finnhub_state = "Configured" if finnhub_configured else "Missing"
+    finnhub_detail = (
+        f"Universe groups loaded: {len(symbol_groups)}."
+        if finnhub_configured
+        else "Add FINNHUB_API_KEY to expand movers, news, and after-hours context."
+    )
+
+    tradier_ready = tradier_configured()
+    tradier_state = "Configured" if tradier_ready else "Optional"
+    tradier_detail = (
+        "Options liquidity can enrich setup quality when Tradier returns chain data."
+        if tradier_ready
+        else "Tradier is not required; the scanner will keep using stock/ETF data."
+    )
+
+    database_configured = secret_configured("DATABASE_URL")
+    database_state = "Configured" if database_configured else "Local only"
+    database_detail = (
+        "Saved trade storage is pointed at the external database."
+        if database_configured
+        else "Saved trade data uses local app storage unless DATABASE_URL is added."
+    )
+
+    cards = [
+        health_card("Price Data", price_state, price_detail, price_level),
+        health_card("Scheduled Scan", scan_state, scan_detail, scan_level),
+        health_card(
+            "Finnhub",
+            finnhub_state,
+            finnhub_detail,
+            "good" if finnhub_configured else "warn",
+        ),
+        health_card(
+            "Tradier Options",
+            tradier_state,
+            tradier_detail,
+            "good" if tradier_ready else "warn",
+        ),
+        health_card(
+            "Database",
+            database_state,
+            database_detail,
+            "good" if database_configured else "warn",
+        ),
+    ]
+    st.markdown(
+        f'<div class="health-grid">{"".join(cards)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_recent_high_scores(history):
     render_section_header(
         "Recent High Scores", f"Neutral log of scores at {HIGH_SCORE_THRESHOLD} or higher"
@@ -3138,8 +3302,32 @@ def render_signal_outcomes():
 
     outcomes = load_signal_outcomes()
     if len(outcomes) == 0:
-        render_empty_state(
-            "No outcome data yet. The scheduled scanner will begin tracking setups during market hours."
+        st.markdown(
+            """
+            <div class="notice notice-info">
+                <strong>Waiting on the first tracked setups.</strong><br>
+                During market hours, Option Beacon will log qualifying guide ideas, then check whether price followed through after 15, 30, and 60 minutes.
+                This section will become the app's feedback loop: which tickers worked, which guide states were reliable, and which reads stalled.
+            </div>
+            <div class="health-grid">
+                <div class="health-card">
+                    <div class="health-label">15 Minute Read</div>
+                    <div class="health-state health-warn">Early reaction</div>
+                    <div class="health-detail">Shows whether the setup reacted quickly or immediately faded.</div>
+                </div>
+                <div class="health-card">
+                    <div class="health-label">30 Minute Read</div>
+                    <div class="health-state health-warn">Primary scorecard</div>
+                    <div class="health-detail">Used for win rate and average move because it balances speed with follow-through.</div>
+                </div>
+                <div class="health-card">
+                    <div class="health-label">60 Minute Read</div>
+                    <div class="health-state health-warn">Follow-through</div>
+                    <div class="health-detail">Shows whether the idea kept working or started reversing after the initial move.</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
         return
 
@@ -3155,6 +3343,14 @@ def render_signal_outcomes():
         "Avg 30m Move",
         f'{summary["avg_return"]:.2f}%' if summary["avg_return"] is not None else "Pending",
     )
+
+    if summary["completed"] == 0:
+        st.markdown(
+            '<div class="notice notice-info"><strong>Tracking is active.</strong><br>'
+            'Rows are being collected, but none are old enough for a 30-minute read yet. '
+            'Once a setup has aged past 30 minutes, the win-rate and average-move metrics will populate.</div>',
+            unsafe_allow_html=True,
+        )
 
     recent = outcomes.copy().tail(75).sort_index(ascending=False)
     recent = recent.rename(
@@ -3221,7 +3417,7 @@ def main():
     require_app_access()
     render_header()
 
-    latest_results, high_score_history, _, symbol_groups = scan_symbols()
+    latest_results, high_score_history, snapshot_time, symbol_groups = scan_symbols()
 
     live_tab, after_hours_tab, opportunities_tab, history_tab, tools_tab = st.tabs(
         ["Live Guide", "After Hours", "Opportunities", "History", "Tools"]
@@ -3258,6 +3454,8 @@ def main():
         render_trade_journal()
 
     with tools_tab:
+        render_scanner_health(latest_results, snapshot_time, symbol_groups)
+        st.divider()
         render_trade_replay_backtest()
         st.divider()
         render_score_guide()
