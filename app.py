@@ -318,6 +318,21 @@ def short_time(value):
         return str(value)
 
 
+def scan_stamp(value):
+    if value in [None, ""]:
+        return eastern_now().strftime("%m/%d/%Y %I:%M %p ET").lstrip("0")
+
+    try:
+        timestamp = pd.Timestamp(value)
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.tz_localize("America/New_York")
+        else:
+            timestamp = timestamp.tz_convert("America/New_York")
+        return timestamp.strftime("%m/%d/%Y %I:%M %p ET").lstrip("0")
+    except Exception:
+        return str(value)
+
+
 def compact_callout_label(*parts):
     labels = []
     for part in parts:
@@ -1502,7 +1517,7 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
     plan = result.get("trade_plan") or {}
     score = row["score"]
     direction = result.get("bias", "Neutral")
-    as_of = short_time(result.get("timestamp"))
+    last_scan = scan_stamp(result.get("timestamp"))
     coach = coach_live_setup(result)
     chase = chase_risk(result)
     sector = setup_sector_support(result, latest_results)
@@ -1570,7 +1585,7 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
             <div class="coach-card-header">
                 <div>
                     <div class="coach-symbol security-symbol">{escape(row["symbol"])}</div>
-                    <div class="content-kicker">{escape(direction)} {escape(contract)} idea | As of {escape(as_of)}</div>
+                    <div class="content-kicker">{escape(direction)} {escape(contract)} idea | Last scan {escape(last_scan)}</div>
                 </div>
                 <div class="coach-grade">
                     Quality: {escape(quality["grade"])}<br>
@@ -1861,7 +1876,7 @@ def render_live_trade_coach(latest_results, high_score_history=None):
 
     with st.expander("Guide Details"):
         for row in display_rows[:6]:
-            st.markdown(f"**{row['Symbol']} - {row['Action']} ({row['Score']}/100, as of {short_time(row.get('Time'))})**")
+            st.markdown(f"**{row['Symbol']} - {row['Action']} ({row['Score']}/100, last scan {scan_stamp(row.get('Time'))})**")
             st.write(f"Exit Score: {row['Exit Score']}/100 - {row['Exit Label']}")
             st.write(f"Entry Risk: {row['Entry Risk']}")
             st.write(f"Live Read: {row['Live Read']} - {row['Live Detail']}")
@@ -2040,7 +2055,7 @@ def render_beacon_board(latest_results, high_score_history=None):
             '<div class="board-row">'
             f'<div class="board-symbol security-symbol">{escape(row["Symbol"])}</div>'
             f'<div><div class="board-main {action_color}">{escape(row["Action"])}</div>'
-            f'<div class="board-sub">{escape(row["Live Read"])} | {escape(row["Timing"])} | {escape(short_time(row.get("Time")))}</div></div>'
+            f'<div class="board-sub">{escape(row["Live Read"])} | {escape(row["Timing"])} | {escape(scan_stamp(row.get("Time")))}</div></div>'
             f'<div class="board-number">{escape(str(row["Score"]))}</div>'
             f'<div class="board-sub">Entry risk: {escape(row["Entry Risk"])}<br>Exit {escape(str(row["Exit Score"]))}</div>'
             '</div>'
@@ -2074,7 +2089,7 @@ def render_beacon_board(latest_results, high_score_history=None):
             '<div class="board-row board-row-compact">'
             f'<div class="board-symbol security-symbol">{escape(row["Symbol"])}</div>'
             f'<div><div class="board-main {risk_color}">Entry risk: {escape(row["Entry Risk"])}</div>'
-            f'<div class="board-sub">{escape(row["Exit Label"])} | {escape(row["Action"])} | {escape(short_time(row.get("Time")))}</div></div>'
+            f'<div class="board-sub">{escape(row["Exit Label"])} | {escape(row["Action"])} | {escape(scan_stamp(row.get("Time")))}</div></div>'
             f'<div class="board-number">{escape(str(row["Exit Score"]))}</div>'
             '</div>'
         )
@@ -2330,7 +2345,7 @@ def render_signal_card(symbol, result):
         coach = coach_live_setup(result)
         if coach["action"] != "Wait":
             st.markdown(
-                f'<div class="notice"><strong>Guide Action: {escape(coach["action"])} | As of {escape(short_time(result.get("timestamp")))}</strong><br>'
+                f'<div class="notice"><strong>Guide Action: {escape(coach["action"])} | Last scan {escape(scan_stamp(result.get("timestamp")))}</strong><br>'
                 f'{escape(coach["summary"])}<br>{escape(coach["next_step"])}<br>'
                 f'Entry Risk: {escape(coach["chase_risk"])} | Exit Score: {coach["exit_score"]}/100 - {escape(coach["exit_label"])}</div>',
                 unsafe_allow_html=True,
