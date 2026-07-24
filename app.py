@@ -1,6 +1,7 @@
 import json
 from datetime import time
 from html import escape
+from textwrap import dedent
 
 import pandas as pd
 import streamlit as st
@@ -1546,17 +1547,32 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
     risk_reward_label = f"{risk_reward}:1" if risk_reward else "N/A"
     contract = coach.get("contract", "N/A")
     option_contract = option_liquidity.get("contract") or "N/A"
-    option_liquidity_notice = ""
+    option_liquidity_notice = []
     if option_liquidity.get("available"):
-        option_liquidity_notice = (
+        option_liquidity_notice.append(
             f'<div class="notice"><strong>Option Chain: {escape(option_liquidity.get("label", "Available"))}</strong><br>'
             f'{escape(option_liquidity.get("detail", ""))}<br>'
             f'Contract: {escape(option_contract)} | Strike: {money(option_liquidity.get("strike"))} | '
             f'Expiration: {escape(str(option_liquidity.get("expiration", "N/A")))}</div>'
         )
 
+    card_sections = [
+        f'<div class="notice notice-info"><strong>Why this is here</strong><br>{escape(quality_note)}</div>',
+        f'<div class="notice notice-info"><strong>What should I do next?</strong><br>{escape(coach["summary"])} {escape(coach["next_step"])}</div>',
+        f'<div class="notice"><strong>Sector Support: {escape(sector["status"])}</strong><br>{escape(sector["detail"])}</div>',
+        f'<div class="notice"><strong>Liquidity: {escape(liquidity["label"])}</strong><br>{escape(liquidity["detail"])}</div>',
+        *option_liquidity_notice,
+        f'<div class="notice"><strong>Live Read: {escape(momentum["label"])}</strong><br>{escape(momentum["detail"])}</div>',
+        f'<div class="notice"><strong>Entry Risk: {escape(chase["label"])}</strong><br>{escape(chase["reason"])}<br>{escape(confidence_note)}</div>',
+        '<div class="content-kicker">Why?</div>',
+        f'<ul class="why-list">{reasons_html}</ul>',
+        '<div class="content-kicker">Exit / Reversal Watch</div>',
+        f'<ul class="why-list">{exit_reasons_html}</ul>',
+    ]
+    card_detail_html = "".join(card_sections)
+
     st.markdown(
-        f"""
+        dedent(f"""
         <div class="coach-card">
             <div class="coach-card-header">
                 <div>
@@ -1582,19 +1598,9 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
                 <div class="coach-metric"><div class="coach-label">Sector</div><div class="coach-value">{escape(sector["status"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Option Chain</div><div class="coach-value">{escape(option_liquidity.get("label", "N/A"))}</div></div>
             </div>
-            <div class="notice notice-info"><strong>Why this is here</strong><br>{escape(quality_note)}</div>
-            <div class="notice notice-info"><strong>What should I do next?</strong><br>{escape(coach["summary"])} {escape(coach["next_step"])}</div>
-            <div class="notice"><strong>Sector Support: {escape(sector["status"])}</strong><br>{escape(sector["detail"])}</div>
-            <div class="notice"><strong>Liquidity: {escape(liquidity["label"])}</strong><br>{escape(liquidity["detail"])}</div>
-            {option_liquidity_notice}
-            <div class="notice"><strong>Live Read: {escape(momentum["label"])}</strong><br>{escape(momentum["detail"])}</div>
-            <div class="notice"><strong>Entry Risk: {escape(chase["label"])}</strong><br>{escape(chase["reason"])}<br>{escape(confidence_note)}</div>
-            <div class="content-kicker">Why?</div>
-            <ul class="why-list">{reasons_html}</ul>
-            <div class="content-kicker">Exit / Reversal Watch</div>
-            <ul class="why-list">{exit_reasons_html}</ul>
+            {card_detail_html}
         </div>
-        """,
+        """).strip(),
         unsafe_allow_html=True,
     )
 
