@@ -334,15 +334,6 @@ def scan_stamp(value):
         return str(value)
 
 
-def compact_callout_label(*parts):
-    labels = []
-    for part in parts:
-        text = str(part or "").strip()
-        if text:
-            labels.append(text.upper())
-    return " / ".join(labels) if labels else "WAIT"
-
-
 def factor_status(result, direction, latest_results=None):
     latest_results = latest_results or {}
     trend = score_value(result, "trend_score")
@@ -951,7 +942,7 @@ def configure_page():
         }
 
         .board-panel {
-            background: #070707;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(0, 0, 0, 0.05)), #070707;
             border: 1px solid rgba(255, 255, 255, 0.16);
             border-radius: 8px;
             min-height: 10rem;
@@ -981,17 +972,17 @@ def configure_page():
         }
 
         .board-body {
-            padding: 0.55rem 0.7rem;
+            padding: 0.6rem 0.7rem;
         }
 
         .board-row {
             align-items: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.075);
             display: grid;
-            gap: 0.5rem;
-            grid-template-columns: 0.7fr 1.05fr 0.6fr 0.8fr;
-            min-height: 2.35rem;
-            padding: 0.35rem 0;
+            gap: 0.75rem;
+            grid-template-columns: minmax(4rem, 0.62fr) minmax(0, 1.55fr) minmax(2.25rem, 0.28fr);
+            min-height: 4.15rem;
+            padding: 0.55rem 0;
         }
 
         .board-row:last-child {
@@ -999,40 +990,88 @@ def configure_page():
         }
 
         .board-row-compact {
-            grid-template-columns: 0.7fr 1fr 0.55fr;
+            min-height: 4.15rem;
         }
 
         .board-symbol {
-            font-size: 1.08rem;
+            font-size: clamp(1rem, 1.2vw, 1.35rem);
+            line-height: 1;
         }
 
         .board-main {
             color: var(--ob-text);
-            font-size: 0.93rem;
+            font-size: 0.92rem;
             font-weight: 700;
-            line-height: 1.15;
+            line-height: 1.12;
+            text-transform: none;
         }
 
         .board-callout {
+            align-items: center;
             color: var(--ob-text);
-            font-size: 0.84rem;
+            display: flex;
+            flex-wrap: wrap;
+            font-size: clamp(0.78rem, 0.85vw, 0.94rem);
             font-weight: 900;
-            letter-spacing: 0.06em;
-            line-height: 1.15;
+            gap: 0.28rem 0.42rem;
+            letter-spacing: 0.05em;
+            line-height: 1.08;
             text-transform: uppercase;
+            overflow-wrap: anywhere;
+        }
+
+        .board-callout-chip {
+            white-space: nowrap;
+        }
+
+        .board-callout-muted {
+            color: var(--ob-muted);
+            white-space: nowrap;
         }
 
         .board-sub {
             color: var(--ob-muted);
-            font-size: 0.78rem;
-            line-height: 1.15;
+            font-size: 0.76rem;
+            line-height: 1.25;
+            margin-top: 0.16rem;
+        }
+
+        .board-meta {
+            color: var(--ob-muted);
+            display: flex;
+            flex-wrap: wrap;
+            font-size: 0.76rem;
+            gap: 0.18rem 0.45rem;
+            line-height: 1.2;
+            margin-top: 0.18rem;
+        }
+
+        .board-meta span {
+            white-space: nowrap;
+        }
+
+        .board-score {
+            align-items: flex-end;
+            display: flex;
+            flex-direction: column;
+            gap: 0.12rem;
+            justify-self: end;
+            text-align: right;
         }
 
         .board-number {
             color: var(--ob-gold);
-            font-size: 1rem;
+            font-size: 1.04rem;
             font-weight: 800;
-            text-align: right;
+            line-height: 1;
+        }
+
+        .board-score-label {
+            color: var(--ob-muted);
+            font-size: 0.62rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
 
         .board-green {
@@ -1282,6 +1321,10 @@ def configure_page():
             .board-panel-wide,
             .board-panel-full {
                 grid-column: auto;
+            }
+
+            .board-row {
+                grid-template-columns: minmax(4.25rem, 0.7fr) minmax(0, 1.45fr) minmax(2rem, 0.25fr);
             }
 
             .board-strip {
@@ -2056,9 +2099,10 @@ def render_beacon_board(latest_results, high_score_history=None):
             '<div class="board-row">'
             f'<div class="board-symbol security-symbol">{escape(row["Symbol"])}</div>'
             f'<div><div class="board-main {action_color}">{escape(row["Action"])}</div>'
-            f'<div class="board-sub">{escape(row["Live Read"])} | {escape(row["Timing"])} | {escape(scan_stamp(row.get("Time")))}</div></div>'
-            f'<div class="board-number">{escape(str(row["Score"]))}</div>'
-            f'<div class="board-sub">Entry risk: {escape(row["Entry Risk"])}<br>Exit {escape(str(row["Exit Score"]))}</div>'
+            f'<div class="board-meta"><span>{escape(row["Live Read"])}</span><span>{escape(row["Timing"])}</span>'
+            f'<span>{escape(scan_stamp(row.get("Time")))}</span></div>'
+            f'<div class="board-sub">Entry risk: {escape(row["Entry Risk"])} | Exit {escape(str(row["Exit Score"]))}</div></div>'
+            f'<div class="board-score"><div class="board-number">{escape(str(row["Score"]))}</div><div class="board-score-label">Score</div></div>'
             '</div>'
         )
     if not coach_html:
@@ -2069,16 +2113,15 @@ def render_beacon_board(latest_results, high_score_history=None):
         for row in rows:
             result = row["result"]
             plan = result.get("trade_plan") or {}
-            callout = compact_callout_label(
-                result.get("bias", "Neutral"),
-                result.get("entry_timing", "Wait"),
-            )
+            bias_label = str(result.get("bias", "Neutral")).upper()
+            timing_label = str(result.get("entry_timing", "Wait")).upper()
             html += (
                 '<div class="board-row board-row-compact">'
                 f'<div class="board-symbol security-symbol">{escape(row["symbol"])}</div>'
-                f'<div><div class="board-callout">{escape(callout)}</div>'
+                f'<div><div class="board-callout"><span class="board-callout-chip">{escape(bias_label)}</span>'
+                f'<span class="board-callout-muted">{escape(timing_label)}</span></div>'
                 f'<div class="board-sub">Entry {money(plan_value(plan, "trigger_price", result.get("entry")))} | Stop {money(plan_value(plan, "technical_stop", result.get("stop")))}</div></div>'
-                f'<div class="board-number">{escape(str(row["score"]))}</div>'
+                f'<div class="board-score"><div class="board-number">{escape(str(row["score"]))}</div><div class="board-score-label">Score</div></div>'
                 '</div>'
             )
         return html or '<div class="board-note">No scored setups yet.</div>'
@@ -2090,8 +2133,9 @@ def render_beacon_board(latest_results, high_score_history=None):
             '<div class="board-row board-row-compact">'
             f'<div class="board-symbol security-symbol">{escape(row["Symbol"])}</div>'
             f'<div><div class="board-main {risk_color}">Entry risk: {escape(row["Entry Risk"])}</div>'
-            f'<div class="board-sub">{escape(row["Exit Label"])} | {escape(row["Action"])} | {escape(scan_stamp(row.get("Time")))}</div></div>'
-            f'<div class="board-number">{escape(str(row["Exit Score"]))}</div>'
+            f'<div class="board-meta"><span>{escape(row["Exit Label"])}</span><span>{escape(row["Action"])}</span>'
+            f'<span>{escape(scan_stamp(row.get("Time")))}</span></div></div>'
+            f'<div class="board-score"><div class="board-number">{escape(str(row["Exit Score"]))}</div><div class="board-score-label">Exit</div></div>'
             '</div>'
         )
     if not risk_html:
@@ -2104,8 +2148,9 @@ def render_beacon_board(latest_results, high_score_history=None):
                 '<div class="board-row board-row-compact">'
                 f'<div class="board-symbol security-symbol">{escape(str(alert.get("symbol", "")))}</div>'
                 f'<div><div class="board-main">{escape(str(alert.get("action", "")))}</div>'
-                f'<div class="board-sub">{escape(str(alert.get("live_read", "")))} | {escape(str(alert.get("timestamp", "")))}</div></div>'
-                f'<div class="board-number">{escape(str(alert.get("score", "")))}</div>'
+                f'<div class="board-meta"><span>{escape(str(alert.get("live_read", "")))}</span>'
+                f'<span>{escape(str(alert.get("timestamp", "")))}</span></div></div>'
+                f'<div class="board-score"><div class="board-number">{escape(str(alert.get("score", "")))}</div><div class="board-score-label">Score</div></div>'
                 '</div>'
             )
     if not alert_html:
