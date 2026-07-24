@@ -46,6 +46,8 @@ jobs:
         env:
           OPTION_BEACON_TEST_ALERT: ${{ inputs.send_test_alert }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          TRADIER_ACCESS_TOKEN: ${{ secrets.TRADIER_ACCESS_TOKEN }}
+          TRADIER_API_BASE_URL: ${{ secrets.TRADIER_API_BASE_URL }}
           OPTION_BEACON_TOP_MOVER_COUNT: ${{ secrets.OPTION_BEACON_TOP_MOVER_COUNT }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 

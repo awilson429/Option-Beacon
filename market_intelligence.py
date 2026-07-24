@@ -176,6 +176,7 @@ def liquidity_quality(result):
     volume = _number(result.get("volume"))
     avg_volume = _number(result.get("avg_volume"))
     relative_volume = _number(result.get("relative_volume"))
+    option_liquidity = result.get("option_liquidity") or {}
 
     score = 0
     reasons = []
@@ -224,6 +225,18 @@ def liquidity_quality(result):
         reasons.append("normal relative volume")
     else:
         reasons.append("relative volume is light")
+
+    if option_liquidity.get("available"):
+        option_score = _number(option_liquidity.get("score"))
+        score = round(score * 0.6 + option_score * 0.4)
+        reasons.insert(
+            0,
+            (
+                f"options {str(option_liquidity.get('label', 'available')).lower()} "
+                f"({option_liquidity.get('volume', 0):,} volume, "
+                f"{option_liquidity.get('open_interest', 0):,} OI)"
+            ),
+        )
 
     score = min(score, 100)
     if score >= 80:

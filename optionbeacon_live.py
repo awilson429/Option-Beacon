@@ -11,6 +11,7 @@ from finnhub_universe import (
 )
 from optionbeacon_strategy import score_candle
 from trade_planning import enrich_with_trade_plan
+from tradier_options import enrich_with_option_liquidity
 
 ETF_SYMBOLS = DEFAULT_ETF_SYMBOLS
 STOCK_SYMBOLS = DEFAULT_STOCK_SYMBOLS
@@ -105,6 +106,7 @@ def generate_signal(symbol):
     i = len(df) - 1
     result = score_candle(df, i, symbol)
     result = enrich_with_trade_plan(result)
+    result = enrich_with_option_liquidity(result)
     result["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return result
 

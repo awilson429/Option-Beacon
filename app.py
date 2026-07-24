@@ -1477,6 +1477,7 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
     sector = setup_sector_support(result, latest_results)
     quality = setup_quality(result, latest_results)
     liquidity = liquidity_quality(result)
+    option_liquidity = result.get("option_liquidity") or {}
     quality_note = setup_quality_summary(result, latest_results)
     confidence_note = confidence_explanation(result, latest_results)
     momentum = setup_momentum_snapshot(result, high_score_history)
@@ -1507,6 +1508,15 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
     risk_reward = plan.get("risk_reward")
     risk_reward_label = f"{risk_reward}:1" if risk_reward else "N/A"
     contract = coach.get("contract", "N/A")
+    option_contract = option_liquidity.get("contract") or "N/A"
+    option_liquidity_notice = ""
+    if option_liquidity.get("available"):
+        option_liquidity_notice = (
+            f'<div class="notice"><strong>Option Chain: {escape(option_liquidity.get("label", "Available"))}</strong><br>'
+            f'{escape(option_liquidity.get("detail", ""))}<br>'
+            f'Contract: {escape(option_contract)} | Strike: {money(option_liquidity.get("strike"))} | '
+            f'Expiration: {escape(str(option_liquidity.get("expiration", "N/A")))}</div>'
+        )
 
     st.markdown(
         f"""
@@ -1533,11 +1543,13 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
                 <div class="coach-metric"><div class="coach-label">Exit Score</div><div class="coach-value">{coach["exit_score"]}/100</div></div>
                 <div class="coach-metric"><div class="coach-label">Liquidity</div><div class="coach-value">{escape(liquidity["label"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Sector</div><div class="coach-value">{escape(sector["status"])}</div></div>
+                <div class="coach-metric"><div class="coach-label">Option Chain</div><div class="coach-value">{escape(option_liquidity.get("label", "N/A"))}</div></div>
             </div>
             <div class="notice notice-info"><strong>Why this is here</strong><br>{escape(quality_note)}</div>
             <div class="notice notice-info"><strong>What should I do next?</strong><br>{escape(coach["summary"])} {escape(coach["next_step"])}</div>
             <div class="notice"><strong>Sector Support: {escape(sector["status"])}</strong><br>{escape(sector["detail"])}</div>
             <div class="notice"><strong>Liquidity: {escape(liquidity["label"])}</strong><br>{escape(liquidity["detail"])}</div>
+            {option_liquidity_notice}
             <div class="notice"><strong>Live Read: {escape(momentum["label"])}</strong><br>{escape(momentum["detail"])}</div>
             <div class="notice"><strong>Chase Risk: {escape(chase["label"])}</strong><br>{escape(chase["reason"])}<br>{escape(confidence_note)}</div>
             <div class="content-kicker">Why?</div>
@@ -2184,6 +2196,7 @@ def render_signal_card(symbol, result):
         what_next = result.get("what_next", "Wait.")
         what_next_reason = result.get("what_next_reason", "No actionable setup yet.")
         trade_plan = result.get("trade_plan", {}) or {}
+        option_liquidity = result.get("option_liquidity") or {}
 
         st.markdown(
             f'<div class="signal-pill {signal_class(signal)}">{signal_label(signal)}</div>',
@@ -2237,6 +2250,19 @@ def render_signal_card(symbol, result):
                 t8.metric("Risk/Reward", f"{trade_plan['risk_reward']}:1" if trade_plan.get("risk_reward") else "N/A")
 
                 st.write(trade_plan.get("contract_guidance", "Use liquid contracts with tight spreads."))
+
+                if option_liquidity.get("available"):
+                    st.markdown("**Option Chain Quality**")
+                    o1, o2, o3, o4 = st.columns(4)
+                    o1.metric("Quality", option_liquidity.get("label", "N/A"))
+                    o2.metric("Volume", f"{option_liquidity.get('volume', 0):,}")
+                    o3.metric("Open Interest", f"{option_liquidity.get('open_interest', 0):,}")
+                    o4.metric("Spread", f"{option_liquidity.get('spread_pct', 0)}%")
+                    st.write(
+                        f"{option_liquidity.get('contract', 'N/A')} | "
+                        f"{option_liquidity.get('expiration', 'N/A')} | "
+                        f"{money(option_liquidity.get('strike'))} strike"
+                    )
 
         coach = coach_live_setup(result)
         if coach["action"] != "Wait":

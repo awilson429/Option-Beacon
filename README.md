@@ -59,6 +59,22 @@ The scheduled scan also includes major market and sector ETFs so the dashboard c
 
 Opportunities are ranked by a blended setup quality score that considers raw scanner score, market support, sector support, liquidity, and chase risk.
 
+## Optional Tradier options data
+
+Add this optional secret in both Streamlit Community Cloud and GitHub Actions to enrich active bullish/bearish setups with option-chain liquidity:
+
+```toml
+TRADIER_ACCESS_TOKEN = "your-tradier-token"
+```
+
+Option Beacon uses the token only to read option expirations/chains and score contract liquidity using volume, open interest, bid/ask spread, and strike distance. If the token is missing or Tradier is unavailable, the app still runs with the existing stock-liquidity score.
+
+For sandbox or a custom Tradier-compatible base URL, optionally add:
+
+```toml
+TRADIER_API_BASE_URL = "https://sandbox.tradier.com/v1"
+```
+
 To tune that number, add this optional GitHub Actions secret:
 
 ```toml
