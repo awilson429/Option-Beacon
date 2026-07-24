@@ -685,10 +685,19 @@ def configure_page():
             text-align: center;
         }
 
-        .ticker-title {
+        .security-symbol {
             color: var(--ob-text);
+            font-family: "Arial Black", Impact, Inter, sans-serif;
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            text-shadow:
+                0.08rem 0.08rem 0 var(--ob-blue),
+                0 0 0.45rem rgba(38, 84, 255, 0.22);
+            text-transform: uppercase;
+        }
+
+        .ticker-title {
             font-size: 1.28rem;
-            font-weight: 700;
             line-height: 1.2;
             margin: 0 0 0.65rem;
         }
@@ -741,9 +750,7 @@ def configure_page():
         }
 
         .opportunity-symbol {
-            color: var(--ob-text);
             font-size: 1.2rem;
-            font-weight: 700;
         }
 
         .opportunity-score {
@@ -784,9 +791,7 @@ def configure_page():
         }
 
         .coach-symbol {
-            color: var(--ob-text);
-            font-size: 1.55rem;
-            font-weight: 700;
+            font-size: 1.75rem;
             line-height: 1.1;
         }
 
@@ -982,12 +987,7 @@ def configure_page():
         }
 
         .board-symbol {
-            color: var(--ob-text);
-            font-family: "Arial Black", Impact, Inter, sans-serif;
             font-size: 1.08rem;
-            font-weight: 900;
-            letter-spacing: -0.01em;
-            text-shadow: 0.08rem 0.08rem 0 var(--ob-blue);
         }
 
         .board-main {
@@ -1045,11 +1045,7 @@ def configure_page():
         }
 
         .board-tile-label {
-            color: var(--ob-muted);
-            font-size: 0.72rem;
-            font-weight: 800;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
+            font-size: 0.9rem;
         }
 
         .board-tile-value {
@@ -1152,10 +1148,7 @@ def configure_page():
         }
 
         .tape-symbol {
-            color: var(--ob-text);
             font-size: 1rem;
-            font-weight: 900;
-            text-shadow: 0.08rem 0.08rem 0 var(--ob-blue);
         }
 
         .tape-main {
@@ -1576,7 +1569,7 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
         <div class="coach-card">
             <div class="coach-card-header">
                 <div>
-                    <div class="coach-symbol">{escape(row["symbol"])}</div>
+                    <div class="coach-symbol security-symbol">{escape(row["symbol"])}</div>
                     <div class="content-kicker">{escape(direction)} {escape(contract)} idea | As of {escape(as_of)}</div>
                 </div>
                 <div class="coach-grade">
@@ -1939,7 +1932,7 @@ def render_beacon_tape(latest_results):
             score = result.get("confidence", 0)
             html += (
                 '<div class="tape-row">'
-                f'<div class="tape-symbol">{escape(symbol)}</div>'
+                f'<div class="tape-symbol security-symbol">{escape(symbol)}</div>'
                 f'<div class="tape-main {tape_row_color(bias)}">{escape(str(bias))}</div>'
                 f'<div class="tape-sub">{escape(price)}<br>{escape(str(score))}</div>'
                 '</div>'
@@ -1952,7 +1945,7 @@ def render_beacon_tape(latest_results):
             color = tape_row_color(row["Bias"])
             html += (
                 '<div class="tape-row">'
-                f'<div class="tape-symbol">{escape(row["Symbol"])}</div>'
+                f'<div class="tape-symbol security-symbol">{escape(row["Symbol"])}</div>'
                 f'<div class="tape-main {color}">{escape(row["Bias"])}</div>'
                 f'<div class="tape-sub">Q {escape(str(row["Quality Score"]))}<br>{escape(row["Grade"])}</div>'
                 '</div>'
@@ -1965,7 +1958,7 @@ def render_beacon_tape(latest_results):
             color = tape_row_color(row["Bias"])
             html += (
                 '<div class="tape-row">'
-                f'<div class="tape-symbol">{escape(row["ETF"])}</div>'
+                f'<div class="tape-symbol security-symbol">{escape(row["ETF"])}</div>'
                 f'<div class="tape-main {color}">{escape(row["Bias"])}</div>'
                 f'<div class="tape-sub">{escape(str(row["Score"]))}<br>{escape(row["Sector"][:6])}</div>'
                 '</div>'
@@ -1979,7 +1972,7 @@ def render_beacon_tape(latest_results):
                 action = str(alert.get("action", ""))
                 html += (
                     '<div class="tape-row">'
-                    f'<div class="tape-symbol">{escape(str(alert.get("symbol", "")))}</div>'
+                    f'<div class="tape-symbol security-symbol">{escape(str(alert.get("symbol", "")))}</div>'
                     f'<div class="tape-main {tape_row_color(action)}">{escape(action)}</div>'
                     f'<div class="tape-sub">{escape(str(alert.get("score", "")))}<br>{escape(str(alert.get("live_read", ""))[:8])}</div>'
                     '</div>'
@@ -2034,7 +2027,7 @@ def render_beacon_board(latest_results, high_score_history=None):
         color = board_color_class(bias)
         market_tiles += (
             f'<div class="board-tile">'
-            f'<div class="board-tile-label">{escape(symbol)}</div>'
+            f'<div class="board-tile-label security-symbol">{escape(symbol)}</div>'
             f'<div class="board-tile-value {color}">{escape(str(bias))}</div>'
             f'<div class="board-sub">Score {escape(str(score))}/100</div>'
             f'</div>'
@@ -2045,7 +2038,7 @@ def render_beacon_board(latest_results, high_score_history=None):
         action_color = board_color_class(row["Action"])
         coach_html += (
             '<div class="board-row">'
-            f'<div class="board-symbol">{escape(row["Symbol"])}</div>'
+            f'<div class="board-symbol security-symbol">{escape(row["Symbol"])}</div>'
             f'<div><div class="board-main {action_color}">{escape(row["Action"])}</div>'
             f'<div class="board-sub">{escape(row["Live Read"])} | {escape(row["Timing"])} | {escape(short_time(row.get("Time")))}</div></div>'
             f'<div class="board-number">{escape(str(row["Score"]))}</div>'
@@ -2066,7 +2059,7 @@ def render_beacon_board(latest_results, high_score_history=None):
             )
             html += (
                 '<div class="board-row board-row-compact">'
-                f'<div class="board-symbol">{escape(row["symbol"])}</div>'
+                f'<div class="board-symbol security-symbol">{escape(row["symbol"])}</div>'
                 f'<div><div class="board-callout">{escape(callout)}</div>'
                 f'<div class="board-sub">Entry {money(plan_value(plan, "trigger_price", result.get("entry")))} | Stop {money(plan_value(plan, "technical_stop", result.get("stop")))}</div></div>'
                 f'<div class="board-number">{escape(str(row["score"]))}</div>'
@@ -2079,7 +2072,7 @@ def render_beacon_board(latest_results, high_score_history=None):
         risk_color = board_color_class(row["Entry Risk"])
         risk_html += (
             '<div class="board-row board-row-compact">'
-            f'<div class="board-symbol">{escape(row["Symbol"])}</div>'
+            f'<div class="board-symbol security-symbol">{escape(row["Symbol"])}</div>'
             f'<div><div class="board-main {risk_color}">Entry risk: {escape(row["Entry Risk"])}</div>'
             f'<div class="board-sub">{escape(row["Exit Label"])} | {escape(row["Action"])} | {escape(short_time(row.get("Time")))}</div></div>'
             f'<div class="board-number">{escape(str(row["Exit Score"]))}</div>'
@@ -2093,7 +2086,7 @@ def render_beacon_board(latest_results, high_score_history=None):
         for _, alert in alerts.tail(6).iloc[::-1].iterrows():
             alert_html += (
                 '<div class="board-row board-row-compact">'
-                f'<div class="board-symbol">{escape(str(alert.get("symbol", "")))}</div>'
+                f'<div class="board-symbol security-symbol">{escape(str(alert.get("symbol", "")))}</div>'
                 f'<div><div class="board-main">{escape(str(alert.get("action", "")))}</div>'
                 f'<div class="board-sub">{escape(str(alert.get("live_read", "")))} | {escape(str(alert.get("timestamp", "")))}</div></div>'
                 f'<div class="board-number">{escape(str(alert.get("score", "")))}</div>'
@@ -2250,7 +2243,7 @@ def render_coach_timeline():
 
 def render_signal_card(symbol, result):
     with st.container(border=True):
-        st.markdown(f'<div class="ticker-title">{symbol}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="ticker-title security-symbol">{symbol}</div>', unsafe_allow_html=True)
 
         if result is None:
             st.error("No data returned.")
