@@ -46,6 +46,7 @@ from trade_journal import (
 )
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
+from signal_outcomes import load_signal_outcomes, summarize_outcomes
 from trade_management import coach_recommendation, trade_summary
 from trade_replay import (
     DEFAULT_MAX_HOLD_CANDLES,
@@ -3084,6 +3085,92 @@ def render_recent_high_scores(history):
     )
 
 
+def render_signal_outcomes():
+    render_section_header(
+        "Accuracy Tracker",
+        "How recent guide ideas performed after the callout",
+    )
+
+    outcomes = load_signal_outcomes()
+    if len(outcomes) == 0:
+        render_empty_state(
+            "No outcome data yet. The scheduled scanner will begin tracking setups during market hours."
+        )
+        return
+
+    summary = summarize_outcomes(outcomes)
+    metric_columns = st.columns(4)
+    metric_columns[0].metric("Tracked Setups", summary["tracked"])
+    metric_columns[1].metric("30m Reads", summary["completed"])
+    metric_columns[2].metric(
+        "30m Win Rate",
+        f'{summary["win_rate"]:.1f}%' if summary["win_rate"] is not None else "Pending",
+    )
+    metric_columns[3].metric(
+        "Avg 30m Move",
+        f'{summary["avg_return"]:.2f}%' if summary["avg_return"] is not None else "Pending",
+    )
+
+    recent = outcomes.copy().tail(75).sort_index(ascending=False)
+    recent = recent.rename(
+        columns={
+            "opened_at": "Opened",
+            "symbol": "Symbol",
+            "bias": "Bias",
+            "action": "Guide State",
+            "score": "Score",
+            "entry_price": "Entry",
+            "return_15m": "15m Move %",
+            "outcome_15m": "15m Result",
+            "return_30m": "30m Move %",
+            "outcome_30m": "30m Result",
+            "return_60m": "60m Move %",
+            "outcome_60m": "60m Result",
+            "max_favorable": "Best Move %",
+            "max_adverse": "Worst Move %",
+            "status": "Status",
+        }
+    )
+    display_columns = [
+        "Opened",
+        "Symbol",
+        "Bias",
+        "Guide State",
+        "Score",
+        "Entry",
+        "15m Move %",
+        "15m Result",
+        "30m Move %",
+        "30m Result",
+        "60m Move %",
+        "60m Result",
+        "Best Move %",
+        "Worst Move %",
+        "Status",
+    ]
+    recent = recent[[column for column in display_columns if column in recent.columns]]
+    recent["Opened"] = recent["Opened"].apply(scan_stamp)
+
+    st.dataframe(recent, use_container_width=True, hide_index=True)
+
+    symbol_summary = summary["by_symbol"]
+    if len(symbol_summary) > 0:
+        st.markdown("**Best Read By Symbol**")
+        symbol_summary = symbol_summary.rename(
+            columns={
+                "symbol": "Symbol",
+                "bias": "Bias",
+                "Win_Rate": "Win Rate %",
+                "Avg_30m_Move": "Avg 30m Move %",
+            }
+        )
+        st.dataframe(
+            symbol_summary.head(25),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+
 def main():
     configure_page()
     require_app_access()
@@ -3120,6 +3207,8 @@ def main():
         render_coach_timeline()
         st.divider()
         render_recent_high_scores(high_score_history)
+        st.divider()
+        render_signal_outcomes()
         st.divider()
         render_trade_journal()
 

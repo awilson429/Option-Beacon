@@ -14,6 +14,7 @@ from optionbeacon_live import generate_signal
 from optionbeacon_live import eastern_timestamp
 from optionbeacon_snapshot import save_latest_results
 from scheduled_trade_coach import run_active_trade_coaching
+from signal_outcomes import load_signal_outcomes, record_signal_outcomes
 
 
 def is_market_open_now():
@@ -76,6 +77,7 @@ def main():
     latest_results = {}
     high_score_history = load_high_score_history()
     live_alerts = load_live_coach_alerts()
+    outcome_history = load_signal_outcomes()
     symbol_groups, source, error = active_symbol_groups()
     symbols = flatten_symbol_groups(symbol_groups)
 
@@ -114,7 +116,15 @@ def main():
                 high_score_history = load_high_score_history()
 
     save_latest_results(latest_results)
+    outcome_history, new_outcomes = record_signal_outcomes(
+        latest_results,
+        history=outcome_history,
+    )
     print(f"Saved scheduled scan for {len(latest_results)} symbols.")
+    print(
+        f"Outcome tracker: {len(outcome_history)} tracked setup(s), "
+        f"{new_outcomes} new."
+    )
 
     coach_rows = run_active_trade_coaching(
         latest_results=latest_results,

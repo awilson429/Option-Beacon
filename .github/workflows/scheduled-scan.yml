@@ -38,6 +38,7 @@ jobs:
           git fetch origin scanner-data --depth=1 || true
           git show origin/scanner-data:high_score_history.csv > high_score_history.csv || true
           git show origin/scanner-data:live_coach_alerts.csv > live_coach_alerts.csv || true
+          git show origin/scanner-data:signal_outcomes.csv > signal_outcomes.csv || true
           git show origin/scanner-data:finnhub_movers_cache.json > finnhub_movers_cache.json || true
           git show origin/scanner-data:optionbeacon_trades.db > optionbeacon_trades.db || true
 
@@ -59,6 +60,7 @@ jobs:
             cp latest_results.json /tmp/option-beacon-scanner-data/latest_results.json
             cp high_score_history.csv /tmp/option-beacon-scanner-data/high_score_history.csv || true
             cp live_coach_alerts.csv /tmp/option-beacon-scanner-data/live_coach_alerts.csv || true
+            cp signal_outcomes.csv /tmp/option-beacon-scanner-data/signal_outcomes.csv || true
             cp finnhub_movers_cache.json /tmp/option-beacon-scanner-data/finnhub_movers_cache.json || true
             cp optionbeacon_trades.db /tmp/option-beacon-scanner-data/optionbeacon_trades.db || true
 
@@ -69,8 +71,9 @@ jobs:
             cp /tmp/option-beacon-scanner-data/* .
             touch high_score_history.csv
             touch live_coach_alerts.csv
+            touch signal_outcomes.csv
             touch finnhub_movers_cache.json
-            git add -f latest_results.json high_score_history.csv live_coach_alerts.csv finnhub_movers_cache.json
+            git add -f latest_results.json high_score_history.csv live_coach_alerts.csv signal_outcomes.csv finnhub_movers_cache.json
             if [[ -f optionbeacon_trades.db ]]; then
               git add -f optionbeacon_trades.db
             fi
