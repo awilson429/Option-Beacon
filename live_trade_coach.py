@@ -2,6 +2,7 @@ ACTION_ENTER = "Entry zone active"
 ACTION_WATCH = "Watch for trigger"
 ACTION_HOLD = "Manage active idea"
 ACTION_AVOID = "Avoid chasing"
+ACTION_MONITOR = "Monitor setup"
 ACTION_WAIT = "Wait"
 
 from market_intelligence import (
@@ -267,6 +268,22 @@ def coach_live_setup(result):
             "summary": f"{direction} idea has a strong score but timing is {timing.lower()}.",
             "next_step": result.get("what_next_reason") or "Wait for cleaner timing.",
             "risk_note": f"Use {invalidation} as the thesis failure area.",
+            "contract": contract,
+            "chase_risk": chase["label"],
+            "chase_reason": chase["reason"],
+            "missing_confirmations": missing,
+            "confidence_note": confidence_note,
+        }
+        payload.update(exit_score_for_live_setup(result, payload))
+        return payload
+
+    if score >= 60 and direction in ["Bullish", "Bearish"]:
+        payload = {
+            "action": ACTION_MONITOR,
+            "priority": score,
+            "summary": f"{direction} setup is developing, but confirmation is incomplete.",
+            "next_step": result.get("what_next_reason") or "Monitor for stronger trend, volume, and price-action alignment.",
+            "risk_note": "No entry is active yet. Treat this as a watchlist read, not an entry callout.",
             "contract": contract,
             "chase_risk": chase["label"],
             "chase_reason": chase["reason"],

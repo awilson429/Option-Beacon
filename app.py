@@ -1796,7 +1796,7 @@ def render_live_trade_coach(latest_results, high_score_history=None):
         "Live Trade Guide",
         "Current scanner ideas with entry, wait, and risk guidance",
     )
-    rows = coach_rows(latest_results, min_score=75, history=high_score_history)
+    rows = coach_rows(latest_results, min_score=60, history=high_score_history)
 
     if not rows:
         render_empty_state("No live trade ideas are ready yet.")
@@ -1804,7 +1804,7 @@ def render_live_trade_coach(latest_results, high_score_history=None):
 
     active_rows = [
         row for row in rows
-        if row["Action"] in ["Entry zone active", "Watch for trigger", "Avoid chasing"]
+        if row["Action"] in ["Entry zone active", "Watch for trigger", "Avoid chasing", "Monitor setup"]
     ]
     display_rows = active_rows or rows[:8]
     display_df = pd.DataFrame(display_rows)
@@ -1816,7 +1816,7 @@ def render_live_trade_coach(latest_results, high_score_history=None):
         key_rows = [
             {
                 "Field": "Guide Action",
-                "What it means": "The next practical step: enter, watch, wait, manage, or avoid.",
+                "What it means": "The next practical step: enter, watch, monitor, wait, manage, or avoid.",
             },
             {
                 "Field": "Entry Risk",
@@ -2010,7 +2010,7 @@ def render_beacon_tape(latest_results):
 
 def render_beacon_board(latest_results, high_score_history=None):
     regime = market_regime(latest_results)
-    coach_queue = coach_rows(latest_results, min_score=70, history=high_score_history)
+    coach_queue = coach_rows(latest_results, min_score=60, history=high_score_history)
     alerts = load_live_coach_alerts()
     bullish_rows = opportunity_rows(latest_results, "Bullish", limit=5)
     bearish_rows = opportunity_rows(latest_results, "Bearish", limit=5)
