@@ -310,7 +310,7 @@ def short_time(value):
     try:
         timestamp = pd.Timestamp(value)
         if timestamp.tzinfo is None:
-            timestamp = timestamp.tz_localize("America/New_York")
+            timestamp = timestamp.tz_localize("UTC").tz_convert("America/New_York")
         else:
             timestamp = timestamp.tz_convert("America/New_York")
         return timestamp.strftime("%I:%M %p ET").lstrip("0")
@@ -325,7 +325,7 @@ def scan_stamp(value):
     try:
         timestamp = pd.Timestamp(value)
         if timestamp.tzinfo is None:
-            timestamp = timestamp.tz_localize("America/New_York")
+            timestamp = timestamp.tz_localize("UTC").tz_convert("America/New_York")
         else:
             timestamp = timestamp.tz_convert("America/New_York")
         return timestamp.strftime("%m/%d/%Y %I:%M %p ET").lstrip("0")

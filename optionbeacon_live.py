@@ -2,6 +2,7 @@ import yfinance as yf
 import pandas as pd
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from finnhub_universe import (
     DEFAULT_ETF_SYMBOLS,
@@ -22,6 +23,10 @@ INTERVAL = "5m"
 DATA_PERIODS = ["5d", "10d", "1mo"]
 
 SCAN_SECONDS = 300  # 5 minutes
+
+
+def eastern_timestamp():
+    return datetime.now(ZoneInfo("America/New_York")).isoformat()
 
 
 def download_data(symbol, period):
@@ -107,7 +112,7 @@ def generate_signal(symbol):
     result = score_candle(df, i, symbol)
     result = enrich_with_trade_plan(result)
     result = enrich_with_option_liquidity(result)
-    result["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    result["timestamp"] = eastern_timestamp()
     return result
 
 
@@ -191,7 +196,7 @@ def main():
 
     while True:
         print("\n\nScanning...")
-        print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        print(eastern_timestamp())
         symbol_groups, source, error = active_symbol_groups()
         scan_symbols = flatten_symbol_groups(symbol_groups)
         print(f"Universe: {source} ({len(scan_symbols)} symbols)")

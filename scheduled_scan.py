@@ -11,6 +11,7 @@ from optionbeacon_history import (
     load_high_score_history,
 )
 from optionbeacon_live import generate_signal
+from optionbeacon_live import eastern_timestamp
 from optionbeacon_snapshot import save_latest_results
 from scheduled_trade_coach import run_active_trade_coaching
 
@@ -59,6 +60,7 @@ def scanner_unavailable(symbol, message):
         "what_next_reason": message,
         "trade_plan": {},
         "reasons": [message],
+        "timestamp": eastern_timestamp(),
     }
 
 
