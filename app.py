@@ -1,7 +1,9 @@
+import base64
 import json
 import os
 from datetime import time
 from html import escape
+from pathlib import Path
 from textwrap import dedent
 
 import pandas as pd
@@ -70,7 +72,22 @@ from trade_storage import (
 
 
 SYMBOL_GROUPS = DEFAULT_SYMBOL_GROUPS
-LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-381bdd4d9924/OptionBeaconLLC%20Logo%20V2.png"
+LOGO_ASSET_PATH = Path("assets/option-beacon-header-logo.png")
+FALLBACK_LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-381bdd4d9924/OptionBeaconLLC%20Logo%20V2.png"
+
+
+@st.cache_data(show_spinner=False)
+def image_data_uri(path):
+    image_path = Path(path)
+    if not image_path.exists():
+        return FALLBACK_LOGO_URL
+
+    encoded = base64.b64encode(image_path.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def logo_source():
+    return image_data_uri(str(LOGO_ASSET_PATH))
 
 
 def is_market_open_now():
@@ -522,10 +539,10 @@ def configure_page():
         }
 
         .brand-logo {
-            width: 116px;
-            height: 116px;
+            width: 148px;
+            height: 148px;
             object-fit: contain;
-            background: #ffffff;
+            background: #000000;
             border: 1px solid rgba(255, 255, 255, 0.20);
             border-radius: 8px;
             padding: 0;
@@ -1425,8 +1442,8 @@ def configure_page():
             }
 
             .brand-logo {
-                width: 92px;
-                height: 92px;
+                width: 108px;
+                height: 108px;
             }
 
             .opportunity-row {
@@ -1490,8 +1507,8 @@ def configure_page():
             }
 
             .brand-logo {
-                width: 72px;
-                height: 72px;
+                width: 86px;
+                height: 86px;
             }
 
             .health-grid {
@@ -1510,6 +1527,7 @@ def app_access_configured():
 
 def require_app_access():
     expected_code = st.secrets.get("APP_ACCESS_CODE")
+    header_logo = logo_source()
 
     if not expected_code:
         return True
@@ -1522,7 +1540,7 @@ def require_app_access():
         <div class="brand-shell">
             <div class="brand-row">
                 <div class="brand-left">
-                    <img class="brand-logo" src="{LOGO_URL}" alt="Option Beacon logo" />
+                    <img class="brand-logo" src="{header_logo}" alt="Option Beacon logo" />
                     <div class="brand-copy">
                         <div class="brand-title">Option Beacon</div>
                         <div class="brand-subtitle">Private Scanner Access</div>
@@ -1552,13 +1570,14 @@ def render_header():
     market_class = "pill-open" if market_open else "pill-closed"
     refreshed_at = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
     access_status = "Private" if app_access_configured() else "Public"
+    header_logo = logo_source()
 
     st.markdown(
         f"""
         <div class="brand-shell">
             <div class="brand-row">
                 <div class="brand-left">
-                    <img class="brand-logo" src="{LOGO_URL}" alt="Option Beacon logo" />
+                    <img class="brand-logo" src="{header_logo}" alt="Option Beacon logo" />
                     <div class="brand-copy">
                         <div class="brand-title">Option Beacon</div>
                         <div class="brand-subtitle">ETF + Single Stock Scanner</div>
