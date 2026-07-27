@@ -6,6 +6,7 @@ __pycache__/
 .env.*
 
 signal_history.csv
+signal_history.jsonl
 optionbeacon_live_signals.csv
 latest_results.json
 high_score_history.csv
