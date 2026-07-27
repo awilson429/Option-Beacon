@@ -52,6 +52,7 @@ from optionbeacon_snapshot import load_latest_results
 from signal_outcomes import load_signal_outcomes, summarize_outcomes
 from tradier_options import tradier_configured
 from trade_management import coach_recommendation, trade_summary
+from trade_planning import trade_plan_view
 from trade_replay import (
     DEFAULT_MAX_HOLD_CANDLES,
     DEFAULT_REPLAY_SYMBOLS,
@@ -731,7 +732,7 @@ def cached_after_hours_briefing():
 
 def render_opportunity_card(row, latest_results, high_score_history=None):
     result = row["result"]
-    plan = result.get("trade_plan") or {}
+    plan_view = trade_plan_view(result)
     score = row["score"]
     direction = result.get("bias", "Neutral")
     last_scan = scan_stamp(result.get("timestamp"))
@@ -754,22 +755,20 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
             f'<strong>{escape(label)}</strong><br>{escape(status)}</div>'
         )
 
-    reasons = result.get("reasons") or ["No strong reason yet"]
+    reasons = plan_view["reasons"]
     reasons_html = "".join(
-        f"<li>{escape(reason)}</li>" for reason in reasons[:6]
+        f"<li>{escape(reason)}</li>" for reason in reasons
     )
     exit_reasons_html = "".join(
         f"<li>{escape(reason)}</li>" for reason in exit_reasons[:4]
     )
 
-    entry_zone_low = money(plan_value(plan, "entry_zone_low", result.get("entry")))
-    entry_zone_high = money(plan_value(plan, "entry_zone_high", result.get("entry")))
-    stop = money(plan_value(plan, "technical_stop", result.get("stop")))
-    target_1 = money(plan_value(plan, "target_1", result.get("target")))
-    target_2 = money(plan_value(plan, "target_2"))
-    target_3 = money(plan_value(plan, "target_3"))
-    risk_reward = plan.get("risk_reward")
-    risk_reward_label = f"{risk_reward}:1" if risk_reward else "N/A"
+    entry_zone = plan_view["entry_zone"]
+    stop = plan_view["initial_stop"]
+    target_1 = plan_view["target_1"]
+    target_2 = plan_view["target_2"]
+    target_3 = plan_view["target_3"]
+    risk_reward_label = plan_view["risk_reward"]
     contract = coach.get("contract", "N/A")
     option_contract = option_liquidity.get("contract") or "N/A"
     option_liquidity_notice = []
@@ -802,7 +801,7 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
             <div class="coach-card-header">
                 <div>
                     <div class="coach-symbol security-symbol">{escape(row["symbol"])}</div>
-                    <div class="content-kicker">{escape(direction)} {escape(contract)} idea | Last scan {escape(last_scan)}</div>
+                    <div class="content-kicker">{escape(plan_view["setup_name"])} | {escape(direction)} {escape(contract)} idea | Last scan {escape(last_scan)}</div>
                 </div>
                 <div class="coach-grade">
                     Quality: {escape(quality["grade"])}<br>
@@ -811,18 +810,24 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
             </div>
             <div class="factor-list">{factor_html}</div>
             <div class="coach-grid">
-                <div class="coach-metric"><div class="coach-label">Entry Zone</div><div class="coach-value">{entry_zone_low}-{entry_zone_high}</div></div>
+                <div class="coach-metric"><div class="coach-label">Entry Zone</div><div class="coach-value">{escape(entry_zone)}</div></div>
+                <div class="coach-metric"><div class="coach-label">Trigger</div><div class="coach-value">{escape(plan_view["trigger_price"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Stop</div><div class="coach-value">{stop}</div></div>
                 <div class="coach-metric"><div class="coach-label">Target 1</div><div class="coach-value">{target_1}</div></div>
                 <div class="coach-metric"><div class="coach-label">Risk/Reward</div><div class="coach-value">{risk_reward_label}</div></div>
                 <div class="coach-metric"><div class="coach-label">Target 2</div><div class="coach-value">{target_2}</div></div>
                 <div class="coach-metric"><div class="coach-label">Target 3</div><div class="coach-value">{target_3}</div></div>
+                <div class="coach-metric"><div class="coach-label">Expected Hold</div><div class="coach-value">{escape(plan_view["expected_hold"])}</div></div>
+                <div class="coach-metric"><div class="coach-label">Maximum Chase</div><div class="coach-value">{escape(plan_view["maximum_chase_price"])}</div></div>
+                <div class="coach-metric"><div class="coach-label">Timing</div><div class="coach-value">{escape(plan_view["timing_label"])}</div></div>
+                <div class="coach-metric"><div class="coach-label">Confidence</div><div class="coach-value">{escape(plan_view["confidence"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Guide Action</div><div class="coach-value">{escape(coach["action"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Exit Score</div><div class="coach-value">{coach["exit_score"]}/100</div></div>
                 <div class="coach-metric"><div class="coach-label">Stock Liquidity</div><div class="coach-value">{escape(liquidity["label"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Sector</div><div class="coach-value">{escape(sector["status"])}</div></div>
                 <div class="coach-metric"><div class="coach-label">Option Chain</div><div class="coach-value">{escape(option_liquidity.get("label", "N/A"))}</div></div>
             </div>
+            <div class="notice"><strong>Invalidation</strong><br>{escape(plan_view["invalidation_condition"])}</div>
             {card_detail_html}
         </div>
         """).strip(),
@@ -1554,18 +1559,35 @@ def render_signal_card(symbol, result):
             p4.metric("BE", f"${result['breakeven']:.2f}")
 
         if trade_plan:
+            plan_view = trade_plan_view(result)
             with st.expander("Trade Plan"):
+                st.markdown(
+                    f"**{plan_view['ticker']} | {plan_view['direction']} | "
+                    f"{plan_view['setup_name']}**"
+                )
                 t1, t2, t3, t4 = st.columns(4)
-                t1.metric("Entry Zone", f"${trade_plan['entry_zone_low']:.2f}-${trade_plan['entry_zone_high']:.2f}")
-                t2.metric("Trigger", f"${trade_plan['trigger_price']:.2f}")
-                t3.metric("Invalidation", f"${trade_plan['invalidation_level']:.2f}")
-                t4.metric("Max Entry", f"${trade_plan['max_entry_price']:.2f}")
+                t1.metric("Confidence", plan_view["confidence"])
+                t2.metric("Entry Zone", plan_view["entry_zone"])
+                t3.metric("Trigger", plan_view["trigger_price"])
+                t4.metric("Initial Stop", plan_view["initial_stop"])
 
                 t5, t6, t7, t8 = st.columns(4)
-                t5.metric("Target 1", f"${trade_plan['target_1']:.2f}")
-                t6.metric("Target 2", f"${trade_plan['target_2']:.2f}")
-                t7.metric("Target 3", f"${trade_plan['target_3']:.2f}")
-                t8.metric("Risk/Reward", f"{trade_plan['risk_reward']}:1" if trade_plan.get("risk_reward") else "N/A")
+                t5.metric("Target 1", plan_view["target_1"])
+                t6.metric("Target 2", plan_view["target_2"])
+                t7.metric("Target 3", plan_view["target_3"])
+                t8.metric("Risk/Reward", plan_view["risk_reward"])
+
+                t9, t10, t11 = st.columns(3)
+                t9.metric("Expected Hold", plan_view["expected_hold"])
+                t10.metric("Maximum Chase", plan_view["maximum_chase_price"])
+                t11.metric("Timing", plan_view["timing_label"])
+
+                st.markdown(
+                    f"**Invalidation:** {plan_view['invalidation_condition']}"
+                )
+                st.markdown("**Why this trade:**")
+                for reason in plan_view["reasons"]:
+                    st.write(f"- {reason}")
 
                 st.write(trade_plan.get("contract_guidance", "Use liquid contracts with tight spreads."))
 

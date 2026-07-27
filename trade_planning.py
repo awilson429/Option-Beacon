@@ -2,6 +2,9 @@ from entry_timing import classify_entry_timing
 from setup_stages import classify_setup_stage
 
 
+UNAVAILABLE = "Unavailable"
+
+
 def _number(result, key, default=0):
     try:
         value = result.get(key, default)
@@ -16,6 +19,97 @@ def _round(value):
 
 def _direction_multiplier(direction):
     return 1 if direction == "Bullish" else -1
+
+
+def timing_label(result):
+    """Return the plain-language timing state for a planned setup."""
+    stage = result.get("setup_stage")
+    entry_timing = result.get("entry_timing")
+
+    if stage == "Failed" or entry_timing == "Setup invalidated":
+        return "INVALID"
+    if stage == "Extended" or entry_timing == "Do not chase":
+        return "EXTENDED"
+    if stage == "Triggered" or entry_timing == "Trigger confirmed":
+        return "ENTERABLE"
+    return "EARLY"
+
+
+def _invalidation_condition(direction, level):
+    if level is None:
+        return UNAVAILABLE
+    if direction == "Bullish":
+        return f"Price falls below ${level:.2f}."
+    if direction == "Bearish":
+        return f"Price rises above ${level:.2f}."
+    return UNAVAILABLE
+
+
+def _supporting_reasons(result, minimum=3, maximum=5):
+    candidates = [
+        *(result.get("reasons") or []),
+        result.get("setup_stage_reason"),
+        result.get("entry_timing_reason"),
+        result.get("what_next_reason"),
+    ]
+    reasons = []
+    for candidate in candidates:
+        text = str(candidate or "").strip()
+        if text and text not in reasons:
+            reasons.append(text)
+        if len(reasons) == maximum:
+            break
+
+    while len(reasons) < minimum:
+        reasons.append("Supporting reason unavailable.")
+    return reasons
+
+
+def _money(value):
+    try:
+        return f"${float(value):.2f}" if value is not None else UNAVAILABLE
+    except (TypeError, ValueError):
+        return UNAVAILABLE
+
+
+def trade_plan_view(result):
+    """Normalize existing trade-plan values for safe display in Streamlit."""
+    result = result or {}
+    plan = result.get("trade_plan") or {}
+    confidence = result.get("confidence")
+    entry_low = plan.get("entry_zone_low")
+    entry_high = plan.get("entry_zone_high")
+    risk_reward = plan.get("risk_reward")
+
+    entry_zone = (
+        f"{_money(entry_low)} - {_money(entry_high)}"
+        if entry_low is not None and entry_high is not None
+        else UNAVAILABLE
+    )
+    return {
+        "ticker": result.get("symbol") or UNAVAILABLE,
+        "direction": plan.get("direction") or result.get("bias") or UNAVAILABLE,
+        "setup_name": plan.get("setup_type") or UNAVAILABLE,
+        "confidence": f"{confidence}/100" if confidence is not None else UNAVAILABLE,
+        "entry_zone": entry_zone,
+        "trigger_price": _money(plan.get("trigger_price")),
+        "initial_stop": _money(plan.get("technical_stop")),
+        "target_1": _money(plan.get("target_1")),
+        "target_2": _money(plan.get("target_2")),
+        "target_3": _money(plan.get("target_3")),
+        "risk_reward": f"{risk_reward}:1" if risk_reward is not None else UNAVAILABLE,
+        "expected_hold": plan.get("expected_hold") or UNAVAILABLE,
+        "maximum_chase_price": _money(
+            plan.get("do_not_chase_price") or plan.get("max_entry_price")
+        ),
+        "invalidation_condition": plan.get("invalidation_condition")
+        or _invalidation_condition(
+            plan.get("direction") or result.get("bias"),
+            plan.get("invalidation_level"),
+        ),
+        "reasons": _supporting_reasons(result),
+        "timing_label": timing_label(result),
+    }
 
 
 def build_trade_plan(result):
@@ -60,6 +154,9 @@ def build_trade_plan(result):
         "trigger_price": _round(trigger),
         "invalidation_level": _round(invalidation),
         "technical_stop": _round(invalidation),
+        "invalidation_condition": _invalidation_condition(
+            direction, _round(invalidation)
+        ),
         "target_1": _round(target_1),
         "target_2": _round(target_2),
         "target_3": _round(target_3),
