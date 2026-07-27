@@ -102,6 +102,8 @@ def test_actionable_bullish_signal_records(tmp_path):
     record = deserialize_trade_outcome(history_file.read_text(encoding="utf-8"))
     assert record.direction == "Bullish"
     assert record.entry == 500.25
+    assert record.timestamp is not None
+    assert record.entry_time is None
     assert record.exit_time is None
     assert record.realized_return is None
 

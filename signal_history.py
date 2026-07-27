@@ -183,7 +183,7 @@ def scanner_result_to_trade_outcome(
         json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
 
-    return create_trade_record(
+    record = create_trade_record(
         trade_id=trade_id,
         timestamp=timestamp,
         symbol=identity["symbol"],
@@ -196,6 +196,8 @@ def scanner_result_to_trade_outcome(
         target_2=_valid_price(plan.get("target_2")),
         target_3=_valid_price(plan.get("target_3")),
     )
+    record.entry_time = None
+    return record
 
 
 def append_trade_outcome_once(
