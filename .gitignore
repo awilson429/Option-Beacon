@@ -12,6 +12,9 @@ high_score_history.csv
 optionbeacon_trades.db
 threshold_optimizer_results.csv
 threshold_recommendations.csv
+*_backtest_results.csv
+live_market_preview.html
+live_preview.py
 
 .DS_Store
 Thumbs.db
