@@ -14,7 +14,8 @@ OUTCOME_FILE = "signal_outcomes.csv"
 REMOTE_OUTCOME_URL = f"{REMOTE_DATA_BASE_URL}/{OUTCOME_FILE}"
 TRACK_MIN_SCORE = 60
 MAX_ROWS = 750
-HORIZONS = (15, 30, 60)
+HORIZONS = (5, 10, 15, 30, 60)
+PRIMARY_HORIZON = 10
 
 OUTCOME_COLUMNS = [
     "event_id",
@@ -27,6 +28,12 @@ OUTCOME_COLUMNS = [
     "entry_price",
     "target_price",
     "stop_price",
+    "price_5m",
+    "return_5m",
+    "outcome_5m",
+    "price_10m",
+    "return_10m",
+    "outcome_10m",
     "price_15m",
     "return_15m",
     "outcome_15m",
@@ -138,6 +145,12 @@ def build_outcome_row(symbol, result, now):
         "entry_price": f"{price:.4f}",
         "target_price": _price_text(plan.get("target_1") or result.get("target")),
         "stop_price": _price_text(plan.get("technical_stop") or result.get("stop")),
+        "price_5m": "",
+        "return_5m": "",
+        "outcome_5m": "",
+        "price_10m": "",
+        "return_10m": "",
+        "outcome_10m": "",
         "price_15m": "",
         "return_15m": "",
         "outcome_15m": "",
@@ -197,37 +210,56 @@ def update_open_outcomes(history, latest_results, now):
 
 def summarize_outcomes(history):
     history = normalize_outcomes(history)
+    primary_outcome_column = f"outcome_{PRIMARY_HORIZON}m"
+    primary_return_column = f"return_{PRIMARY_HORIZON}m"
+    completed_primary = history[
+        history[primary_outcome_column].astype(str).str.len() > 0
+    ].copy()
     completed_30m = history[history["outcome_30m"].astype(str).str.len() > 0].copy()
-    if completed_30m.empty:
+    if completed_primary.empty:
         return {
             "tracked": len(history),
             "completed": 0,
+            "completed_10m": 0,
+            "win_rate_10m": None,
+            "avg_return_10m": None,
             "win_rate": None,
             "avg_return": None,
             "by_symbol": pd.DataFrame(),
             "by_action": pd.DataFrame(),
         }
 
-    completed_30m["return_value"] = pd.to_numeric(
-        completed_30m["return_30m"], errors="coerce"
+    completed_primary["return_value"] = pd.to_numeric(
+        completed_primary[primary_return_column], errors="coerce"
     ).fillna(0)
-    completed_30m["win"] = completed_30m["return_value"] > 0
+    completed_primary["win"] = completed_primary["return_value"] > 0
+
+    if completed_30m.empty:
+        completed_30m = completed_primary.copy()
+        completed_30m["return_value"] = completed_primary["return_value"]
+        completed_30m["win"] = completed_primary["win"]
+    else:
+        completed_30m["return_value"] = pd.to_numeric(
+            completed_30m["return_30m"], errors="coerce"
+        ).fillna(0)
+        completed_30m["win"] = completed_30m["return_value"] > 0
+
     by_symbol = (
-        completed_30m.groupby(["symbol", "bias"])
+        completed_primary.groupby(["symbol", "bias"])
         .agg(
             Setups=("event_id", "count"),
             Win_Rate=("win", lambda values: round(values.mean() * 100, 1)),
-            Avg_30m_Move=("return_value", lambda values: round(values.mean(), 2)),
+            Avg_10m_Move=("return_value", lambda values: round(values.mean(), 2)),
         )
         .reset_index()
         .sort_values(["Setups", "Win_Rate"], ascending=[False, False])
     )
     by_action = (
-        completed_30m.groupby("action")
+        completed_primary.groupby("action")
         .agg(
             Setups=("event_id", "count"),
             Win_Rate=("win", lambda values: round(values.mean() * 100, 1)),
-            Avg_30m_Move=("return_value", lambda values: round(values.mean(), 2)),
+            Avg_10m_Move=("return_value", lambda values: round(values.mean(), 2)),
         )
         .reset_index()
         .sort_values(["Setups", "Win_Rate"], ascending=[False, False])
@@ -236,6 +268,9 @@ def summarize_outcomes(history):
     return {
         "tracked": len(history),
         "completed": len(completed_30m),
+        "completed_10m": len(completed_primary),
+        "win_rate_10m": round(completed_primary["win"].mean() * 100, 1),
+        "avg_return_10m": round(completed_primary["return_value"].mean(), 2),
         "win_rate": round(completed_30m["win"].mean() * 100, 1),
         "avg_return": round(completed_30m["return_value"].mean(), 2),
         "by_symbol": by_symbol,

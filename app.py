@@ -2125,6 +2125,8 @@ def render_live_trade_coach(latest_results, high_score_history=None):
                 "Timing",
                 "Guide Summary",
                 "Next Step",
+                "10m Edge",
+                "10m Edge Label",
                 "Exit Score",
                 "Exit Label",
                 "Entry Risk",
@@ -2146,6 +2148,7 @@ def render_live_trade_coach(latest_results, high_score_history=None):
             st.write(f"Missing: {row['Missing']}")
             st.write(row["Coach Summary"])
             st.write(row["Next Step"])
+            st.write(f"10-Minute Edge: {row['10m Edge']}% - {row['10m Edge Label']}")
             st.write(row["Risk Note"])
 
 
@@ -2335,7 +2338,7 @@ def render_beacon_board(latest_results, high_score_history=None):
             f'<span class="board-main {action_color}">{escape(row["Action"])}</span></div>'
             f'<div class="board-meta"><span>{escape(row["Live Read"])}</span><span>{escape(row["Timing"])}</span>'
             f'<span>{escape(scan_stamp(row.get("Time")))}</span></div>'
-            f'<div class="board-sub">Entry risk: {escape(row["Entry Risk"])} | Exit {escape(str(row["Exit Score"]))}</div></div>'
+            f'<div class="board-sub">10m edge: {escape(str(row["10m Edge"]))}% {escape(row["10m Edge Label"])} | Entry risk: {escape(row["Entry Risk"])} | Exit {escape(str(row["Exit Score"]))}</div></div>'
             f'<div class="board-score"><div class="board-number">{escape(str(row["Score"]))}</div><div class="board-score-label">Score</div></div>'
             '</div>'
         )
@@ -3453,24 +3456,24 @@ def render_signal_outcomes():
             """
             <div class="notice notice-info">
                 <strong>Waiting on the first tracked setups.</strong><br>
-                During market hours, Option Beacon will log qualifying guide ideas, then check whether price followed through after 15, 30, and 60 minutes.
+                During market hours, Option Beacon will log qualifying guide ideas, then check whether price followed through after 5, 10, 15, 30, and 60 minutes.
                 This section will become the app's feedback loop: which tickers worked, which guide states were reliable, and which reads stalled.
             </div>
             <div class="health-grid">
                 <div class="health-card">
-                    <div class="health-label">15 Minute Read</div>
-                    <div class="health-state health-warn">Early reaction</div>
-                    <div class="health-detail">Shows whether the setup reacted quickly or immediately faded.</div>
+                    <div class="health-label">5 Minute Read</div>
+                    <div class="health-state health-warn">Immediate reaction</div>
+                    <div class="health-detail">Shows whether the setup reacted right away or faded almost immediately.</div>
                 </div>
                 <div class="health-card">
-                    <div class="health-label">30 Minute Read</div>
+                    <div class="health-label">10 Minute Read</div>
                     <div class="health-state health-warn">Primary scorecard</div>
-                    <div class="health-detail">Used for win rate and average move because it balances speed with follow-through.</div>
+                    <div class="health-detail">Used for the short-window edge read because it matches the fast option-decision window.</div>
                 </div>
                 <div class="health-card">
-                    <div class="health-label">60 Minute Read</div>
+                    <div class="health-label">30/60 Minute Reads</div>
                     <div class="health-state health-warn">Follow-through</div>
-                    <div class="health-detail">Shows whether the idea kept working or started reversing after the initial move.</div>
+                    <div class="health-detail">Shows whether the idea kept working or started reversing after the first push.</div>
                 </div>
             </div>
             """,
@@ -3481,21 +3484,30 @@ def render_signal_outcomes():
     summary = summarize_outcomes(outcomes)
     metric_columns = st.columns(4)
     metric_columns[0].metric("Tracked Setups", summary["tracked"])
-    metric_columns[1].metric("30m Reads", summary["completed"])
+    metric_columns[1].metric("10m Reads", summary["completed_10m"])
     metric_columns[2].metric(
-        "30m Win Rate",
-        f'{summary["win_rate"]:.1f}%' if summary["win_rate"] is not None else "Pending",
+        "10m Edge Rate",
+        f'{summary["win_rate_10m"]:.1f}%' if summary["win_rate_10m"] is not None else "Pending",
     )
     metric_columns[3].metric(
-        "Avg 30m Move",
-        f'{summary["avg_return"]:.2f}%' if summary["avg_return"] is not None else "Pending",
+        "Avg 10m Move",
+        f'{summary["avg_return_10m"]:.2f}%' if summary["avg_return_10m"] is not None else "Pending",
     )
 
-    if summary["completed"] == 0:
+    if summary["completed_10m"] == 0:
         st.markdown(
             '<div class="notice notice-info"><strong>Tracking is active.</strong><br>'
-            'Rows are being collected, but none are old enough for a 30-minute read yet. '
-            'Once a setup has aged past 30 minutes, the win-rate and average-move metrics will populate.</div>',
+            'Rows are being collected, but none are old enough for a 10-minute read yet. '
+            'Once a setup has aged past 10 minutes, the short-window edge metrics will populate.</div>',
+            unsafe_allow_html=True,
+        )
+    elif summary["win_rate_10m"] is not None:
+        edge_label = "Positive short-window edge" if summary["win_rate_10m"] >= 55 else "Short-window edge still unproven"
+        st.markdown(
+            f'<div class="notice notice-info"><strong>{escape(edge_label)}</strong><br>'
+            f'Based on tracked outcomes so far, qualifying setups followed through after 10 minutes '
+            f'{summary["win_rate_10m"]:.1f}% of the time with an average 10-minute move of '
+            f'{summary["avg_return_10m"]:.2f}%.</div>',
             unsafe_allow_html=True,
         )
 
@@ -3508,6 +3520,10 @@ def render_signal_outcomes():
             "action": "Guide State",
             "score": "Score",
             "entry_price": "Entry",
+            "return_5m": "5m Move %",
+            "outcome_5m": "5m Result",
+            "return_10m": "10m Move %",
+            "outcome_10m": "10m Result",
             "return_15m": "15m Move %",
             "outcome_15m": "15m Result",
             "return_30m": "30m Move %",
@@ -3526,6 +3542,10 @@ def render_signal_outcomes():
         "Guide State",
         "Score",
         "Entry",
+        "5m Move %",
+        "5m Result",
+        "10m Move %",
+        "10m Result",
         "15m Move %",
         "15m Result",
         "30m Move %",
@@ -3549,7 +3569,7 @@ def render_signal_outcomes():
                 "symbol": "Symbol",
                 "bias": "Bias",
                 "Win_Rate": "Win Rate %",
-                "Avg_30m_Move": "Avg 30m Move %",
+                "Avg_10m_Move": "Avg 10m Move %",
             }
         )
         st.dataframe(

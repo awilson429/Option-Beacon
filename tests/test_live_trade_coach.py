@@ -1,4 +1,10 @@
-from live_trade_coach import ACTION_AVOID, ACTION_ENTER, ACTION_WATCH, coach_live_setup
+from live_trade_coach import (
+    ACTION_AVOID,
+    ACTION_ENTER,
+    ACTION_WATCH,
+    coach_live_setup,
+    ten_minute_edge,
+)
 
 
 def test_live_coach_marks_triggered_setup_as_entry_zone_active():
@@ -66,3 +72,28 @@ def test_live_coach_warns_when_setup_is_extended():
 
     assert coach["action"] == ACTION_AVOID
     assert coach["exit_score"] >= 65
+
+
+def test_ten_minute_edge_returns_bounded_probability():
+    result = {
+        "signal": "BULLISH SETUP",
+        "bias": "Bullish",
+        "confidence": 92,
+        "price": 600,
+        "vwap": 598,
+        "macd_hist": 0.4,
+        "relative_volume": 1.8,
+        "entry_timing": "Trigger confirmed",
+        "setup_stage": "Triggered",
+        "trade_plan": {
+            "trigger_price": 599.5,
+            "invalidation_level": 597,
+            "target_1": 603,
+        },
+    }
+
+    coach = coach_live_setup(result)
+    edge = ten_minute_edge(result, coach)
+
+    assert 5 <= edge["probability"] <= 92
+    assert edge["label"] in ["High", "Moderate", "Developing", "Low"]

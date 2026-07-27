@@ -104,6 +104,74 @@ def exit_score_for_live_setup(result, coach=None):
     }
 
 
+def ten_minute_edge(result, coach):
+    score = _number(result.get("confidence"))
+    edge = 45 + ((score - 60) * 0.45)
+
+    if coach["action"] == ACTION_ENTER:
+        edge += 8
+    elif coach["action"] == ACTION_WATCH:
+        edge += 4
+    elif coach["action"] == ACTION_MONITOR:
+        edge -= 2
+    elif coach["action"] == ACTION_AVOID:
+        edge -= 16
+    elif coach["action"] == ACTION_WAIT:
+        edge -= 10
+
+    chase_risk = coach.get("chase_risk")
+    if chase_risk == "Low":
+        edge += 5
+    elif chase_risk == "Moderate":
+        edge -= 2
+    elif chase_risk == "High":
+        edge -= 10
+
+    exit_score = _number(coach.get("exit_score"))
+    if exit_score >= 80:
+        edge -= 18
+    elif exit_score >= 55:
+        edge -= 9
+    elif exit_score <= 20:
+        edge += 3
+
+    relative_volume = _number(result.get("relative_volume"))
+    if relative_volume >= 1.5:
+        edge += 5
+    elif relative_volume and relative_volume < 0.8:
+        edge -= 5
+
+    direction = result.get("bias", "Neutral")
+    price = _number(result.get("price"))
+    vwap = _number(result.get("vwap"))
+    macd_hist = _number(result.get("macd_hist"))
+    if direction == "Bullish":
+        if price and vwap and price >= vwap:
+            edge += 4
+        if macd_hist > 0:
+            edge += 3
+    elif direction == "Bearish":
+        if price and vwap and price <= vwap:
+            edge += 4
+        if macd_hist < 0:
+            edge += 3
+
+    edge = max(5, min(92, round(edge)))
+    if edge >= 65:
+        label = "High"
+    elif edge >= 55:
+        label = "Moderate"
+    elif edge >= 45:
+        label = "Developing"
+    else:
+        label = "Low"
+
+    return {
+        "probability": edge,
+        "label": label,
+    }
+
+
 def _number(value, default=0):
     try:
         return float(value) if value is not None else default
@@ -313,6 +381,7 @@ def coach_rows(latest_results, min_score=80, history=None):
     rows = []
     for symbol, result in latest_results.items():
         coach = coach_live_setup(result)
+        edge = ten_minute_edge(result or {"confidence": 0}, coach)
         momentum = setup_momentum_snapshot(result or {"symbol": symbol}, history)
         if coach["priority"] < min_score and coach["action"] == ACTION_WAIT:
             continue
@@ -332,6 +401,8 @@ def coach_rows(latest_results, min_score=80, history=None):
                 "Next Step": coach["next_step"],
                 "Exit Score": coach["exit_score"],
                 "Exit Label": coach["exit_label"],
+                "10m Edge": edge["probability"],
+                "10m Edge Label": edge["label"],
                 "Entry Risk": coach["chase_risk"],
                 "Live Read": momentum["label"],
                 "Live Detail": momentum["detail"],

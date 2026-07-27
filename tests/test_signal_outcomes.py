@@ -44,7 +44,7 @@ def test_directional_return_flips_for_bearish_setups():
     assert directional_return("Bearish", 100, 98) == 2
 
 
-def test_record_signal_outcomes_updates_30_minute_result(tmp_path):
+def test_record_signal_outcomes_updates_10_minute_result(tmp_path):
     file_name = tmp_path / "signal_outcomes.csv"
     opened_at = datetime(2026, 7, 24, 10, 0, tzinfo=ZoneInfo("America/New_York"))
     first_results = {"SPY": setup_result(price=100)}
@@ -59,18 +59,18 @@ def test_record_signal_outcomes_updates_30_minute_result(tmp_path):
     assert len(history) == 1
 
     later_result = setup_result(price=101)
-    later_result["timestamp"] = (opened_at + timedelta(minutes=30)).isoformat()
+    later_result["timestamp"] = (opened_at + timedelta(minutes=10)).isoformat()
     history, new_rows = record_signal_outcomes(
         {"SPY": later_result},
         history=history,
-        now=opened_at + timedelta(minutes=30),
+        now=opened_at + timedelta(minutes=10),
         file_name=file_name,
     )
 
     assert new_rows == 1
-    assert history.iloc[0]["outcome_30m"] == "Strong follow-through"
-    assert history.iloc[0]["return_30m"] == "1.00"
+    assert history.iloc[0]["outcome_10m"] == "Strong follow-through"
+    assert history.iloc[0]["return_10m"] == "1.00"
 
     summary = summarize_outcomes(history)
-    assert summary["completed"] == 1
-    assert summary["win_rate"] == 100.0
+    assert summary["completed_10m"] == 1
+    assert summary["win_rate_10m"] == 100.0
