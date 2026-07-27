@@ -1053,33 +1053,34 @@ def configure_page():
             background: rgba(255, 255, 255, 0.035);
             border: 1px solid var(--ob-border);
             border-radius: 8px;
-            display: grid;
+            display: flex !important;
             gap: 0.5rem;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
             padding: 0.5rem;
             margin-bottom: 1rem;
             width: 100%;
         }
 
         .stTabs [data-baseweb="tab"] {
-            border: 1px solid var(--ob-border-strong);
+            background: rgba(255, 255, 255, 0.025);
+            border: 1px solid rgba(255, 255, 255, 0.14);
             border-radius: 8px;
             color: var(--ob-muted);
-            font-size: clamp(0.82rem, 1.3vw, 1rem);
-            font-weight: 850;
-            justify-content: center;
-            min-height: 3rem;
+            flex: 1 1 0 !important;
+            font-size: clamp(0.72rem, 1.15vw, 0.9rem);
+            font-weight: 800;
+            justify-content: center !important;
+            min-height: 3.25rem;
             padding: 0.55rem 0.8rem;
             text-align: center;
             text-transform: uppercase;
-            width: 100%;
+            width: auto !important;
         }
 
         .stTabs [data-baseweb="tab"] p {
             color: inherit;
             font-size: inherit;
             font-weight: inherit;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.1em;
             margin: 0;
             white-space: nowrap;
         }
@@ -1087,8 +1088,8 @@ def configure_page():
         .stTabs [aria-selected="true"] {
             border-color: rgba(216, 179, 90, 0.85);
             color: var(--ob-text);
-            background: linear-gradient(180deg, rgba(216, 179, 90, 0.18), rgba(216, 179, 90, 0.06));
-            box-shadow: inset 0 -3px 0 rgba(216, 179, 90, 0.8);
+            background: linear-gradient(180deg, rgba(216, 179, 90, 0.16), rgba(255, 255, 255, 0.035));
+            box-shadow: inset 0 -3px 0 rgba(216, 179, 90, 0.85);
         }
 
         .stTabs [data-baseweb="tab-highlight"] {
@@ -1473,10 +1474,11 @@ def configure_page():
             }
 
             .stTabs [data-baseweb="tab-list"] {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                flex-wrap: wrap;
             }
 
             .stTabs [data-baseweb="tab"] {
+                flex-basis: calc(50% - 0.3rem) !important;
                 min-height: 2.8rem;
                 padding: 0.45rem 0.6rem;
             }
