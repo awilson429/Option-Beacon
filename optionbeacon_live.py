@@ -29,6 +29,15 @@ def eastern_timestamp():
     return datetime.now(ZoneInfo("America/New_York")).isoformat()
 
 
+def eastern_candle_timestamp(value):
+    timestamp = pd.Timestamp(value)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.tz_localize("America/New_York")
+    else:
+        timestamp = timestamp.tz_convert("America/New_York")
+    return timestamp.isoformat()
+
+
 def download_data(symbol, period):
     try:
         return yf.download(
@@ -112,6 +121,7 @@ def generate_signal(symbol):
     result = score_candle(df, i, symbol)
     result = enrich_with_trade_plan(result)
     result = enrich_with_option_liquidity(result)
+    result["last_candle_at"] = eastern_candle_timestamp(df.index[i])
     result["timestamp"] = eastern_timestamp()
     return result
 

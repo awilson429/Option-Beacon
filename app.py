@@ -311,11 +311,7 @@ def short_time(value):
         return eastern_now().strftime("%I:%M %p ET").lstrip("0")
 
     try:
-        timestamp = pd.Timestamp(value)
-        if timestamp.tzinfo is None:
-            timestamp = timestamp.tz_localize("UTC").tz_convert("America/New_York")
-        else:
-            timestamp = timestamp.tz_convert("America/New_York")
+        timestamp = eastern_timestamp_from_value(value)
         return timestamp.strftime("%I:%M %p ET").lstrip("0")
     except Exception:
         return str(value)
@@ -326,14 +322,90 @@ def scan_stamp(value):
         return eastern_now().strftime("%m/%d/%Y %I:%M %p ET").lstrip("0")
 
     try:
-        timestamp = pd.Timestamp(value)
-        if timestamp.tzinfo is None:
-            timestamp = timestamp.tz_localize("UTC").tz_convert("America/New_York")
-        else:
-            timestamp = timestamp.tz_convert("America/New_York")
+        timestamp = eastern_timestamp_from_value(value)
         return timestamp.strftime("%m/%d/%Y %I:%M %p ET").lstrip("0")
     except Exception:
         return str(value)
+
+
+def eastern_timestamp_from_value(value, naive_timezone="UTC"):
+    text = str(value or "").strip()
+    if text.endswith(" ET"):
+        text = text[:-3]
+        timestamp = pd.Timestamp(text)
+        return timestamp.tz_localize("America/New_York")
+
+    timestamp = pd.Timestamp(value)
+    if timestamp.tzinfo is None:
+        return timestamp.tz_localize(naive_timezone).tz_convert("America/New_York")
+    return timestamp.tz_convert("America/New_York")
+
+
+def is_today_timestamp(value):
+    try:
+        return eastern_timestamp_from_value(value).date() == eastern_now().date()
+    except Exception:
+        return False
+
+
+def today_alerts(alerts):
+    if alerts.empty or "timestamp" not in alerts.columns:
+        return alerts
+    mask = alerts["timestamp"].apply(is_today_timestamp)
+    return alerts[mask].copy()
+
+
+def today_rows(rows, time_key="Time"):
+    return [row for row in rows if is_today_timestamp(row.get(time_key))]
+
+
+def current_day_guide_rows(rows, latest_results):
+    current_rows = []
+    for row in rows:
+        result = latest_results.get(row.get("Symbol"), {})
+        timestamp_value = result.get("last_candle_at") or row.get("Time")
+        if is_today_timestamp(timestamp_value):
+            current_rows.append(row)
+    return current_rows
+
+
+def current_day_opportunity_rows(rows):
+    return [
+        row for row in rows
+        if is_today_timestamp((row.get("result") or {}).get("last_candle_at") or (row.get("result") or {}).get("timestamp"))
+    ]
+
+
+def current_day_ranked_rows(rows, latest_results):
+    return [
+        row for row in rows
+        if is_today_timestamp(
+            (latest_results.get(row.get("Symbol")) or {}).get("last_candle_at")
+            or (latest_results.get(row.get("Symbol")) or {}).get("timestamp")
+        )
+    ]
+
+
+def result_freshness_label(result):
+    timestamp_value = (result or {}).get("last_candle_at") or (result or {}).get("timestamp")
+    if not timestamp_value:
+        return "Freshness unknown"
+
+    try:
+        timestamp = eastern_timestamp_from_value(timestamp_value, naive_timezone="America/New_York")
+    except Exception:
+        return "Freshness unknown"
+
+    if timestamp.date() != eastern_now().date():
+        return f"Stale {timestamp.strftime('%m/%d/%Y')}"
+
+    age_minutes = max(
+        0,
+        int((pd.Timestamp.now(tz="America/New_York") - pd.Timestamp(timestamp)).total_seconds() // 60),
+    )
+    if age_minutes <= 7:
+        return "Live candle"
+    return f"{age_minutes}m old"
 
 
 def factor_status(result, direction, latest_results=None):
@@ -1525,6 +1597,57 @@ def health_card(label, state, detail, level="warn"):
     )
 
 
+def scanner_freshness(latest_results, snapshot_time):
+    timestamps = [
+        result.get("last_candle_at") or result.get("timestamp")
+        for result in latest_results.values()
+        if result and (result.get("last_candle_at") or result.get("timestamp"))
+    ]
+    reference_time = max(timestamps) if timestamps else snapshot_time
+    if reference_time in [None, ""]:
+        return {
+            "is_stale": False,
+            "label": "Live fallback",
+            "detail": "No scheduled scanner timestamp is loaded yet.",
+        }
+
+    try:
+        timestamp = eastern_timestamp_from_value(reference_time, naive_timezone="America/New_York")
+    except Exception:
+        return {
+            "is_stale": True,
+            "label": "Timestamp unclear",
+            "detail": f"Could not read scanner timestamp: {reference_time}",
+        }
+
+    now = pd.Timestamp.now(tz="America/New_York")
+    age_minutes = max(0, int((now - pd.Timestamp(timestamp)).total_seconds() // 60))
+    is_same_day = timestamp.date() == eastern_now().date()
+    is_stale = (not is_same_day) or age_minutes > 20
+    if is_same_day:
+        detail = f"Latest scanner data: {scan_stamp(timestamp)} ({age_minutes} min old)."
+    else:
+        detail = f"Latest scanner data is from {scan_stamp(timestamp)}, not today."
+
+    return {
+        "is_stale": is_stale,
+        "label": "Stale scanner data" if is_stale else "Fresh scanner data",
+        "detail": detail,
+    }
+
+
+def render_scanner_freshness_notice(latest_results, snapshot_time):
+    freshness = scanner_freshness(latest_results, snapshot_time)
+    if not freshness["is_stale"]:
+        return
+
+    st.markdown(
+        f'<div class="notice notice-warning"><strong>{escape(freshness["label"])}</strong><br>'
+        f'{escape(freshness["detail"])} Today-only alert panels are hidden until fresh scanner data returns.</div>',
+        unsafe_allow_html=True,
+    )
+
+
 @st.cache_data(ttl=60, show_spinner=False)
 def cached_generate_signal(symbol):
     try:
@@ -1929,10 +2052,13 @@ def render_live_trade_coach(latest_results, high_score_history=None):
         "Live Trade Guide",
         "Current scanner ideas with entry, wait, and risk guidance",
     )
-    rows = coach_rows(latest_results, min_score=60, history=high_score_history)
+    rows = current_day_guide_rows(
+        coach_rows(latest_results, min_score=60, history=high_score_history),
+        latest_results,
+    )
 
     if not rows:
-        render_empty_state("No live trade ideas are ready yet.")
+        render_empty_state("No current-day guide ideas are ready yet.")
         return
 
     active_rows = [
@@ -2050,9 +2176,12 @@ def render_market_snapshot(latest_results):
 
 
 def render_beacon_tape(latest_results):
-    ranked_rows = ranked_setup_rows(latest_results, min_score=65, limit=7)
+    ranked_rows = current_day_ranked_rows(
+        ranked_setup_rows(latest_results, min_score=65, limit=7),
+        latest_results,
+    )
     sector_rows = sector_strength_rows(latest_results)[:7]
-    alerts = load_live_coach_alerts()
+    alerts = today_alerts(load_live_coach_alerts())
 
     def market_rows():
         html = ""
@@ -2063,11 +2192,12 @@ def render_beacon_tape(latest_results):
             bias = result.get("bias", "N/A")
             price = money(result.get("price"))
             score = result.get("confidence", 0)
+            freshness = result_freshness_label(result)
             html += (
                 '<div class="tape-row">'
                 f'<div class="tape-symbol security-symbol">{escape(symbol)}</div>'
                 f'<div class="tape-main {tape_row_color(bias)}">{escape(str(bias))}</div>'
-                f'<div class="tape-sub">{escape(price)}<br>{escape(str(score))}</div>'
+                f'<div class="tape-sub">{escape(price)}<br>{escape(str(score))} | {escape(freshness)}</div>'
                 '</div>'
             )
         return html or '<div class="tape-empty">Market context is waiting on fresh scanner data.</div>'
@@ -2110,7 +2240,7 @@ def render_beacon_tape(latest_results):
                     f'<div class="tape-sub">{escape(str(alert.get("score", "")))}<br>{escape(str(alert.get("live_read", ""))[:8])}</div>'
                     '</div>'
                 )
-        return html or '<div class="tape-empty">No recent guide alerts logged.</div>'
+        return html or '<div class="tape-empty">No guide alerts logged today.</div>'
 
     bull_count = sum(1 for row in ranked_rows if row["Bias"] == "Bullish")
     bear_count = sum(1 for row in ranked_rows if row["Bias"] == "Bearish")
@@ -2143,10 +2273,17 @@ def render_beacon_tape(latest_results):
 
 def render_beacon_board(latest_results, high_score_history=None):
     regime = market_regime(latest_results)
-    coach_queue = coach_rows(latest_results, min_score=60, history=high_score_history)
-    alerts = load_live_coach_alerts()
-    bullish_rows = opportunity_rows(latest_results, "Bullish", limit=5)
-    bearish_rows = opportunity_rows(latest_results, "Bearish", limit=5)
+    coach_queue = current_day_guide_rows(
+        coach_rows(latest_results, min_score=60, history=high_score_history),
+        latest_results,
+    )
+    alerts = today_alerts(load_live_coach_alerts())
+    bullish_rows = current_day_opportunity_rows(
+        opportunity_rows(latest_results, "Bullish", limit=5)
+    )
+    bearish_rows = current_day_opportunity_rows(
+        opportunity_rows(latest_results, "Bearish", limit=5)
+    )
     risk_rows = [
         row for row in coach_queue
         if row["Entry Risk"] == "High" or int(row.get("Exit Score") or 0) >= 55
@@ -2158,11 +2295,12 @@ def render_beacon_board(latest_results, high_score_history=None):
         bias = result.get("bias", "N/A")
         score = result.get("confidence", 0)
         color = board_color_class(bias)
+        freshness = result_freshness_label(result)
         market_tiles += (
             f'<div class="board-tile">'
             f'<div class="board-tile-label security-symbol">{escape(symbol)}</div>'
             f'<div class="board-tile-value {color}">{escape(str(bias))}</div>'
-            f'<div class="board-sub">Score {escape(str(score))}/100</div>'
+            f'<div class="board-sub">Score {escape(str(score))}/100 | {escape(freshness)}</div>'
             f'</div>'
         )
 
@@ -2180,7 +2318,7 @@ def render_beacon_board(latest_results, high_score_history=None):
             '</div>'
         )
     if not coach_html:
-        coach_html = '<div class="board-note">No guide ideas are active yet.</div>'
+        coach_html = '<div class="board-note">No current-day guide ideas are active yet.</div>'
 
     def setup_rows(rows):
         html = ""
@@ -2194,7 +2332,7 @@ def render_beacon_board(latest_results, high_score_history=None):
                 f'<div class="board-symbol security-symbol">{escape(row["symbol"])}</div>'
                 f'<div><div class="board-callout"><span class="board-callout-chip">{escape(bias_label)}</span>'
                 f'<span class="board-callout-muted">{escape(timing_label)}</span></div>'
-                f'<div class="board-sub">Entry {money(plan_value(plan, "trigger_price", result.get("entry")))} | Stop {money(plan_value(plan, "technical_stop", result.get("stop")))}</div></div>'
+                f'<div class="board-sub">Entry {money(plan_value(plan, "trigger_price", result.get("entry")))} | Stop {money(plan_value(plan, "technical_stop", result.get("stop")))} | {escape(result_freshness_label(result))}</div></div>'
                 f'<div class="board-score"><div class="board-number">{escape(str(row["score"]))}</div><div class="board-score-label">Score</div></div>'
                 '</div>'
             )
@@ -2228,7 +2366,7 @@ def render_beacon_board(latest_results, high_score_history=None):
                 '</div>'
             )
     if not alert_html:
-        alert_html = '<div class="board-note">No recent guide alerts logged yet.</div>'
+        alert_html = '<div class="board-note">No guide alerts logged today.</div>'
 
     st.markdown(
         f"""
@@ -2271,10 +2409,10 @@ def render_live_coach_alerts():
         "Recent Guide Alerts",
         "Meaningful setup changes logged by the scheduled scanner",
     )
-    alerts = load_live_coach_alerts()
+    alerts = today_alerts(load_live_coach_alerts())
 
     if alerts.empty:
-        render_empty_state("No guide alerts logged yet.")
+        render_empty_state("No guide alerts logged today.")
         return
 
     display = alerts.tail(50).sort_index(ascending=False).rename(
@@ -3184,23 +3322,10 @@ def render_scanner_health(latest_results, snapshot_time, symbol_groups):
         else "No symbols are loaded yet."
     )
 
-    if snapshot_time is not None:
-        snapshot_timestamp = pd.Timestamp(snapshot_time)
-        if snapshot_timestamp.tzinfo is None:
-            snapshot_timestamp = snapshot_timestamp.tz_localize("America/New_York")
-        else:
-            snapshot_timestamp = snapshot_timestamp.tz_convert("America/New_York")
-        age_minutes = max(
-            0,
-            int((pd.Timestamp.now(tz="America/New_York") - snapshot_timestamp).total_seconds() // 60),
-        )
-        scan_level = "good" if age_minutes <= 15 else "warn"
-        scan_state = "Fresh" if age_minutes <= 15 else "Stale"
-        scan_detail = f"Latest scheduled scan: {scan_stamp(snapshot_timestamp)} ({age_minutes} min old)."
-    else:
-        scan_level = "warn"
-        scan_state = "Local fallback"
-        scan_detail = "No scanner-data snapshot was loaded; the app is using direct local reads."
+    freshness = scanner_freshness(latest_results, snapshot_time)
+    scan_level = "warn" if freshness["is_stale"] else "good"
+    scan_state = "Stale" if freshness["is_stale"] else "Fresh"
+    scan_detail = freshness["detail"]
 
     finnhub_configured = secret_configured("FINNHUB_API_KEY")
     finnhub_state = "Configured" if finnhub_configured else "Missing"
@@ -3418,6 +3543,7 @@ def main():
     render_header()
 
     latest_results, high_score_history, snapshot_time, symbol_groups = scan_symbols()
+    render_scanner_freshness_notice(latest_results, snapshot_time)
 
     live_tab, after_hours_tab, opportunities_tab, history_tab, tools_tab = st.tabs(
         ["Live Guide", "After Hours", "Opportunities", "History", "Tools"]
