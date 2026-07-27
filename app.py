@@ -3553,10 +3553,10 @@ def main():
         render_market_snapshot(latest_results)
         render_beacon_tape(latest_results)
         render_beacon_board(latest_results, high_score_history)
-        with st.expander("Detailed Live Guide"):
-            render_live_trade_coach(latest_results, high_score_history)
-        with st.expander("Recent Guide Alert Table"):
-            render_live_coach_alerts()
+        st.divider()
+        render_live_trade_coach(latest_results, high_score_history)
+        st.divider()
+        render_live_coach_alerts()
 
     with after_hours_tab:
         render_after_hours(latest_results)
