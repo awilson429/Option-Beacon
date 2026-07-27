@@ -1128,6 +1128,25 @@ def configure_page():
             text-transform: none;
         }
 
+        .board-titleline {
+            align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+
+        .board-bias-tag {
+            border: 1px solid currentColor;
+            border-radius: 999px;
+            font-size: 0.62rem;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            line-height: 1;
+            padding: 0.22rem 0.42rem;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
         .board-callout {
             align-items: center;
             color: var(--ob-text);
@@ -2307,10 +2326,13 @@ def render_beacon_board(latest_results, high_score_history=None):
     coach_html = ""
     for row in coach_queue[:7]:
         action_color = board_color_class(row["Action"])
+        bias = row.get("Bias", "Neutral")
+        bias_color = board_color_class(bias)
         coach_html += (
             '<div class="board-row">'
             f'<div class="board-symbol security-symbol">{escape(row["Symbol"])}</div>'
-            f'<div><div class="board-main {action_color}">{escape(row["Action"])}</div>'
+            f'<div><div class="board-titleline"><span class="board-bias-tag {bias_color}">{escape(bias)}</span>'
+            f'<span class="board-main {action_color}">{escape(row["Action"])}</span></div>'
             f'<div class="board-meta"><span>{escape(row["Live Read"])}</span><span>{escape(row["Timing"])}</span>'
             f'<span>{escape(scan_stamp(row.get("Time")))}</span></div>'
             f'<div class="board-sub">Entry risk: {escape(row["Entry Risk"])} | Exit {escape(str(row["Exit Score"]))}</div></div>'
