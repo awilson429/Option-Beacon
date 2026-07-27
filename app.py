@@ -1049,6 +1049,7 @@ def configure_page():
             overflow: hidden;
         }
 
+        div[data-testid="stTabs"] div[role="tablist"],
         .stTabs [data-baseweb="tab-list"] {
             background: rgba(255, 255, 255, 0.035);
             border: 1px solid var(--ob-border);
@@ -1060,6 +1061,7 @@ def configure_page():
             width: 100%;
         }
 
+        div[data-testid="stTabs"] button[role="tab"],
         .stTabs [data-baseweb="tab"] {
             background: rgba(255, 255, 255, 0.025);
             border: 1px solid rgba(255, 255, 255, 0.14);
@@ -1076,6 +1078,7 @@ def configure_page():
             width: auto !important;
         }
 
+        div[data-testid="stTabs"] button[role="tab"] p,
         .stTabs [data-baseweb="tab"] p {
             color: inherit;
             font-size: inherit;
@@ -1085,6 +1088,7 @@ def configure_page():
             white-space: nowrap;
         }
 
+        div[data-testid="stTabs"] button[role="tab"][aria-selected="true"],
         .stTabs [aria-selected="true"] {
             border-color: rgba(216, 179, 90, 0.85);
             color: var(--ob-text);
@@ -1092,8 +1096,16 @@ def configure_page():
             box-shadow: inset 0 -3px 0 rgba(216, 179, 90, 0.85);
         }
 
-        .stTabs [data-baseweb="tab-highlight"] {
-            display: none;
+        div[data-testid="stTabs"] button[role="tab"]:hover {
+            border-color: rgba(216, 179, 90, 0.55);
+            color: var(--ob-text);
+        }
+
+        div[data-testid="stTabs"] [data-baseweb="tab-highlight"],
+        div[data-testid="stTabs"] [data-baseweb="tab-border"],
+        .stTabs [data-baseweb="tab-highlight"],
+        .stTabs [data-baseweb="tab-border"] {
+            display: none !important;
         }
 
         .beacon-board {
@@ -1473,10 +1485,12 @@ def configure_page():
                 grid-template-columns: 1fr 1fr;
             }
 
+            div[data-testid="stTabs"] div[role="tablist"],
             .stTabs [data-baseweb="tab-list"] {
                 flex-wrap: wrap;
             }
 
+            div[data-testid="stTabs"] button[role="tab"],
             .stTabs [data-baseweb="tab"] {
                 flex-basis: calc(50% - 0.3rem) !important;
                 min-height: 2.8rem;
