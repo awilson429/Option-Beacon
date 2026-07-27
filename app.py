@@ -1051,31 +1051,32 @@ def configure_page():
 
         div[data-testid="stTabs"] div[role="tablist"],
         .stTabs [data-baseweb="tab-list"] {
-            background: rgba(255, 255, 255, 0.035);
-            border: 1px solid var(--ob-border);
-            border-radius: 8px;
-            display: flex !important;
-            gap: 0.5rem;
-            padding: 0.5rem;
-            margin-bottom: 1rem;
+            background: transparent;
+            border: 0;
+            display: grid !important;
+            gap: 0.7rem;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            padding: 0;
+            margin: 0.15rem 0 0.85rem;
             width: 100%;
         }
 
         div[data-testid="stTabs"] button[role="tab"],
         .stTabs [data-baseweb="tab"] {
-            background: rgba(255, 255, 255, 0.025);
+            align-items: flex-start;
+            background: rgba(255, 255, 255, 0.035);
             border: 1px solid rgba(255, 255, 255, 0.14);
             border-radius: 8px;
             color: var(--ob-muted);
-            flex: 1 1 0 !important;
-            font-size: clamp(0.72rem, 1.15vw, 0.9rem);
+            display: flex !important;
+            flex: unset !important;
+            font-size: clamp(0.82rem, 1.35vw, 1.05rem);
             font-weight: 800;
-            justify-content: center !important;
-            min-height: 3.25rem;
-            padding: 0.55rem 0.8rem;
-            text-align: center;
-            text-transform: uppercase;
-            width: auto !important;
+            justify-content: flex-start !important;
+            min-height: 5.25rem;
+            padding: 0.8rem;
+            text-align: left;
+            width: 100% !important;
         }
 
         div[data-testid="stTabs"] button[role="tab"] p,
@@ -1083,16 +1084,17 @@ def configure_page():
             color: inherit;
             font-size: inherit;
             font-weight: inherit;
-            letter-spacing: 0.1em;
+            letter-spacing: 0;
+            line-height: 1.1;
             margin: 0;
-            white-space: nowrap;
+            white-space: normal;
         }
 
         div[data-testid="stTabs"] button[role="tab"][aria-selected="true"],
         .stTabs [aria-selected="true"] {
             border-color: rgba(216, 179, 90, 0.85);
             color: var(--ob-text);
-            background: linear-gradient(180deg, rgba(216, 179, 90, 0.16), rgba(255, 255, 255, 0.035));
+            background: linear-gradient(180deg, rgba(216, 179, 90, 0.14), rgba(255, 255, 255, 0.04));
             box-shadow: inset 0 -3px 0 rgba(216, 179, 90, 0.85);
         }
 
@@ -1487,14 +1489,13 @@ def configure_page():
 
             div[data-testid="stTabs"] div[role="tablist"],
             .stTabs [data-baseweb="tab-list"] {
-                flex-wrap: wrap;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
 
             div[data-testid="stTabs"] button[role="tab"],
             .stTabs [data-baseweb="tab"] {
-                flex-basis: calc(50% - 0.3rem) !important;
-                min-height: 2.8rem;
-                padding: 0.45rem 0.6rem;
+                min-height: 4rem;
+                padding: 0.65rem;
             }
 
             .opportunity-reason {
