@@ -72,6 +72,7 @@ from trade_storage import (
 
 
 SYMBOL_GROUPS = DEFAULT_SYMBOL_GROUPS
+MARKET_CONTEXT_TAPE_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA", "XLK", "XLF"]
 LOGO_ASSET_PATH = Path("assets/option-beacon-header-logo.png")
 FALLBACK_LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-381bdd4d9924/OptionBeaconLLC%20Logo%20V2.png"
 
@@ -2226,7 +2227,7 @@ def render_beacon_tape(latest_results):
 
     def market_rows():
         html = ""
-        for symbol in ["SPY", "QQQ", "IWM", "DIA", "XLK", "XLF"]:
+        for symbol in MARKET_CONTEXT_TAPE_SYMBOLS:
             result = latest_results.get(symbol, {})
             if not result:
                 continue
@@ -2241,7 +2242,7 @@ def render_beacon_tape(latest_results):
                 f'<div class="tape-sub">{escape(price)}<br>{escape(str(score))} | {escape(freshness)}</div>'
                 '</div>'
             )
-        return html or '<div class="tape-empty">Market context is waiting on fresh scanner data.</div>'
+        return html or '<div class="tape-empty">Core market ETFs are waiting on fresh scanner data.</div>'
 
     def setup_rows():
         html = ""
@@ -2291,7 +2292,7 @@ def render_beacon_tape(latest_results):
         f"""
         <div class="beacon-tape">
             <div class="tape-panel">
-                <div class="tape-header"><span>Market</span><span>Table</span></div>
+                <div class="tape-header"><span>Market Context</span><span>ETFs</span></div>
                 {market_rows()}
             </div>
             <div class="tape-panel">
