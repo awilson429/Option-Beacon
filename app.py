@@ -1053,25 +1053,46 @@ def configure_page():
             background: rgba(255, 255, 255, 0.035);
             border: 1px solid var(--ob-border);
             border-radius: 8px;
-            gap: 0.45rem;
-            padding: 0.45rem;
+            display: grid;
+            gap: 0.5rem;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            padding: 0.5rem;
             margin-bottom: 1rem;
+            width: 100%;
         }
 
         .stTabs [data-baseweb="tab"] {
             border: 1px solid var(--ob-border-strong);
-            border-radius: 999px;
+            border-radius: 8px;
             color: var(--ob-muted);
-            font-weight: 700;
-            min-height: 2.5rem;
-            padding: 0.35rem 1.2rem;
+            font-size: clamp(0.82rem, 1.3vw, 1rem);
+            font-weight: 850;
+            justify-content: center;
+            min-height: 3rem;
+            padding: 0.55rem 0.8rem;
+            text-align: center;
             text-transform: uppercase;
+            width: 100%;
+        }
+
+        .stTabs [data-baseweb="tab"] p {
+            color: inherit;
+            font-size: inherit;
+            font-weight: inherit;
+            letter-spacing: 0.04em;
+            margin: 0;
+            white-space: nowrap;
         }
 
         .stTabs [aria-selected="true"] {
-            border-color: rgba(216, 179, 90, 0.65);
+            border-color: rgba(216, 179, 90, 0.85);
             color: var(--ob-text);
-            background: rgba(216, 179, 90, 0.08);
+            background: linear-gradient(180deg, rgba(216, 179, 90, 0.18), rgba(216, 179, 90, 0.06));
+            box-shadow: inset 0 -3px 0 rgba(216, 179, 90, 0.8);
+        }
+
+        .stTabs [data-baseweb="tab-highlight"] {
+            display: none;
         }
 
         .beacon-board {
@@ -1449,6 +1470,15 @@ def configure_page():
 
             .opportunity-row {
                 grid-template-columns: 1fr 1fr;
+            }
+
+            .stTabs [data-baseweb="tab-list"] {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .stTabs [data-baseweb="tab"] {
+                min-height: 2.8rem;
+                padding: 0.45rem 0.6rem;
             }
 
             .opportunity-reason {
