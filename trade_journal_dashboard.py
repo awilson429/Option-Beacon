@@ -6,7 +6,11 @@ import math
 from datetime import datetime, timezone
 from typing import Iterable
 
-from signal_history import TradeOutcome
+from signal_history import (
+    DEFAULT_MIN_ENTRY_CONFIDENCE,
+    TradeOutcome,
+    entry_confidence_eligible,
+)
 from trade_analytics import confidence_bucket
 
 
@@ -29,6 +33,18 @@ def trade_outcome_status(record: TradeOutcome) -> str:
     if record.entry_time is not None:
         return "OPEN"
     return "CANDIDATE"
+
+
+def entry_eligibility_label(
+    record: TradeOutcome,
+    minimum_entry_confidence: float = DEFAULT_MIN_ENTRY_CONFIDENCE,
+) -> str:
+    """Return a read-only explanation of candidate entry eligibility."""
+    if trade_outcome_status(record) != "CANDIDATE":
+        return UNAVAILABLE
+    if not entry_confidence_eligible(record, minimum_entry_confidence):
+        return "WATCH ONLY — BELOW ENTRY CONFIDENCE"
+    return "ENTRY ELIGIBLE"
 
 
 def filter_trade_outcomes(
@@ -147,6 +163,7 @@ def trade_history_rows(records: Iterable[TradeOutcome]) -> list[dict]:
                 ),
                 "Hold Minutes": format_metric(record.hold_minutes),
                 "Status": trade_outcome_status(record),
+                "Entry Eligibility": entry_eligibility_label(record),
             }
         )
     return rows

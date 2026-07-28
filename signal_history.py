@@ -18,6 +18,7 @@ from uuid import uuid4
 DEFAULT_HISTORY_FILE = "signal_history.jsonl"
 DEFAULT_MAX_CANDIDATE_AGE_MINUTES = 60
 DEFAULT_MAX_ENTERED_AGE_MINUTES = 240
+DEFAULT_MIN_ENTRY_CONFIDENCE = 65
 LOGGER = logging.getLogger(__name__)
 
 
@@ -206,6 +207,23 @@ def _directional_return(direction: str, entry: float, price: float) -> float:
     return change if direction == "Bullish" else -change
 
 
+def entry_confidence_eligible(
+    record: TradeOutcome,
+    minimum_entry_confidence: float = DEFAULT_MIN_ENTRY_CONFIDENCE,
+) -> bool:
+    """Return whether an unentered record clears the finite confidence gate."""
+    try:
+        confidence = float(record.confidence)
+        threshold = float(minimum_entry_confidence)
+    except (TypeError, ValueError):
+        return False
+    return (
+        math.isfinite(confidence)
+        and math.isfinite(threshold)
+        and confidence >= threshold
+    )
+
+
 def expire_trade_outcome(
     record: TradeOutcome,
     current_price: float,
@@ -259,6 +277,7 @@ def update_trade_outcome(
     record: TradeOutcome,
     current_price: float,
     current_timestamp: datetime | str,
+    minimum_entry_confidence: float = DEFAULT_MIN_ENTRY_CONFIDENCE,
 ) -> TradeOutcome:
     """Advance one candidate or entered outcome using the latest market price."""
     if record.exit_time is not None:
@@ -274,7 +293,10 @@ def update_trade_outcome(
         entry_reached = (
             price >= entry if record.direction == "Bullish" else price <= entry
         )
-        if entry_reached:
+        if entry_reached and entry_confidence_eligible(
+            record,
+            minimum_entry_confidence,
+        ):
             record.entry_time = checked_at
         return record
 
@@ -335,6 +357,7 @@ def update_trade_outcomes_from_result(
     file_name: str | Path = DEFAULT_HISTORY_FILE,
     max_candidate_age_minutes: float = DEFAULT_MAX_CANDIDATE_AGE_MINUTES,
     max_entered_age_minutes: float = DEFAULT_MAX_ENTERED_AGE_MINUTES,
+    minimum_entry_confidence: float = DEFAULT_MIN_ENTRY_CONFIDENCE,
 ) -> int:
     """Update matching history records without allowing failures to stop scanning."""
     try:
@@ -362,7 +385,12 @@ def update_trade_outcomes_from_result(
                 max_entered_age_minutes=max_entered_age_minutes,
             )
             if record.exit_time is None:
-                update_trade_outcome(record, current_price, current_timestamp)
+                update_trade_outcome(
+                    record,
+                    current_price,
+                    current_timestamp,
+                    minimum_entry_confidence=minimum_entry_confidence,
+                )
             if serialize_trade_outcome(record) != before:
                 updated_count += 1
 
