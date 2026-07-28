@@ -526,6 +526,121 @@ def configure_page():
             margin-top: 0.2rem;
         }
 
+        .decision-summary {
+            background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018));
+            border: 1px solid var(--ob-border-strong);
+            border-left: 6px solid var(--ob-muted);
+            border-radius: 8px;
+            margin: 0 0 0.85rem;
+            padding: 0.85rem;
+        }
+
+        .decision-header {
+            align-items: flex-start;
+            display: flex;
+            gap: 0.75rem;
+            justify-content: space-between;
+            margin-bottom: 0.7rem;
+        }
+
+        .decision-symbol {
+            font-size: 1.55rem;
+            line-height: 1.1;
+        }
+
+        .decision-setup {
+            color: var(--ob-muted);
+            font-size: 0.85rem;
+            margin-top: 0.2rem;
+        }
+
+        .decision-state {
+            border: 1px solid currentColor;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            padding: 0.35rem 0.6rem;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .decision-grid {
+            display: grid;
+            gap: 0.45rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .decision-metric {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--ob-border);
+            border-radius: 6px;
+            min-width: 0;
+            padding: 0.5rem 0.55rem;
+        }
+
+        .decision-label {
+            color: var(--ob-muted);
+            font-size: 0.68rem;
+            font-weight: 750;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .decision-value {
+            color: var(--ob-text);
+            font-size: 0.95rem;
+            font-weight: 750;
+            line-height: 1.2;
+            margin-top: 0.15rem;
+            overflow-wrap: anywhere;
+        }
+
+        .decision-action {
+            align-items: center;
+            color: var(--ob-text);
+            display: flex;
+            font-size: 0.9rem;
+            gap: 0.45rem;
+            justify-content: space-between;
+            margin-top: 0.65rem;
+        }
+
+        .decision-action span {
+            color: var(--ob-muted);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+        }
+
+        .decision-banner {
+            border: 1px solid var(--ob-border);
+            border-left: 5px solid var(--ob-muted);
+            border-radius: 8px;
+            margin: 0.35rem 0 0.65rem;
+            padding: 0.65rem 0.75rem;
+        }
+
+        .decision-positive {
+            border-left-color: var(--ob-green);
+            color: var(--ob-green);
+        }
+
+        .decision-caution {
+            border-left-color: var(--ob-gold);
+            color: #d9c385;
+        }
+
+        .decision-urgent {
+            border-left-color: var(--ob-red);
+            color: var(--ob-red);
+        }
+
+        .decision-muted,
+        .decision-neutral {
+            border-left-color: var(--ob-muted);
+            color: var(--ob-muted);
+        }
+
         .factor-list {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -998,6 +1113,20 @@ def configure_page():
         }
 
         @media (max-width: 760px) {
+            .decision-header,
+            .decision-action {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .decision-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .decision-state {
+                white-space: normal;
+            }
+
             .brand-row {
                 align-items: center;
                 flex-direction: column;
