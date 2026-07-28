@@ -188,7 +188,15 @@ LIQUID_OPTIONS_CANDIDATES = [
 
 
 def finnhub_api_key():
-    return os.getenv("FINNHUB_API_KEY", "").strip()
+    value = os.getenv("FINNHUB_API_KEY", "").strip()
+    if value:
+        return value
+    try:
+        import streamlit as st
+
+        return str(st.secrets.get("FINNHUB_API_KEY") or "").strip()
+    except Exception:
+        return ""
 
 
 def top_mover_count():

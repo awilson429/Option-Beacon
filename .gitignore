@@ -4,12 +4,27 @@ __pycache__/
 .streamlit/secrets.toml
 .env
 .env.*
+.venv/
+venv/
+env/
+.pytest_cache/
+*.tmp
+*.log
 
 signal_history.csv
 signal_history.jsonl
+signal_history.backup*.jsonl
+paper_option_trades.jsonl
+runtime_diagnostics.json
+runtime_diagnostics.json.tmp
+paper_option_positions.json
+paper_option_positions.json.tmp
 optionbeacon_live_signals.csv
 latest_results.json
 high_score_history.csv
+signal_outcomes.csv
+live_coach_alerts.csv
+finnhub_movers_cache.json
 optionbeacon_trades.db
 threshold_optimizer_results.csv
 threshold_recommendations.csv
