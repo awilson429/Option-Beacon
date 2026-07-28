@@ -16,6 +16,8 @@ from uuid import uuid4
 
 
 DEFAULT_HISTORY_FILE = "signal_history.jsonl"
+DEFAULT_MAX_CANDIDATE_AGE_MINUTES = 60
+DEFAULT_MAX_ENTERED_AGE_MINUTES = 240
 LOGGER = logging.getLogger(__name__)
 
 
@@ -204,6 +206,55 @@ def _directional_return(direction: str, entry: float, price: float) -> float:
     return change if direction == "Bullish" else -change
 
 
+def expire_trade_outcome(
+    record: TradeOutcome,
+    current_price: float,
+    current_timestamp: datetime | str,
+    max_candidate_age_minutes: float = DEFAULT_MAX_CANDIDATE_AGE_MINUTES,
+    max_entered_age_minutes: float = DEFAULT_MAX_ENTERED_AGE_MINUTES,
+) -> TradeOutcome:
+    """Close an untriggered candidate or stale entered trade at its age limit."""
+    if record.exit_time is not None:
+        return record
+
+    checked_at = _current_timestamp(current_timestamp)
+    if record.entry_time is None:
+        signal_time = _current_timestamp(record.timestamp)
+        elapsed_minutes = max(
+            0.0,
+            (checked_at - signal_time).total_seconds() / 60,
+        )
+        if elapsed_minutes >= max_candidate_age_minutes:
+            record.exit_time = checked_at
+            record.exit_reason = "NEVER_TRIGGERED"
+            record.realized_return = None
+            record.max_favorable_excursion = None
+            record.max_adverse_excursion = None
+            record.hold_minutes = elapsed_minutes
+        return record
+
+    entry = _valid_price(record.entry)
+    price = _valid_price(current_price)
+    entry_time = _current_timestamp(record.entry_time)
+    elapsed_minutes = max(
+        0.0,
+        (checked_at - entry_time).total_seconds() / 60,
+    )
+    if (
+        elapsed_minutes >= max_entered_age_minutes
+        and entry is not None
+        and price is not None
+    ):
+        record.exit_time = checked_at
+        record.exit_reason = "TIME_EXIT"
+        record.realized_return = _directional_return(
+            record.direction,
+            entry,
+            price,
+        )
+    return record
+
+
 def update_trade_outcome(
     record: TradeOutcome,
     current_price: float,
@@ -282,6 +333,8 @@ def update_trade_outcome(
 def update_trade_outcomes_from_result(
     result: dict,
     file_name: str | Path = DEFAULT_HISTORY_FILE,
+    max_candidate_age_minutes: float = DEFAULT_MAX_CANDIDATE_AGE_MINUTES,
+    max_entered_age_minutes: float = DEFAULT_MAX_ENTERED_AGE_MINUTES,
 ) -> int:
     """Update matching history records without allowing failures to stop scanning."""
     try:
@@ -301,7 +354,15 @@ def update_trade_outcomes_from_result(
             if record.symbol.upper() != symbol or record.exit_time is not None:
                 continue
             before = serialize_trade_outcome(record)
-            update_trade_outcome(record, current_price, current_timestamp)
+            expire_trade_outcome(
+                record,
+                current_price,
+                current_timestamp,
+                max_candidate_age_minutes=max_candidate_age_minutes,
+                max_entered_age_minutes=max_entered_age_minutes,
+            )
+            if record.exit_time is None:
+                update_trade_outcome(record, current_price, current_timestamp)
             if serialize_trade_outcome(record) != before:
                 updated_count += 1
 
