@@ -2,10 +2,13 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 
 from signal_history import (
+    DEFAULT_MAX_CANDIDATE_AGE_MINUTES,
+    DEFAULT_MAX_ENTERED_AGE_MINUTES,
     TradeOutcome,
     append_trade_outcome,
     create_trade_record,
     deserialize_trade_outcome,
+    expire_trade_outcome,
     load_trade_outcomes,
     record_scanner_result,
     rewrite_trade_outcomes,
@@ -349,6 +352,160 @@ def test_update_write_failure_does_not_crash_scanning(
             "symbol": "SPY",
             "price": 101,
             "last_candle_at": (UPDATE_TIME + timedelta(minutes=5)).isoformat(),
+        },
+        history_file,
+    ) == 0
+    assert "Could not update signal outcomes for SPY" in caplog.text
+
+
+def test_candidate_remains_open_before_default_timeout():
+    record = lifecycle_record()
+    checked_at = record.timestamp + timedelta(
+        minutes=DEFAULT_MAX_CANDIDATE_AGE_MINUTES - 1
+    )
+
+    expire_trade_outcome(record, 99, checked_at)
+
+    assert record.exit_time is None
+    assert record.exit_reason is None
+
+
+def test_candidate_closes_as_never_triggered_at_default_timeout():
+    record = lifecycle_record()
+    checked_at = record.timestamp + timedelta(
+        minutes=DEFAULT_MAX_CANDIDATE_AGE_MINUTES
+    )
+
+    expire_trade_outcome(record, 99, checked_at)
+
+    assert record.exit_time == checked_at
+    assert record.exit_reason == "NEVER_TRIGGERED"
+    assert record.hold_minutes == 60
+
+
+def test_candidate_expiration_leaves_returns_and_excursions_unset():
+    record = lifecycle_record()
+    record.realized_return = 1
+    record.max_favorable_excursion = 2
+    record.max_adverse_excursion = -1
+
+    expire_trade_outcome(record, 99, record.timestamp + timedelta(minutes=60))
+
+    assert record.realized_return is None
+    assert record.max_favorable_excursion is None
+    assert record.max_adverse_excursion is None
+
+
+def test_entered_trade_remains_open_before_default_timeout():
+    record = lifecycle_record(entered=True)
+
+    expire_trade_outcome(
+        record,
+        102,
+        record.entry_time + timedelta(minutes=DEFAULT_MAX_ENTERED_AGE_MINUTES - 1),
+    )
+
+    assert record.exit_time is None
+    assert record.exit_reason is None
+
+
+def test_entered_trade_closes_as_time_exit_at_default_timeout():
+    record = lifecycle_record(entered=True)
+    checked_at = record.entry_time + timedelta(
+        minutes=DEFAULT_MAX_ENTERED_AGE_MINUTES
+    )
+
+    expire_trade_outcome(record, 102, checked_at)
+
+    assert record.exit_time == checked_at
+    assert record.exit_reason == "TIME_EXIT"
+
+
+def test_bullish_time_exit_return_is_calculated_correctly():
+    record = lifecycle_record(entered=True)
+    record.max_favorable_excursion = 4
+    record.max_adverse_excursion = -2
+    record.hold_minutes = 235
+
+    expire_trade_outcome(record, 102, record.entry_time + timedelta(minutes=240))
+
+    assert record.realized_return == 2
+    assert record.max_favorable_excursion == 4
+    assert record.max_adverse_excursion == -2
+    assert record.hold_minutes == 235
+
+
+def test_bearish_time_exit_return_is_calculated_correctly():
+    record = lifecycle_record("Bearish", entered=True)
+
+    expire_trade_outcome(record, 98, record.entry_time + timedelta(minutes=240))
+
+    assert record.exit_reason == "TIME_EXIT"
+    assert record.realized_return == 2
+
+
+def test_expiration_does_not_change_closed_record():
+    record = lifecycle_record(entered=True)
+    record.exit_time = UPDATE_TIME + timedelta(minutes=5)
+    record.exit_reason = "TARGET_1"
+    record.realized_return = 3
+    original = deepcopy(record)
+
+    expire_trade_outcome(record, 90, UPDATE_TIME + timedelta(minutes=300))
+
+    assert record == original
+
+
+def test_custom_candidate_timeout_works():
+    record = lifecycle_record()
+    checked_at = record.timestamp + timedelta(minutes=15)
+
+    expire_trade_outcome(
+        record,
+        99,
+        checked_at,
+        max_candidate_age_minutes=15,
+    )
+
+    assert record.exit_reason == "NEVER_TRIGGERED"
+    assert record.hold_minutes == 15
+
+
+def test_custom_entered_timeout_works():
+    record = lifecycle_record(entered=True)
+
+    expire_trade_outcome(
+        record,
+        101,
+        record.entry_time + timedelta(minutes=30),
+        max_entered_age_minutes=30,
+    )
+
+    assert record.exit_reason == "TIME_EXIT"
+    assert record.realized_return == 1
+
+
+def test_expiration_write_failure_does_not_crash_scanning(
+    monkeypatch,
+    caplog,
+    tmp_path,
+):
+    history_file = tmp_path / "signal_history.jsonl"
+    candidate = lifecycle_record()
+    rewrite_trade_outcomes([candidate], history_file)
+
+    def fail_write(*args, **kwargs):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr("signal_history.rewrite_trade_outcomes", fail_write)
+
+    assert update_trade_outcomes_from_result(
+        {
+            "symbol": "SPY",
+            "price": 99,
+            "last_candle_at": (
+                candidate.timestamp + timedelta(minutes=60)
+            ).isoformat(),
         },
         history_file,
     ) == 0
