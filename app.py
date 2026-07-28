@@ -49,8 +49,21 @@ from trade_journal import (
 )
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
+from signal_history import load_trade_outcomes
 from signal_outcomes import load_signal_outcomes, summarize_outcomes
 from tradier_options import tradier_configured
+from trade_analytics import (
+    CONFIDENCE_BUCKETS,
+    analyze_trade_outcomes,
+    confidence_bucket,
+)
+from trade_journal_dashboard import (
+    STATUS_OPTIONS,
+    filter_trade_outcomes,
+    format_metric,
+    grouped_performance_rows,
+    trade_history_rows,
+)
 from trade_management import coach_recommendation, trade_summary
 from trade_planning import trade_plan_view
 from trade_replay import (
@@ -2558,6 +2571,148 @@ def render_signal_outcomes():
         )
 
 
+def render_outcome_trade_journal():
+    render_section_header(
+        "Trade Journal",
+        "Read-only performance history for generated OptionBeacon signals",
+    )
+    records = load_trade_outcomes()
+    if not records:
+        render_empty_state("No trade history has been recorded yet.")
+        return
+
+    symbols = ["All", *sorted({record.symbol for record in records if record.symbol})]
+    setups = ["All", *sorted({record.setup for record in records if record.setup})]
+    directions = [
+        "All",
+        *sorted({record.direction for record in records if record.direction}),
+    ]
+    exit_reasons = [
+        "All",
+        *sorted({record.exit_reason for record in records if record.exit_reason}),
+    ]
+    present_confidence_buckets = {
+        confidence_bucket(record.confidence) for record in records
+    }
+    confidence_buckets = [
+        "All",
+        *[
+            label
+            for label, _lower, _upper in CONFIDENCE_BUCKETS
+            if label in present_confidence_buckets
+        ],
+    ]
+
+    filter_1, filter_2, filter_3 = st.columns(3)
+    selected_symbol = filter_1.selectbox(
+        "Symbol",
+        symbols,
+        key="outcome_journal_symbol",
+    )
+    selected_setup = filter_2.selectbox(
+        "Setup",
+        setups,
+        key="outcome_journal_setup",
+    )
+    selected_direction = filter_3.selectbox(
+        "Direction",
+        directions,
+        key="outcome_journal_direction",
+    )
+    filter_4, filter_5, filter_6 = st.columns(3)
+    selected_exit_reason = filter_4.selectbox(
+        "Exit reason",
+        exit_reasons,
+        key="outcome_journal_exit_reason",
+    )
+    selected_confidence = filter_5.selectbox(
+        "Confidence bucket",
+        confidence_buckets,
+        key="outcome_journal_confidence",
+    )
+    selected_status = filter_6.selectbox(
+        "Status",
+        STATUS_OPTIONS,
+        key="outcome_journal_status",
+    )
+
+    filtered_records = filter_trade_outcomes(
+        records,
+        symbol=selected_symbol,
+        setup=selected_setup,
+        direction=selected_direction,
+        exit_reason=selected_exit_reason,
+        confidence=selected_confidence,
+        status=selected_status,
+    )
+    st.caption(f"Showing {len(filtered_records)} of {len(records)} recorded signals")
+
+    analytics = analyze_trade_outcomes(filtered_records)
+    overall = analytics["overall"]
+    metric_rows = (
+        (
+            ("Total Signals", str(overall["total_signals"])),
+            ("Entered Trades", str(overall["entered_trades"])),
+            ("Closed Trades", str(overall["closed_trades"])),
+            ("Never Triggered", str(overall["never_triggered"])),
+            (
+                "Win Rate",
+                format_metric(overall["win_rate"], percentage=True),
+            ),
+        ),
+        (
+            (
+                "Average Return",
+                format_metric(overall["average_return"], percentage=True),
+            ),
+            ("Profit Factor", format_metric(overall["profit_factor"])),
+            (
+                "Expectancy",
+                format_metric(overall["expectancy"], percentage=True),
+            ),
+            (
+                "Average Hold Minutes",
+                format_metric(overall["average_hold_minutes"]),
+            ),
+        ),
+    )
+    for metric_row in metric_rows:
+        columns = st.columns(len(metric_row))
+        for column, (label, value) in zip(columns, metric_row):
+            column.metric(label, value)
+
+    st.markdown("**Grouped Performance**")
+    group_tabs = st.tabs(["Symbol", "Setup", "Direction", "Confidence Bucket"])
+    grouped_sets = (
+        analytics["by_symbol"],
+        analytics["by_setup"],
+        analytics["by_direction"],
+        analytics["by_confidence_bucket"],
+    )
+    for tab, grouped_rows in zip(group_tabs, grouped_sets):
+        with tab:
+            display_rows = grouped_performance_rows(grouped_rows)
+            if display_rows:
+                st.dataframe(
+                    pd.DataFrame(display_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                render_empty_state("No closed trade performance is available.")
+
+    st.markdown("**Trade History**")
+    history_rows = trade_history_rows(filtered_records)
+    if history_rows:
+        st.dataframe(
+            pd.DataFrame(history_rows),
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        render_empty_state("No trade history matches the selected filters.")
+
+
 def main():
     configure_page()
     require_app_access()
@@ -2566,8 +2721,22 @@ def main():
     latest_results, high_score_history, snapshot_time, symbol_groups = scan_symbols()
     render_scanner_freshness_notice(latest_results, snapshot_time)
 
-    live_tab, after_hours_tab, opportunities_tab, history_tab, tools_tab = st.tabs(
-        ["Live Guide", "After Hours", "Opportunities", "History", "Tools"]
+    (
+        live_tab,
+        after_hours_tab,
+        opportunities_tab,
+        journal_tab,
+        history_tab,
+        tools_tab,
+    ) = st.tabs(
+        [
+            "Live Guide",
+            "After Hours",
+            "Opportunities",
+            "Trade Journal",
+            "History",
+            "Tools",
+        ]
     )
 
     with live_tab:
@@ -2590,6 +2759,9 @@ def main():
         render_ranked_setup_table(latest_results)
         with st.expander("Full Scanner"):
             render_current_scanner(latest_results, symbol_groups)
+
+    with journal_tab:
+        render_outcome_trade_journal()
 
     with history_tab:
         render_coach_timeline()
