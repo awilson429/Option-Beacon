@@ -57,6 +57,12 @@ from trade_analytics import (
     analyze_trade_outcomes,
     confidence_bucket,
 )
+from trade_evidence import (
+    UNAVAILABLE as EVIDENCE_UNAVAILABLE,
+    actionable_trade_plan,
+    format_evidence_metric,
+    historical_evidence,
+)
 from trade_journal_dashboard import (
     STATUS_OPTIONS,
     filter_trade_outcomes,
@@ -743,7 +749,136 @@ def cached_after_hours_briefing():
     return fetch_after_hours_briefing()
 
 
-def render_opportunity_card(row, latest_results, high_score_history=None):
+def load_trade_evidence_history():
+    try:
+        return load_trade_outcomes()
+    except Exception:
+        return []
+
+
+def render_historical_edge(result, trade_history):
+    if not actionable_trade_plan(result):
+        return
+
+    try:
+        evidence = historical_evidence(result, trade_history)
+    except Exception:
+        evidence = historical_evidence(result, [])
+
+    match_labels = {
+        "LEVEL_1": "Level 1 — Setup, direction, and symbol",
+        "LEVEL_2": "Level 2 — Setup and direction",
+        "LEVEL_3": "Level 3 — Setup",
+        "NO_MATCH": "No match",
+    }
+    st.markdown(
+        '<div class="section-subtitle"><span>Historical Edge</span>'
+        '<span class="section-count">Read-only evidence</span></div>',
+        unsafe_allow_html=True,
+    )
+    notice_class = (
+        "notice-warning"
+        if evidence["display_grade"] in {"WEAK", "INSUFFICIENT DATA", "NO MATCH"}
+        else "notice-info"
+    )
+    st.markdown(
+        f'<div class="notice {notice_class}"><strong>'
+        f'{escape(evidence["display_grade"])}</strong><br>'
+        f'{escape(evidence["summary"])}</div>',
+        unsafe_allow_html=True,
+    )
+
+    row_1 = st.columns(4)
+    row_1[0].metric("Grade", evidence["display_grade"])
+    row_1[1].metric(
+        "Match Level",
+        match_labels.get(evidence["match_level"], evidence["match_level"]),
+    )
+    row_1[2].metric("Sample Size", evidence["sample_size"])
+    row_1[3].metric(
+        "Win Rate",
+        format_evidence_metric(evidence["win_rate"], percentage=True),
+    )
+
+    row_2 = st.columns(4)
+    row_2[0].metric(
+        "Average Return",
+        format_evidence_metric(evidence["average_return"], percentage=True),
+    )
+    row_2[1].metric(
+        "Median Return",
+        format_evidence_metric(evidence["median_return"], percentage=True),
+    )
+    row_2[2].metric(
+        "Expectancy",
+        format_evidence_metric(evidence["expectancy"], percentage=True),
+    )
+    row_2[3].metric(
+        "Profit Factor",
+        format_evidence_metric(evidence["profit_factor"]),
+    )
+
+    row_3 = st.columns(3)
+    row_3[0].metric(
+        "Average Hold Minutes",
+        format_evidence_metric(evidence["average_hold_minutes"]),
+    )
+    row_3[1].metric(
+        "Average MFE",
+        format_evidence_metric(evidence["average_mfe"], percentage=True),
+    )
+    row_3[2].metric(
+        "Average MAE",
+        format_evidence_metric(evidence["average_mae"], percentage=True),
+    )
+
+    row_4 = st.columns(5)
+    for column, label, key in zip(
+        row_4,
+        (
+            "Target 1 Rate",
+            "Target 2 Rate",
+            "Target 3 Rate",
+            "Stop Rate",
+            "Time-exit Rate",
+        ),
+        (
+            "target_1_rate",
+            "target_2_rate",
+            "target_3_rate",
+            "stop_rate",
+            "time_exit_rate",
+        ),
+    ):
+        column.metric(
+            label,
+            format_evidence_metric(evidence[key], percentage=True),
+        )
+
+    gap = format_evidence_metric(evidence["confidence_gap"])
+    if gap != EVIDENCE_UNAVAILABLE:
+        gap = f"{gap} pp"
+    row_5 = st.columns(3)
+    row_5[0].metric(
+        "Current Confidence",
+        format_evidence_metric(evidence["current_confidence"], decimals=0),
+    )
+    row_5[1].metric(
+        f'Historical Win Rate ({evidence["confidence_bucket"]})',
+        format_evidence_metric(
+            evidence["historical_confidence_win_rate"],
+            percentage=True,
+        ),
+    )
+    row_5[2].metric("Confidence Gap", gap)
+
+
+def render_opportunity_card(
+    row,
+    latest_results,
+    high_score_history=None,
+    trade_history=None,
+):
     result = row["result"]
     plan_view = trade_plan_view(result)
     score = row["score"]
@@ -846,6 +981,7 @@ def render_opportunity_card(row, latest_results, high_score_history=None):
         """).strip(),
         unsafe_allow_html=True,
     )
+    render_historical_edge(result, trade_history or [])
 
 
 def render_market_regime(latest_results):
@@ -880,7 +1016,13 @@ def render_sector_strength(latest_results):
     )
 
 
-def render_opportunity_list(title, rows, latest_results, high_score_history=None):
+def render_opportunity_list(
+    title,
+    rows,
+    latest_results,
+    high_score_history=None,
+    trade_history=None,
+):
     title_class = "signal-call" if "Bullish" in title else "signal-put" if "Bearish" in title else ""
     st.markdown(
         f'<div class="opportunity-heading {title_class}">{title}</div>',
@@ -892,20 +1034,41 @@ def render_opportunity_list(title, rows, latest_results, high_score_history=None
         return
 
     for row in rows:
-        render_opportunity_card(row, latest_results, high_score_history)
+        render_opportunity_card(
+            row,
+            latest_results,
+            high_score_history,
+            trade_history,
+        )
 
 
-def render_top_opportunities(latest_results, high_score_history=None):
+def render_top_opportunities(
+    latest_results,
+    high_score_history=None,
+    trade_history=None,
+):
     render_section_header("Top Opportunities", "Highest-scoring bullish and bearish setups")
     bullish_rows = opportunity_rows(latest_results, "Bullish")
     bearish_rows = opportunity_rows(latest_results, "Bearish")
     bullish_column, bearish_column = st.columns(2)
 
     with bullish_column:
-        render_opportunity_list("Top Bullish", bullish_rows, latest_results, high_score_history)
+        render_opportunity_list(
+            "Top Bullish",
+            bullish_rows,
+            latest_results,
+            high_score_history,
+            trade_history,
+        )
 
     with bearish_column:
-        render_opportunity_list("Top Bearish", bearish_rows, latest_results, high_score_history)
+        render_opportunity_list(
+            "Top Bearish",
+            bearish_rows,
+            latest_results,
+            high_score_history,
+            trade_history,
+        )
 
 
 def render_ranked_setup_table(latest_results):
@@ -1514,7 +1677,7 @@ def render_coach_timeline():
     )
 
 
-def render_signal_card(symbol, result):
+def render_signal_card(symbol, result, trade_history=None):
     with st.container(border=True):
         st.markdown(f'<div class="ticker-title security-symbol">{symbol}</div>', unsafe_allow_html=True)
 
@@ -1616,6 +1779,8 @@ def render_signal_card(symbol, result):
                         f"{option_liquidity.get('expiration', 'N/A')} | "
                         f"{money(option_liquidity.get('strike'))} strike"
                     )
+
+                render_historical_edge(result, trade_history or [])
 
         coach = coach_live_setup(result)
         if coach["action"] != "Wait":
@@ -2300,7 +2465,7 @@ def render_trade_replay_backtest():
     )
 
 
-def render_current_scanner(latest_results, symbol_groups):
+def render_current_scanner(latest_results, symbol_groups, trade_history=None):
     st.markdown('<div class="section-title">Scanner</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="section-kicker">Real-time opportunity groups</div>',
@@ -2316,7 +2481,11 @@ def render_current_scanner(latest_results, symbol_groups):
             columns = st.columns(2)
             for column, symbol in zip(columns, symbols[row_start:row_start + 2]):
                 with column:
-                    render_signal_card(symbol, latest_results.get(symbol))
+                    render_signal_card(
+                        symbol,
+                        latest_results.get(symbol),
+                        trade_history,
+                    )
 
 
 def render_scanner_health(latest_results, snapshot_time, symbol_groups):
@@ -2571,12 +2740,12 @@ def render_signal_outcomes():
         )
 
 
-def render_outcome_trade_journal():
+def render_outcome_trade_journal(records=None):
     render_section_header(
         "Trade Journal",
         "Read-only performance history for generated OptionBeacon signals",
     )
-    records = load_trade_outcomes()
+    records = list(records) if records is not None else load_trade_outcomes()
     if not records:
         render_empty_state("No trade history has been recorded yet.")
         return
@@ -2719,6 +2888,7 @@ def main():
     render_header()
 
     latest_results, high_score_history, snapshot_time, symbol_groups = scan_symbols()
+    trade_evidence_history = load_trade_evidence_history()
     render_scanner_freshness_notice(latest_results, snapshot_time)
 
     (
@@ -2752,16 +2922,24 @@ def main():
         render_after_hours(latest_results)
 
     with opportunities_tab:
-        render_top_opportunities(latest_results, high_score_history)
+        render_top_opportunities(
+            latest_results,
+            high_score_history,
+            trade_evidence_history,
+        )
         st.divider()
         render_sector_strength(latest_results)
         st.divider()
         render_ranked_setup_table(latest_results)
         with st.expander("Full Scanner"):
-            render_current_scanner(latest_results, symbol_groups)
+            render_current_scanner(
+                latest_results,
+                symbol_groups,
+                trade_evidence_history,
+            )
 
     with journal_tab:
-        render_outcome_trade_journal()
+        render_outcome_trade_journal(trade_evidence_history)
 
     with history_tab:
         render_coach_timeline()
