@@ -1,4 +1,8 @@
-"""Pure navigation declarations for the streamlined dashboard."""
+"""Deterministic card navigation for the OptionBeacon dashboard."""
+
+from html import escape
+import os
+import subprocess
 
 
 MAIN_NAVIGATION = (
@@ -9,6 +13,141 @@ MAIN_NAVIGATION = (
     "Tools",
     "Developer Tools",
 )
+
+NAVIGATION_SLUGS = {
+    "Trade Desk": "trade-desk",
+    "Opportunities": "opportunities",
+    "After Hours": "after-hours",
+    "History": "history",
+    "Tools": "tools",
+    "Developer Tools": "developer-tools",
+}
+
+CARD_NAVIGATION_CSS = """
+<style>
+.ob-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin: 0.75rem 0 1.5rem;
+}
+.ob-nav-card {
+    align-items: center;
+    background: #15191f;
+    border: 1px solid #3a414b;
+    border-radius: 0.75rem;
+    color: #f3f4f6 !important;
+    display: flex;
+    font-size: 0.92rem;
+    font-weight: 650;
+    justify-content: center;
+    min-height: 4.25rem;
+    padding: 0.8rem 0.65rem;
+    text-align: center;
+    text-decoration: none !important;
+    transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+.ob-nav-card:hover {
+    background: #20252c;
+    border-color: #c8a84e;
+    color: #ffffff !important;
+    transform: translateY(-1px);
+}
+.ob-nav-card-active {
+    background: linear-gradient(135deg, #332b18, #211d14);
+    border: 2px solid #d2ad4f;
+    box-shadow: 0 0 0 1px rgba(210, 173, 79, 0.16);
+    color: #f7df9a !important;
+}
+@media (max-width: 900px) {
+    .ob-nav-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+    .ob-nav-grid {
+        gap: 0.55rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .ob-nav-card {
+        min-height: 3.75rem;
+        padding: 0.65rem 0.5rem;
+    }
+}
+@media (max-width: 360px) {
+    .ob-nav-grid { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+"""
+
+
+def selected_navigation_page(query_params=None):
+    """Resolve the requested page, defaulting safely to Trade Desk."""
+    if query_params is None:
+        import streamlit as st
+
+        query_params = st.query_params
+    params = query_params
+    requested = params.get("page", NAVIGATION_SLUGS[MAIN_NAVIGATION[0]])
+    if isinstance(requested, (list, tuple)):
+        requested = requested[0] if requested else ""
+    slug_to_page = {slug: page for page, slug in NAVIGATION_SLUGS.items()}
+    return slug_to_page.get(str(requested), MAIN_NAVIGATION[0])
+
+
+def navigation_markup(active_page):
+    """Return app-controlled card markup with no generated Streamlit selectors."""
+    cards = []
+    for page in MAIN_NAVIGATION:
+        active = page == active_page
+        classes = "ob-nav-card ob-nav-card-active" if active else "ob-nav-card"
+        current = ' aria-current="page"' if active else ""
+        cards.append(
+            f'<a class="{classes}" href="?page={NAVIGATION_SLUGS[page]}"'
+            f'{current}>{escape(page)}</a>'
+        )
+    return '<nav class="ob-nav-grid" aria-label="Primary navigation">' + "".join(cards) + "</nav>"
+
+
+def render_card_navigation(query_params=None):
+    """Render the single navigation implementation used in every environment."""
+    import streamlit as st
+
+    active_page = selected_navigation_page(query_params)
+    st.markdown(CARD_NAVIGATION_CSS, unsafe_allow_html=True)
+    st.markdown(navigation_markup(active_page), unsafe_allow_html=True)
+    return active_page
+
+
+def _git_value(*args):
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        return result.stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def build_marker():
+    """Return non-sensitive build metadata for hosted diagnostics."""
+    import streamlit as st
+
+    commit = (
+        os.getenv("STREAMLIT_GIT_COMMIT")
+        or os.getenv("GIT_COMMIT")
+        or _git_value("rev-parse", "--short", "HEAD")
+        or "unavailable"
+    )
+    branch = (
+        os.getenv("STREAMLIT_GIT_BRANCH")
+        or os.getenv("GIT_BRANCH")
+        or _git_value("branch", "--show-current")
+        or "unavailable"
+    )
+    return f"Build {commit[:12]} · Branch {branch} · Streamlit {st.__version__}"
 
 TOOLS_SECTIONS = ("Scanner Health",)
 TRADE_DESK_SUBTITLE = (

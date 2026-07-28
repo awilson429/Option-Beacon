@@ -137,10 +137,11 @@ from ui_polish import (
     scanner_summary,
 )
 from ui_navigation import (
-    MAIN_NAVIGATION,
     NO_ACTIONABLE_OPPORTUNITY_MESSAGE,
     RECORDED_CANDIDATES_LABEL,
     TRADE_DESK_SUBTITLE,
+    build_marker,
+    render_card_navigation,
 )
 
 
@@ -3392,6 +3393,7 @@ def render_developer_tools():
     )
 
     st.markdown("### System Status")
+    st.caption(build_marker())
     st.dataframe(pd.DataFrame(system_status()), use_container_width=True, hide_index=True)
 
     def run_diagnostic(button_label, key, diagnostic):
@@ -3550,19 +3552,12 @@ def main():
         cached_open_trade_quote,
     )
 
-    (
-        journal_tab,
-        opportunities_tab,
-        after_hours_tab,
-        history_tab,
-        tools_tab,
-        developer_tools_tab,
-    ) = st.tabs(MAIN_NAVIGATION)
+    active_page = render_card_navigation()
 
-    with after_hours_tab:
+    if active_page == "After Hours":
         render_after_hours(latest_results)
 
-    with opportunities_tab:
+    elif active_page == "Opportunities":
         render_top_opportunities(
             latest_results,
             high_score_history,
@@ -3579,7 +3574,7 @@ def main():
                 trade_evidence_history,
             )
 
-    with journal_tab:
+    elif active_page == "Trade Desk":
         render_outcome_trade_journal(
             trade_evidence_history,
             latest_results,
@@ -3587,7 +3582,7 @@ def main():
             open_trade_quote_status,
         )
 
-    with history_tab:
+    elif active_page == "History":
         render_coach_timeline()
         st.divider()
         render_recent_high_scores(high_score_history)
@@ -3596,10 +3591,10 @@ def main():
         st.divider()
         render_trade_journal()
 
-    with tools_tab:
+    elif active_page == "Tools":
         render_scanner_health(latest_results, snapshot_time, symbol_groups)
 
-    with developer_tools_tab:
+    elif active_page == "Developer Tools":
         render_developer_tools()
 
     st.markdown(

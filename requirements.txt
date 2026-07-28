@@ -1,6 +1,6 @@
 yfinance
 pandas
-streamlit
+streamlit==1.60.0
 streamlit-autorefresh
 pandas-market-calendars
 psycopg2-binary
