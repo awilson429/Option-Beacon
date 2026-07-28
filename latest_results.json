@@ -1,0 +1,1485 @@
+{
+  "updated_at": "2026-07-28T15:46:27.090209-04:00",
+  "results": {
+    "SPY": {
+      "symbol": "SPY",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 740.969970703125,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:13.972998-04:00"
+    },
+    "QQQ": {
+      "symbol": "QQQ",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 675.9500122070312,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:14.186704-04:00"
+    },
+    "IWM": {
+      "symbol": "IWM",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 293.010009765625,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:14.381551-04:00"
+    },
+    "DIA": {
+      "symbol": "DIA",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 527.1099853515625,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:14.586049-04:00"
+    },
+    "XLK": {
+      "symbol": "XLK",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 171.2100067138672,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:14.787161-04:00"
+    },
+    "XLY": {
+      "symbol": "XLY",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 112.29000091552734,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:14.959093-04:00"
+    },
+    "XLF": {
+      "symbol": "XLF",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 57.51499938964844,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:15.136302-04:00"
+    },
+    "XLV": {
+      "symbol": "XLV",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 167.41000366210938,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:15.316345-04:00"
+    },
+    "XLI": {
+      "symbol": "XLI",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 182.47500610351562,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:15.543710-04:00"
+    },
+    "XLE": {
+      "symbol": "XLE",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 57.71500015258789,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:15.719656-04:00"
+    },
+    "XLP": {
+      "symbol": "XLP",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 87.1050033569336,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:15.917842-04:00"
+    },
+    "XLU": {
+      "symbol": "XLU",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 45.709999084472656,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:16.122516-04:00"
+    },
+    "XLC": {
+      "symbol": "XLC",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 109.55999755859375,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:16.253661-04:00"
+    },
+    "XLRE": {
+      "symbol": "XLRE",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 46.150001525878906,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:16.400749-04:00"
+    },
+    "XLB": {
+      "symbol": "XLB",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 52.380001068115234,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:16.565933-04:00"
+    },
+    "AMD": {
+      "symbol": "AMD",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 457.4200134277344,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:16.711939-04:00"
+    },
+    "AMAT": {
+      "symbol": "AMAT",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 479.0899963378906,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:16.849045-04:00"
+    },
+    "ARM": {
+      "symbol": "ARM",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 244.78500366210938,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:16.971118-04:00"
+    },
+    "INTC": {
+      "symbol": "INTC",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 86.76000213623047,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:17.282095-04:00"
+    },
+    "ADBE": {
+      "symbol": "ADBE",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 248.4600067138672,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:17.432131-04:00"
+    },
+    "DOCU": {
+      "symbol": "DOCU",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 55.63999938964844,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:17.573588-04:00"
+    },
+    "ASML": {
+      "symbol": "ASML",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 1585.4200439453125,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:17.728865-04:00"
+    },
+    "CRM": {
+      "symbol": "CRM",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 181.63999938964844,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:17.868569-04:00"
+    },
+    "CAT": {
+      "symbol": "CAT",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 838.6525268554688,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:18.129590-04:00"
+    },
+    "BKNG": {
+      "symbol": "BKNG",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 198.9499969482422,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:18.286750-04:00"
+    },
+    "DUOL": {
+      "symbol": "DUOL",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 140.1699981689453,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:18.444618-04:00"
+    },
+    "ENPH": {
+      "symbol": "ENPH",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 36.36000061035156,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:18.573819-04:00"
+    },
+    "HOOD": {
+      "symbol": "HOOD",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 91.76000213623047,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:18.734747-04:00"
+    },
+    "IBM": {
+      "symbol": "IBM",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 226.70750427246094,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:18.996165-04:00"
+    },
+    "ABBV": {
+      "symbol": "ABBV",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 265.2099914550781,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:19.171925-04:00"
+    },
+    "COST": {
+      "symbol": "COST",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 968.6699829101562,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:19.332773-04:00"
+    },
+    "FCX": {
+      "symbol": "FCX",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 62.029998779296875,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:19.490685-04:00"
+    },
+    "HD": {
+      "symbol": "HD",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 344.42999267578125,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:19.801999-04:00"
+    },
+    "BMY": {
+      "symbol": "BMY",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 63.64250183105469,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:20.017903-04:00"
+    },
+    "BKR": {
+      "symbol": "BKR",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 58.31999969482422,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:20.183502-04:00"
+    },
+    "ABNB": {
+      "symbol": "ABNB",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 152.44000244140625,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:20.330646-04:00"
+    },
+    "COIN": {
+      "symbol": "COIN",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 166.01499938964844,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:20.471293-04:00"
+    },
+    "CCL": {
+      "symbol": "CCL",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 28.155000686645508,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:20.649692-04:00"
+    },
+    "GDX": {
+      "symbol": "GDX",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 74.26499938964844,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:20.819773-04:00"
+    },
+    "BITO": {
+      "symbol": "BITO",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 8.625,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:20.954720-04:00"
+    },
+    "ETSY": {
+      "symbol": "ETSY",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 86.55999755859375,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:21.082497-04:00"
+    },
+    "BA": {
+      "symbol": "BA",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 221.89500427246094,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:21.297739-04:00"
+    },
+    "ARKG": {
+      "symbol": "ARKG",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 37.584999084472656,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:21.435520-04:00"
+    },
+    "DOW": {
+      "symbol": "DOW",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 29.09000015258789,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:21.593182-04:00"
+    },
+    "ARKK": {
+      "symbol": "ARKK",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 72.07499694824219,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:21.722488-04:00"
+    },
+    "CELH": {
+      "symbol": "CELH",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 29.149999618530273,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:21.873144-04:00"
+    },
+    "DIS": {
+      "symbol": "DIS",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 98.69000244140625,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:22.080354-04:00"
+    },
+    "GME": {
+      "symbol": "GME",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 22.235000610351562,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:22.225310-04:00"
+    },
+    "GS": {
+      "symbol": "GS",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 1037.469970703125,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:22.411406-04:00"
+    },
+    "AFRM": {
+      "symbol": "AFRM",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 72.4000015258789,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:22.535649-04:00"
+    },
+    "GLD": {
+      "symbol": "GLD",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 369.3699951171875,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:22.682723-04:00"
+    },
+    "BIDU": {
+      "symbol": "BIDU",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 104.96499633789062,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:22.846261-04:00"
+    },
+    "AVGO": {
+      "symbol": "AVGO",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 383.9649963378906,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:23.028160-04:00"
+    },
+    "DKNG": {
+      "symbol": "DKNG",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 24.625,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:23.152498-04:00"
+    },
+    "C": {
+      "symbol": "C",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 132.19500732421875,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:23.334129-04:00"
+    },
+    "GOOGL": {
+      "symbol": "GOOGL",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 334.0400085449219,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:23.461950-04:00"
+    },
+    "FXI": {
+      "symbol": "FXI",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 35.6349983215332,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:23.636989-04:00"
+    },
+    "GOOG": {
+      "symbol": "GOOG",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 333.29998779296875,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:23.768082-04:00"
+    },
+    "CRWD": {
+      "symbol": "CRWD",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 182.07000732421875,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:23.910494-04:00"
+    },
+    "F": {
+      "symbol": "F",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 14.903400421142578,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:24.098059-04:00"
+    },
+    "EWZ": {
+      "symbol": "EWZ",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 36.01499938964844,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:24.292057-04:00"
+    },
+    "CSCO": {
+      "symbol": "CSCO",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 115.94000244140625,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:24.452290-04:00"
+    },
+    "AAPL": {
+      "symbol": "AAPL",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 339.19500732421875,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:24.608769-04:00"
+    },
+    "BAC": {
+      "symbol": "BAC",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 62.529998779296875,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:24.868264-04:00"
+    },
+    "BP": {
+      "symbol": "BP",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 41.81999969482422,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:25.267862-04:00"
+    },
+    "AMZN": {
+      "symbol": "AMZN",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 230.9102020263672,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:25.409723-04:00"
+    },
+    "CAVA": {
+      "symbol": "CAVA",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 64.66000366210938,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:25.544581-04:00"
+    },
+    "CLF": {
+      "symbol": "CLF",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 11.930000305175781,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:25.758970-04:00"
+    },
+    "FDX": {
+      "symbol": "FDX",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 312.32000732421875,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:25.941865-04:00"
+    },
+    "ELF": {
+      "symbol": "ELF",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 83.3499984741211,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:26.101569-04:00"
+    },
+    "HYG": {
+      "symbol": "HYG",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 79.38500213623047,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:26.576263-04:00"
+    },
+    "IEF": {
+      "symbol": "IEF",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 93.54010009765625,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:26.725424-04:00"
+    },
+    "BABA": {
+      "symbol": "BABA",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 115.44000244140625,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:26.857515-04:00"
+    },
+    "CVX": {
+      "symbol": "CVX",
+      "signal": "MARKET CLOSED / WAIT",
+      "price": 188.3300018310547,
+      "setup_stage": "Market Closed",
+      "setup_stage_reason": "Scanner is waiting for an active trading window.",
+      "trade_plan": {},
+      "what_next": "Wait.",
+      "what_next_reason": "Scanner is not showing an actionable live setup.",
+      "entry_timing": "Wait",
+      "entry_timing_reason": "Scanner is not showing an actionable live setup.",
+      "option_liquidity": {
+        "available": false,
+        "score": 0,
+        "label": "Not checked",
+        "detail": "Option chain is checked only for active setups."
+      },
+      "last_candle_at": "2026-07-28T15:45:00-04:00",
+      "timestamp": "2026-07-28T15:46:27.090034-04:00"
+    }
+  }
+}
