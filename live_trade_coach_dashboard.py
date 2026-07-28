@@ -187,44 +187,50 @@ def coach_display_model(coach: dict) -> dict:
     }
 
 
-def render_live_trade_coach_output(coach: dict) -> None:
+def render_live_trade_coach_output(
+    coach: dict,
+    *,
+    show_overview: bool = True,
+) -> None:
     """Render an advisory-only Live Trade Coach result."""
     import streamlit as st
 
     display = coach_display_model(coach)
-    st.markdown("#### Live Trade Coach")
-    headline = (
-        f"**{display['status']} · {display['urgency']} urgency**  \n"
-        f"{display['summary']}"
-    )
-    treatments = {
-        "positive": st.success,
-        "caution": st.warning,
-        "urgent": st.error,
-        "neutral": st.info,
-        "muted": st.caption,
-    }
-    treatments[display["treatment"]](headline)
+    if show_overview:
+        st.markdown("#### Live Trade Coach")
+        headline = (
+            f"**{display['status']} · {display['urgency']} urgency**  \n"
+            f"{display['summary']}"
+        )
+        treatments = {
+            "positive": st.success,
+            "caution": st.warning,
+            "urgent": st.error,
+            "neutral": st.info,
+            "muted": st.caption,
+        }
+        treatments[display["treatment"]](headline)
 
-    first = st.columns(4)
-    first[0].metric("Status", display["status"])
-    first[1].metric("Urgency", display["urgency"])
-    first[2].metric("Current Return", display["current_return"])
-    first[3].metric("Risk Remaining", display["risk_remaining"])
+        first = st.columns(4)
+        first[0].metric("Current Return", display["current_return"])
+        first[1].metric("Risk Remaining", display["risk_remaining"])
+        first[2].metric("Target 1 Progress", display["progress_to_target_1"])
+        first[3].metric("Historical Grade", display["historical_grade"])
+        st.markdown(f"**Suggested action:** {display['action']}  \n*Advisory only.*")
 
-    second = st.columns(3)
-    second[0].metric("Progress to Target 1", display["progress_to_target_1"])
-    second[1].metric("Progress to Target 2", display["progress_to_target_2"])
-    second[2].metric("Progress to Target 3", display["progress_to_target_3"])
+    with st.expander("Coach Details"):
+        second = st.columns(4)
+        second[0].metric("Status", display["status"])
+        second[1].metric("Urgency", display["urgency"])
+        second[2].metric("Progress to Target 2", display["progress_to_target_2"])
+        second[3].metric("Progress to Target 3", display["progress_to_target_3"])
 
-    third = st.columns(5)
-    third[0].metric("Target 1 Reached", display["target_1_reached"])
-    third[1].metric("Target 2 Reached", display["target_2_reached"])
-    third[2].metric("Target 3 Reached", display["target_3_reached"])
-    third[3].metric("Stop Threatened", display["stop_threatened"])
-    third[4].metric("Historical Grade", display["historical_grade"])
+        third = st.columns(4)
+        third[0].metric("Target 1 Reached", display["target_1_reached"])
+        third[1].metric("Target 2 Reached", display["target_2_reached"])
+        third[2].metric("Target 3 Reached", display["target_3_reached"])
+        third[3].metric("Stop Threatened", display["stop_threatened"])
 
-    st.markdown(f"**Action:** {display['action']}")
-    st.markdown("**Reasons**")
-    for reason in display["reasons"]:
-        st.write(f"- {reason}")
+        st.markdown("**Reasons**")
+        for reason in display["reasons"]:
+            st.write(f"- {reason}")

@@ -96,6 +96,11 @@ from trade_storage import (
     update_position_premium,
     update_position_stop,
 )
+from ui_polish import (
+    open_trade_summary,
+    opportunity_summary,
+    scanner_summary,
+)
 
 
 SYMBOL_GROUPS = DEFAULT_SYMBOL_GROUPS
@@ -581,6 +586,87 @@ def render_empty_state(message):
     st.markdown(f'<div class="empty-state">{message}</div>', unsafe_allow_html=True)
 
 
+def render_decision_summary(summary, *, compact=False):
+    """Render a responsive at-a-glance decision summary."""
+    fields = (
+        (
+            ("Confidence", summary["confidence"]),
+            ("Timing", summary["timing"]),
+            ("Historical Grade", summary["historical_grade"]),
+            ("Coach Status", summary["coach_status"]),
+            ("Entry / Trigger", summary["entry"]),
+            ("Stop", summary["stop"]),
+            ("Target 1", summary["target_1"]),
+        )
+        if compact
+        else (
+            ("Current Price", summary["current_price"]),
+            ("Confidence", summary["confidence"]),
+            ("Timing", summary["timing"]),
+            ("Historical Grade", summary["historical_grade"]),
+            ("Historical Samples", summary["historical_sample_size"]),
+            ("Historical Win Rate", summary["historical_win_rate"]),
+            ("Coach Status", summary["coach_status"]),
+            ("Entry / Trigger", summary["entry"]),
+            ("Stop", summary["stop"]),
+            ("Target 1", summary["target_1"]),
+        )
+    )
+    metrics_html = "".join(
+        '<div class="decision-metric">'
+        f'<div class="decision-label">{escape(label)}</div>'
+        f'<div class="decision-value">{escape(str(value))}</div>'
+        "</div>"
+        for label, value in fields
+    )
+    state_class = f'decision-{escape(summary["treatment"])}'
+    st.markdown(
+        dedent(
+            f"""
+            <div class="decision-summary {state_class}">
+                <div class="decision-header">
+                    <div>
+                        <div class="decision-symbol security-symbol">
+                            {escape(summary["symbol"])} · {escape(summary["direction"])}
+                        </div>
+                        <div class="decision-setup">{escape(summary.get("setup", ""))}</div>
+                    </div>
+                    <div class="decision-state">
+                        Suggested action · {escape(summary["decision_state"])}
+                    </div>
+                </div>
+                <div class="decision-grid">{metrics_html}</div>
+                <div class="decision-action">
+                    <strong>Coach action:</strong> {escape(summary["coach_action"])}
+                    <span>Advisory only</span>
+                </div>
+            </div>
+            """
+        ).strip(),
+        unsafe_allow_html=True,
+    )
+
+
+def render_open_trade_summary(summary):
+    """Render the default-visible OPEN-trade management fields."""
+    st.markdown(
+        f"### {escape(summary['symbol'])} · {escape(summary['direction'])}"
+    )
+    state_class = f'decision-{escape(summary["treatment"])}'
+    st.markdown(
+        f'<div class="decision-banner {state_class}">'
+        f'<strong>Suggested action · {escape(summary["coach_status"])}</strong><br>'
+        f'{escape(summary["coach_action"])}'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    columns = st.columns(4)
+    columns[0].metric("Current Return", summary["current_return"])
+    columns[1].metric("Risk Remaining", summary["risk_remaining"])
+    columns[2].metric("Target 1 Progress", summary["target_progress"])
+    columns[3].metric("Historical Grade", summary["historical_grade"])
+
+
 def secret_configured(name):
     if os.getenv(name):
         return True
@@ -790,100 +876,100 @@ def render_historical_edge(result, trade_history, evidence=None):
         else "notice-info"
     )
     st.markdown(
-        f'<div class="notice {notice_class}"><strong>'
-        f'{escape(evidence["display_grade"])}</strong><br>'
+        f'<div class="notice {notice_class}"><strong>Historical results</strong><br>'
         f'{escape(evidence["summary"])}</div>',
         unsafe_allow_html=True,
     )
 
-    row_1 = st.columns(4)
+    row_1 = st.columns(3)
     row_1[0].metric("Grade", evidence["display_grade"])
-    row_1[1].metric(
-        "Match Level",
-        match_labels.get(evidence["match_level"], evidence["match_level"]),
-    )
-    row_1[2].metric("Sample Size", evidence["sample_size"])
-    row_1[3].metric(
+    row_1[1].metric("Sample Size", evidence["sample_size"])
+    row_1[2].metric(
         "Win Rate",
         format_evidence_metric(evidence["win_rate"], percentage=True),
     )
 
-    row_2 = st.columns(4)
-    row_2[0].metric(
-        "Average Return",
-        format_evidence_metric(evidence["average_return"], percentage=True),
-    )
-    row_2[1].metric(
-        "Median Return",
-        format_evidence_metric(evidence["median_return"], percentage=True),
-    )
-    row_2[2].metric(
-        "Expectancy",
-        format_evidence_metric(evidence["expectancy"], percentage=True),
-    )
-    row_2[3].metric(
-        "Profit Factor",
-        format_evidence_metric(evidence["profit_factor"]),
-    )
-
-    row_3 = st.columns(3)
-    row_3[0].metric(
-        "Average Hold Minutes",
-        format_evidence_metric(evidence["average_hold_minutes"]),
-    )
-    row_3[1].metric(
-        "Average MFE",
-        format_evidence_metric(evidence["average_mfe"], percentage=True),
-    )
-    row_3[2].metric(
-        "Average MAE",
-        format_evidence_metric(evidence["average_mae"], percentage=True),
-    )
-
-    row_4 = st.columns(5)
-    for column, label, key in zip(
-        row_4,
-        (
-            "Target 1 Rate",
-            "Target 2 Rate",
-            "Target 3 Rate",
-            "Stop Rate",
-            "Time-exit Rate",
-        ),
-        (
-            "target_1_rate",
-            "target_2_rate",
-            "target_3_rate",
-            "stop_rate",
-            "time_exit_rate",
-        ),
-    ):
-        column.metric(
-            label,
-            format_evidence_metric(evidence[key], percentage=True),
+    with st.expander("Historical Details"):
+        st.caption(
+            "Read-only historical context; past results do not guarantee future outcomes."
         )
-
-    gap = format_evidence_metric(evidence["confidence_gap"])
-    if gap != EVIDENCE_UNAVAILABLE:
-        gap = f"{gap} pp"
-    row_5 = st.columns(3)
-    row_5[0].metric(
-        "Current Confidence",
-        format_evidence_metric(evidence["current_confidence"], decimals=0),
-    )
-    row_5[1].metric(
-        f'Historical Win Rate ({evidence["confidence_bucket"]})',
-        format_evidence_metric(
-            evidence["historical_confidence_win_rate"],
-            percentage=True,
-        ),
-    )
-    row_5[2].metric("Confidence Gap", gap)
+        detail_1 = st.columns(4)
+        detail_1[0].metric(
+            "Match Level",
+            match_labels.get(evidence["match_level"], evidence["match_level"]),
+        )
+        detail_1[1].metric(
+            "Average Return",
+            format_evidence_metric(evidence["average_return"], percentage=True),
+        )
+        detail_1[2].metric(
+            "Median Return",
+            format_evidence_metric(evidence["median_return"], percentage=True),
+        )
+        detail_1[3].metric(
+            "Expectancy",
+            format_evidence_metric(evidence["expectancy"], percentage=True),
+        )
+        detail_2 = st.columns(4)
+        detail_2[0].metric(
+            "Profit Factor",
+            format_evidence_metric(evidence["profit_factor"]),
+        )
+        detail_2[1].metric(
+            "Average Hold Minutes",
+            format_evidence_metric(evidence["average_hold_minutes"]),
+        )
+        detail_2[2].metric(
+            "Average MFE",
+            format_evidence_metric(evidence["average_mfe"], percentage=True),
+        )
+        detail_2[3].metric(
+            "Average MAE",
+            format_evidence_metric(evidence["average_mae"], percentage=True),
+        )
+        detail_3 = st.columns(5)
+        for column, label, key in zip(
+            detail_3,
+            (
+                "Target 1 Rate",
+                "Target 2 Rate",
+                "Target 3 Rate",
+                "Stop Rate",
+                "Time-exit Rate",
+            ),
+            (
+                "target_1_rate",
+                "target_2_rate",
+                "target_3_rate",
+                "stop_rate",
+                "time_exit_rate",
+            ),
+        ):
+            column.metric(
+                label,
+                format_evidence_metric(evidence[key], percentage=True),
+            )
+        gap = format_evidence_metric(evidence["confidence_gap"])
+        if gap != EVIDENCE_UNAVAILABLE:
+            gap = f"{gap} pp"
+        detail_4 = st.columns(3)
+        detail_4[0].metric(
+            "Current Confidence",
+            format_evidence_metric(evidence["current_confidence"], decimals=0),
+        )
+        detail_4[1].metric(
+            f'Historical Win Rate ({evidence["confidence_bucket"]})',
+            format_evidence_metric(
+                evidence["historical_confidence_win_rate"],
+                percentage=True,
+            ),
+        )
+        detail_4[2].metric("Confidence Gap", gap)
     return evidence
 
 
-def render_live_plan_trade_coach(result, trade_history, evidence=None):
-    """Render coaching for an actionable, entered live plan without persistence."""
+def live_plan_trade_coach_result(result, trade_history, evidence=None):
+    """Return coaching for an actionable, entered live plan without persistence."""
     current_price = result.get("price")
     now = eastern_now()
     record = live_plan_trade_outcome(
@@ -893,19 +979,34 @@ def render_live_plan_trade_coach(result, trade_history, evidence=None):
         current_timestamp=now,
     )
     if record is None:
-        return
+        return None
 
     if evidence is None:
         try:
             evidence = historical_evidence(result, trade_history)
         except Exception:
             evidence = None
-    coach = open_trade_coach_output(
+    return open_trade_coach_output(
         record,
         current_price,
         now,
         evidence,
     )
+
+
+def render_live_plan_trade_coach(
+    result,
+    trade_history,
+    evidence=None,
+    coach=None,
+):
+    """Render the existing advisory coach output for a live plan."""
+    if coach is None:
+        coach = live_plan_trade_coach_result(
+            result,
+            trade_history,
+            evidence,
+        )
     if coach is not None:
         render_live_trade_coach_output(coach)
 
@@ -918,10 +1019,8 @@ def render_opportunity_card(
 ):
     result = row["result"]
     plan_view = trade_plan_view(result)
-    score = row["score"]
     direction = result.get("bias", "Neutral")
-    last_scan = scan_stamp(result.get("timestamp"))
-    coach = coach_live_setup(result)
+    setup_coach = coach_live_setup(result)
     chase = chase_risk(result)
     sector = setup_sector_support(result, latest_results)
     quality = setup_quality(result, latest_results)
@@ -930,95 +1029,98 @@ def render_opportunity_card(
     quality_note = setup_quality_summary(result, latest_results)
     confidence_note = confidence_explanation(result, latest_results)
     momentum = setup_momentum_snapshot(result, high_score_history)
-    exit_reasons = coach.get("exit_reasons", [])
+    exit_reasons = setup_coach.get("exit_reasons", [])
     factors = factor_status(result, direction, latest_results)
-    factor_html = ""
-    for label, status in factors:
-        status_class = "factor-good" if status in ["Aligned", "Confirmed"] else "factor-warn"
-        factor_html += (
-            f'<div class="factor-pill {status_class}">'
-            f'<strong>{escape(label)}</strong><br>{escape(status)}</div>'
+    if actionable_trade_plan(result):
+        try:
+            evidence = historical_evidence(result, trade_history or [])
+        except Exception:
+            evidence = historical_evidence(result, [])
+    else:
+        evidence = {}
+    outcome_coach = live_plan_trade_coach_result(
+        result,
+        trade_history or [],
+        evidence,
+    )
+    summary = opportunity_summary(result, evidence, outcome_coach)
+
+    with st.container(border=True):
+        render_decision_summary(summary)
+
+        render_historical_edge(result, trade_history or [], evidence=evidence)
+        render_live_plan_trade_coach(
+            result,
+            trade_history or [],
+            evidence=evidence,
+            coach=outcome_coach,
         )
 
-    reasons = plan_view["reasons"]
-    reasons_html = "".join(
-        f"<li>{escape(reason)}</li>" for reason in reasons
-    )
-    exit_reasons_html = "".join(
-        f"<li>{escape(reason)}</li>" for reason in exit_reasons[:4]
-    )
+        st.markdown("#### Option Contract & Liquidity")
+        if option_liquidity.get("available"):
+            option_columns = st.columns(4)
+            option_columns[0].metric(
+                "Chain Quality",
+                option_liquidity.get("label", "Available"),
+            )
+            option_columns[1].metric(
+                "Contract",
+                option_liquidity.get("contract") or "N/A",
+            )
+            option_columns[2].metric(
+                "Strike",
+                money(option_liquidity.get("strike")),
+            )
+            option_columns[3].metric(
+                "Expiration",
+                str(option_liquidity.get("expiration", "N/A")),
+            )
+            st.caption(option_liquidity.get("detail", ""))
+        else:
+            st.caption("Option-chain details are unavailable; no contract is implied.")
 
-    entry_zone = plan_view["entry_zone"]
-    stop = plan_view["initial_stop"]
-    target_1 = plan_view["target_1"]
-    target_2 = plan_view["target_2"]
-    target_3 = plan_view["target_3"]
-    risk_reward_label = plan_view["risk_reward"]
-    contract = coach.get("contract", "N/A")
-    option_contract = option_liquidity.get("contract") or "N/A"
-    option_liquidity_notice = []
-    if option_liquidity.get("available"):
-        option_liquidity_notice.append(
-            f'<div class="notice"><strong>Option Chain: {escape(option_liquidity.get("label", "Available"))}</strong><br>'
-            f'{escape(option_liquidity.get("detail", ""))}<br>'
-            f'Contract: {escape(option_contract)} | Strike: {money(option_liquidity.get("strike"))} | '
-            f'Expiration: {escape(str(option_liquidity.get("expiration", "N/A")))}</div>'
-        )
-
-    card_sections = [
-        f'<div class="notice notice-info"><strong>Why this is here</strong><br>{escape(quality_note)}</div>',
-        f'<div class="notice notice-info"><strong>What should I do next?</strong><br>{escape(coach["summary"])} {escape(coach["next_step"])}</div>',
-        f'<div class="notice"><strong>Sector Support: {escape(sector["status"])}</strong><br>{escape(sector["detail"])}</div>',
-        f'<div class="notice"><strong>Liquidity: {escape(liquidity["label"])}</strong><br>{escape(liquidity["detail"])}</div>',
-        *option_liquidity_notice,
-        f'<div class="notice"><strong>Live Read: {escape(momentum["label"])}</strong><br>{escape(momentum["detail"])}</div>',
-        f'<div class="notice"><strong>Entry Risk: {escape(chase["label"])}</strong><br>{escape(chase["reason"])}<br>{escape(confidence_note)}</div>',
-        '<div class="content-kicker">Why?</div>',
-        f'<ul class="why-list">{reasons_html}</ul>',
-        '<div class="content-kicker">Exit / Reversal Watch</div>',
-        f'<ul class="why-list">{exit_reasons_html}</ul>',
-    ]
-    card_detail_html = "".join(card_sections)
-
-    st.markdown(
-        dedent(f"""
-        <div class="coach-card">
-            <div class="coach-card-header">
-                <div>
-                    <div class="coach-symbol security-symbol">{escape(row["symbol"])}</div>
-                    <div class="content-kicker">{escape(plan_view["setup_name"])} | {escape(direction)} {escape(contract)} idea | Last scan {escape(last_scan)}</div>
-                </div>
-                <div class="coach-grade">
-                    Quality: {escape(quality["grade"])}<br>
-                    <span class="content-kicker">Quality {quality["score"]}/100 | Setup {score}%</span>
-                </div>
-            </div>
-            <div class="factor-list">{factor_html}</div>
-            <div class="coach-grid">
-                <div class="coach-metric"><div class="coach-label">Entry Zone</div><div class="coach-value">{escape(entry_zone)}</div></div>
-                <div class="coach-metric"><div class="coach-label">Trigger</div><div class="coach-value">{escape(plan_view["trigger_price"])}</div></div>
-                <div class="coach-metric"><div class="coach-label">Stop</div><div class="coach-value">{stop}</div></div>
-                <div class="coach-metric"><div class="coach-label">Target 1</div><div class="coach-value">{target_1}</div></div>
-                <div class="coach-metric"><div class="coach-label">Risk/Reward</div><div class="coach-value">{risk_reward_label}</div></div>
-                <div class="coach-metric"><div class="coach-label">Target 2</div><div class="coach-value">{target_2}</div></div>
-                <div class="coach-metric"><div class="coach-label">Target 3</div><div class="coach-value">{target_3}</div></div>
-                <div class="coach-metric"><div class="coach-label">Expected Hold</div><div class="coach-value">{escape(plan_view["expected_hold"])}</div></div>
-                <div class="coach-metric"><div class="coach-label">Maximum Chase</div><div class="coach-value">{escape(plan_view["maximum_chase_price"])}</div></div>
-                <div class="coach-metric"><div class="coach-label">Timing</div><div class="coach-value">{escape(plan_view["timing_label"])}</div></div>
-                <div class="coach-metric"><div class="coach-label">Confidence</div><div class="coach-value">{escape(plan_view["confidence"])}</div></div>
-                <div class="coach-metric"><div class="coach-label">Guide Action</div><div class="coach-value">{escape(coach["action"])}</div></div>
-                <div class="coach-metric"><div class="coach-label">Exit Score</div><div class="coach-value">{coach["exit_score"]}/100</div></div>
-                <div class="coach-metric"><div class="coach-label">Stock Liquidity</div><div class="coach-value">{escape(liquidity["label"])}</div></div>
-                <div class="coach-metric"><div class="coach-label">Sector</div><div class="coach-value">{escape(sector["status"])}</div></div>
-                <div class="coach-metric"><div class="coach-label">Option Chain</div><div class="coach-value">{escape(option_liquidity.get("label", "N/A"))}</div></div>
-            </div>
-            <div class="notice"><strong>Invalidation</strong><br>{escape(plan_view["invalidation_condition"])}</div>
-            {card_detail_html}
-        </div>
-        """).strip(),
-        unsafe_allow_html=True,
-    )
-    evidence = render_historical_edge(result, trade_history or [])
+        with st.expander("Technical Details"):
+            st.caption(
+                f"Last scan {scan_stamp(result.get('timestamp'))} · "
+                f"Quality {quality['score']}/100 ({quality['grade']}) · "
+                f"Setup score {row['score']}%"
+            )
+            factor_columns = st.columns(3)
+            for index, (label, status) in enumerate(factors):
+                factor_columns[index % 3].metric(label, status)
+            technical_columns = st.columns(4)
+            technical_columns[0].metric("Entry Zone", plan_view["entry_zone"])
+            technical_columns[1].metric("Target 2", plan_view["target_2"])
+            technical_columns[2].metric("Target 3", plan_view["target_3"])
+            technical_columns[3].metric("Risk/Reward", plan_view["risk_reward"])
+            technical_columns_2 = st.columns(4)
+            technical_columns_2[0].metric(
+                "Expected Hold",
+                plan_view["expected_hold"],
+            )
+            technical_columns_2[1].metric(
+                "Maximum Chase",
+                plan_view["maximum_chase_price"],
+            )
+            technical_columns_2[2].metric("Sector", sector["status"])
+            technical_columns_2[3].metric("Stock Liquidity", liquidity["label"])
+            st.markdown(
+                f"**Invalidation:** {plan_view['invalidation_condition']}"
+            )
+            st.write(f"**Why this is here:** {quality_note}")
+            st.write(f"**Sector support:** {sector['detail']}")
+            st.write(f"**Liquidity:** {liquidity['detail']}")
+            st.write(f"**Live read:** {momentum['label']} — {momentum['detail']}")
+            st.write(
+                f"**Entry risk:** {chase['label']} — {chase['reason']} "
+                f"{confidence_note}"
+            )
+            st.markdown("**Why this trade**")
+            for reason in plan_view["reasons"]:
+                st.write(f"- {reason}")
+            st.markdown("**Exit / Reversal Watch**")
+            for reason in exit_reasons[:4]:
+                st.write(f"- {reason}")
     render_live_plan_trade_coach(
         result,
         trade_history or [],
@@ -1072,7 +1174,7 @@ def render_opportunity_list(
     )
 
     if not rows:
-        render_empty_state("No scored opportunities yet.")
+        render_empty_state("No qualifying opportunities are available right now.")
         return
 
     for row in rows:
@@ -1738,43 +1840,25 @@ def render_signal_card(symbol, result, trade_history=None):
         what_next_reason = result.get("what_next_reason", "No actionable setup yet.")
         trade_plan = result.get("trade_plan", {}) or {}
         option_liquidity = result.get("option_liquidity") or {}
+        evidence = None
+        outcome_coach = None
+        if actionable_trade_plan(result):
+            try:
+                evidence = historical_evidence(result, trade_history or [])
+            except Exception:
+                evidence = historical_evidence(result, [])
+            outcome_coach = live_plan_trade_coach_result(
+                result,
+                trade_history or [],
+                evidence,
+            )
+        at_a_glance = scanner_summary(result, evidence, outcome_coach)
 
         st.markdown(
             f'<div class="signal-pill {signal_class(signal)}">{signal_label(signal)}</div>',
             unsafe_allow_html=True,
         )
-        st.markdown(
-            f"""
-            <div class="price-metric">
-                <div class="price-label">Price</div>
-                <div class="price-value">{f"${price:.2f}" if price else "N/A"}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        if "confidence" in result:
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Setup Score", f"{confidence}/100")
-            c2.metric("Bias", bias)
-            c3.metric("Stage", setup_stage)
-            c4.metric("Timing", entry_timing)
-
-            st.metric("Quality", quality)
-
-            st.markdown(
-                f'<div class="notice notice-info"><strong>What should I do next?</strong><br>'
-                f'{escape(what_next)} {escape(what_next_reason)}</div>',
-                unsafe_allow_html=True,
-            )
-
-        if signal in ["BULLISH SETUP", "BEARISH SETUP"]:
-            st.success("High-probability setup active")
-            p1, p2, p3, p4 = st.columns(4)
-            p1.metric("Entry", f"${result['entry']:.2f}")
-            p2.metric("Stop", f"${result['stop']:.2f}")
-            p3.metric("Target", f"${result['target']:.2f}")
-            p4.metric("BE", f"${result['breakeven']:.2f}")
+        render_decision_summary(at_a_glance, compact=True)
 
         if trade_plan:
             plan_view = trade_plan_view(result)
@@ -1822,23 +1906,36 @@ def render_signal_card(symbol, result, trade_history=None):
                         f"{money(option_liquidity.get('strike'))} strike"
                     )
 
-                evidence = render_historical_edge(result, trade_history or [])
-                render_live_plan_trade_coach(
+                evidence = render_historical_edge(
                     result,
                     trade_history or [],
                     evidence=evidence,
                 )
+                render_live_plan_trade_coach(
+                    result,
+                    trade_history or [],
+                    evidence=evidence,
+                    coach=outcome_coach,
+                )
 
         coach = coach_live_setup(result)
-        if coach["action"] != "Wait":
+        with st.expander("Technical Details"):
+            if coach["action"] != "Wait":
+                st.markdown(
+                    f"**Scanner guide:** {coach['action']} · "
+                    f"{coach['summary']} {coach['next_step']}  \n"
+                    f"Entry risk: {coach['chase_risk']} · "
+                    f"Exit score: {coach['exit_score']}/100 "
+                    f"({coach['exit_label']})"
+                )
             st.markdown(
-                f'<div class="notice"><strong>Guide Action: {escape(coach["action"])} | Last scan {escape(scan_stamp(result.get("timestamp")))}</strong><br>'
-                f'{escape(coach["summary"])}<br>{escape(coach["next_step"])}<br>'
-                f'Entry Risk: {escape(coach["chase_risk"])} | Exit Score: {coach["exit_score"]}/100 - {escape(coach["exit_label"])}</div>',
-                unsafe_allow_html=True,
+                f"**What should I do next?** {what_next} {what_next_reason}"
             )
-
-        with st.expander("Signal Details"):
+            detail_summary = st.columns(4)
+            detail_summary[0].metric("Current Price", f"${price:.2f}" if price else "—")
+            detail_summary[1].metric("Quality", quality)
+            detail_summary[2].metric("Stage", setup_stage)
+            detail_summary[3].metric("Entry Timing", entry_timing)
             checks = quality_summary(result)
             q1, q2, q3, q4, q5 = st.columns(5)
             q1.metric("Trend", checks["Trend"])
@@ -2965,7 +3062,11 @@ def render_outcome_trade_journal(records=None, latest_results=None):
                 f"{record.symbol} · {record.direction} · {record.setup}",
             ):
                 if coach is not None:
-                    render_live_trade_coach_output(coach)
+                    summary = open_trade_summary(record, coach)
+                    render_open_trade_summary(summary)
+                    if current_price is None:
+                        st.caption("Current market price is unavailable.")
+                    render_live_trade_coach_output(coach, show_overview=False)
 
 
 def main():
