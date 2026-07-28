@@ -1,8 +1,6 @@
 """Deterministic card navigation for the OptionBeacon dashboard."""
 
 from html import escape
-import os
-import subprocess
 
 
 MAIN_NAVIGATION = (
@@ -116,38 +114,6 @@ def render_card_navigation(query_params=None):
     st.markdown(navigation_markup(active_page), unsafe_allow_html=True)
     return active_page
 
-
-def _git_value(*args):
-    try:
-        result = subprocess.run(
-            ["git", *args],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        return result.stdout.strip() or None
-    except (OSError, subprocess.SubprocessError):
-        return None
-
-
-def build_marker():
-    """Return non-sensitive build metadata for hosted diagnostics."""
-    import streamlit as st
-
-    commit = (
-        os.getenv("STREAMLIT_GIT_COMMIT")
-        or os.getenv("GIT_COMMIT")
-        or _git_value("rev-parse", "--short", "HEAD")
-        or "unavailable"
-    )
-    branch = (
-        os.getenv("STREAMLIT_GIT_BRANCH")
-        or os.getenv("GIT_BRANCH")
-        or _git_value("branch", "--show-current")
-        or "unavailable"
-    )
-    return f"Build {commit[:12]} · Branch {branch} · Streamlit {st.__version__}"
 
 TOOLS_SECTIONS = ("Scanner Health",)
 TRADE_DESK_SUBTITLE = (

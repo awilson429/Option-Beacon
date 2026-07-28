@@ -11,6 +11,7 @@ import streamlit as st
 from ui.theme import configure_page
 
 from after_hours import after_hours_focus_rows, fetch_after_hours_briefing
+from build_information import render_build_footer
 from developer_tools import (
     hosted_configuration_status,
     latest_production_ledger_entry,
@@ -140,7 +141,6 @@ from ui_navigation import (
     NO_ACTIONABLE_OPPORTUNITY_MESSAGE,
     RECORDED_CANDIDATES_LABEL,
     TRADE_DESK_SUBTITLE,
-    build_marker,
     render_card_navigation,
 )
 
@@ -3393,7 +3393,6 @@ def render_developer_tools():
     )
 
     st.markdown("### System Status")
-    st.caption(build_marker())
     st.dataframe(pd.DataFrame(system_status()), use_container_width=True, hide_index=True)
 
     def run_diagnostic(button_label, key, diagnostic):
@@ -3606,6 +3605,7 @@ def main():
         '<a href="https://option-beacon.com" target="_blank">option-beacon.com</a></div>',
         unsafe_allow_html=True,
     )
+    render_build_footer()
 
 
 try:
