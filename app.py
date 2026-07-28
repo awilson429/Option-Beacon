@@ -28,6 +28,13 @@ from live_coach_alerts import (
     timeline_summary,
 )
 from live_trade_coach import coach_live_setup, coach_rows
+from live_trade_coach_dashboard import (
+    latest_symbol_price,
+    live_plan_trade_outcome,
+    open_trade_coach_output,
+    open_trade_coach_eligible,
+    render_live_trade_coach_output,
+)
 from market_intelligence import (
     chase_risk,
     confidence_explanation,
@@ -756,14 +763,15 @@ def load_trade_evidence_history():
         return []
 
 
-def render_historical_edge(result, trade_history):
+def render_historical_edge(result, trade_history, evidence=None):
     if not actionable_trade_plan(result):
-        return
+        return None
 
-    try:
-        evidence = historical_evidence(result, trade_history)
-    except Exception:
-        evidence = historical_evidence(result, [])
+    if evidence is None:
+        try:
+            evidence = historical_evidence(result, trade_history)
+        except Exception:
+            evidence = historical_evidence(result, [])
 
     match_labels = {
         "LEVEL_1": "Level 1 — Setup, direction, and symbol",
@@ -871,6 +879,35 @@ def render_historical_edge(result, trade_history):
         ),
     )
     row_5[2].metric("Confidence Gap", gap)
+    return evidence
+
+
+def render_live_plan_trade_coach(result, trade_history, evidence=None):
+    """Render coaching for an actionable, entered live plan without persistence."""
+    current_price = result.get("price")
+    now = eastern_now()
+    record = live_plan_trade_outcome(
+        result,
+        trade_history,
+        current_price=current_price,
+        current_timestamp=now,
+    )
+    if record is None:
+        return
+
+    if evidence is None:
+        try:
+            evidence = historical_evidence(result, trade_history)
+        except Exception:
+            evidence = None
+    coach = open_trade_coach_output(
+        record,
+        current_price,
+        now,
+        evidence,
+    )
+    if coach is not None:
+        render_live_trade_coach_output(coach)
 
 
 def render_opportunity_card(
@@ -981,7 +1018,12 @@ def render_opportunity_card(
         """).strip(),
         unsafe_allow_html=True,
     )
-    render_historical_edge(result, trade_history or [])
+    evidence = render_historical_edge(result, trade_history or [])
+    render_live_plan_trade_coach(
+        result,
+        trade_history or [],
+        evidence=evidence,
+    )
 
 
 def render_market_regime(latest_results):
@@ -1780,7 +1822,12 @@ def render_signal_card(symbol, result, trade_history=None):
                         f"{money(option_liquidity.get('strike'))} strike"
                     )
 
-                render_historical_edge(result, trade_history or [])
+                evidence = render_historical_edge(result, trade_history or [])
+                render_live_plan_trade_coach(
+                    result,
+                    trade_history or [],
+                    evidence=evidence,
+                )
 
         coach = coach_live_setup(result)
         if coach["action"] != "Wait":
@@ -2740,7 +2787,7 @@ def render_signal_outcomes():
         )
 
 
-def render_outcome_trade_journal(records=None):
+def render_outcome_trade_journal(records=None, latest_results=None):
     render_section_header(
         "Trade Journal",
         "Read-only performance history for generated OptionBeacon signals",
@@ -2881,6 +2928,45 @@ def render_outcome_trade_journal(records=None):
     else:
         render_empty_state("No trade history matches the selected filters.")
 
+    open_records = [
+        record for record in filtered_records if open_trade_coach_eligible(record)
+    ]
+    if open_records:
+        st.markdown("**Live Trade Coach — Open Trades**")
+        now = eastern_now()
+        for record in sorted(
+            open_records,
+            key=lambda item: item.timestamp,
+            reverse=True,
+        ):
+            current_price = latest_symbol_price(
+                latest_results or {},
+                record.symbol,
+            )
+            try:
+                evidence = historical_evidence(
+                    {
+                        "symbol": record.symbol,
+                        "bias": record.direction,
+                        "setup": record.setup,
+                        "confidence": record.confidence,
+                    },
+                    records,
+                )
+            except Exception:
+                evidence = None
+            coach = open_trade_coach_output(
+                record,
+                current_price,
+                now,
+                evidence,
+            )
+            with st.expander(
+                f"{record.symbol} · {record.direction} · {record.setup}",
+            ):
+                if coach is not None:
+                    render_live_trade_coach_output(coach)
+
 
 def main():
     configure_page()
@@ -2939,7 +3025,10 @@ def main():
             )
 
     with journal_tab:
-        render_outcome_trade_journal(trade_evidence_history)
+        render_outcome_trade_journal(
+            trade_evidence_history,
+            latest_results,
+        )
 
     with history_tab:
         render_coach_timeline()
