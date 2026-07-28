@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Iterable
 
 from setup_intelligence import DEFAULT_MINIMUM_SAMPLE_SIZE, setup_intelligence
-from signal_history import TradeOutcome
+from signal_history import (
+    DEFAULT_MIN_ENTRY_CONFIDENCE,
+    TradeOutcome,
+    entry_confidence_eligible,
+)
 from trade_planning import timing_label
 
 
@@ -19,30 +24,81 @@ NON_LIVE_SIGNALS = {
 }
 
 
-def actionable_trade_plan(result: dict) -> bool:
-    """Return whether a scanner result should display historical evidence."""
+def scanner_entry_eligibility(
+    result: dict,
+    minimum_entry_confidence: float = DEFAULT_MIN_ENTRY_CONFIDENCE,
+) -> dict:
+    """Return canonical display eligibility and concise rejection reasons."""
     result = result or {}
     plan = result.get("trade_plan") or {}
     direction = plan.get("direction") or result.get("bias")
-    if direction not in {"Bullish", "Bearish"} or not plan:
-        return False
+    reasons = []
+    if direction not in {"Bullish", "Bearish"}:
+        reasons.append("Direction is not actionable.")
+    if not plan:
+        reasons.append("Entry plan is incomplete.")
     if result.get("signal") in NON_LIVE_SIGNALS:
-        return False
+        reasons.append("Candidate is not live.")
+
+    confidence = result.get("confidence")
+    confidence_record = SimpleNamespace(confidence=confidence)
+    if not entry_confidence_eligible(
+        confidence_record,
+        minimum_entry_confidence,
+    ):
+        try:
+            confidence_label = f"{float(confidence):g}%"
+        except (TypeError, ValueError):
+            confidence_label = "Unavailable"
+        reasons.append(
+            f"Confidence {confidence_label} is below the "
+            f"{float(minimum_entry_confidence):g}% entry requirement."
+        )
+
     timing = str(result.get("timing_label") or timing_label(result)).upper()
     if timing in {"INVALID", "EXTENDED"}:
-        return False
-    if str(result.get("entry_timing") or "").upper() == "WAIT":
-        return False
+        reasons.append(f"Timing is {timing.lower()}.")
+    entry_timing = str(result.get("entry_timing") or "").upper()
+    if entry_timing in {"WAIT", "TOO EARLY"} or timing in {"TOO EARLY", "WAIT"}:
+        reasons.append("Timing is too early.")
+    if entry_timing in {"SETUP INVALIDATED", "DO NOT CHASE"}:
+        reasons.append(
+            "Timing is invalid."
+            if entry_timing == "SETUP INVALIDATED"
+            else "Timing is extended."
+        )
+    if result.get("watch_only") is True or str(
+        result.get("entry_eligibility") or ""
+    ).upper() in {"WATCH ONLY", "NOT ELIGIBLE"}:
+        reasons.append("Candidate is watch-only.")
+    if result.get("entry_time") is not None and result.get("exit_time") is not None:
+        reasons.append("Trade is closed.")
 
-    value = plan.get("trigger_price")
-    if value is None:
-        value = plan.get("entry_price")
-    if value is None:
-        value = plan.get("entry_zone_low")
-    try:
-        return math.isfinite(float(value)) and float(value) > 0
-    except (TypeError, ValueError):
-        return False
+    def valid_plan_value(*keys) -> bool:
+        value = next((plan.get(key) for key in keys if plan.get(key) is not None), None)
+        try:
+            return math.isfinite(float(value)) and float(value) > 0
+        except (TypeError, ValueError):
+            return False
+
+    if not valid_plan_value("trigger_price", "entry_price", "entry_zone_low"):
+        reasons.append("Entry plan is incomplete.")
+    if not valid_plan_value("technical_stop", "invalidation_level", "stop"):
+        reasons.append("Entry plan is incomplete.")
+    if not valid_plan_value("target_1"):
+        reasons.append("Entry plan is incomplete.")
+
+    unique_reasons = list(dict.fromkeys(reasons))
+    return {
+        "eligible": not unique_reasons,
+        "reasons": unique_reasons[:2],
+        "minimum_entry_confidence": minimum_entry_confidence,
+    }
+
+
+def actionable_trade_plan(result: dict) -> bool:
+    """Return whether a scanner result clears the canonical display entry gate."""
+    return scanner_entry_eligibility(result)["eligible"]
 
 
 def format_evidence_metric(

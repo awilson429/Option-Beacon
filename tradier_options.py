@@ -111,6 +111,20 @@ def option_chain(symbol, expiration):
     return options, ""
 
 
+def option_quote(option_symbol):
+    """Fetch one current option quote through the existing Tradier transport."""
+    payload, error = _get_json(
+        "/markets/quotes",
+        {"symbols": option_symbol, "greeks": "false"},
+    )
+    if error:
+        return None, error
+    quote = (payload or {}).get("quotes", {}).get("quote")
+    if isinstance(quote, list):
+        quote = quote[0] if quote else None
+    return (quote if isinstance(quote, dict) else None), ""
+
+
 def _number(value, default=0):
     try:
         if value in [None, ""]:

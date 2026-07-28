@@ -25,6 +25,8 @@ def live_result(**overrides):
             "setup_type": "Bullish breakout",
             "direction": "Bullish",
             "trigger_price": 100,
+            "technical_stop": 95,
+            "target_1": 105,
         },
     }
     result.update(overrides)

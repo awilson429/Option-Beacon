@@ -11,10 +11,24 @@ import streamlit as st
 from ui.theme import configure_page
 
 from after_hours import after_hours_focus_rows, fetch_after_hours_briefing
+from build_information import render_build_footer
+from developer_tools import (
+    hosted_configuration_status,
+    latest_production_ledger_entry,
+    load_latest_diagnostic,
+    option_engine_diagnostic,
+    save_diagnostic_result,
+    system_status,
+    verify_finnhub_connection,
+    verify_position_tracking,
+    verify_tradier_connection,
+)
 from finnhub_universe import (
     DEFAULT_SYMBOL_GROUPS,
     MARKET_CONTEXT_SYMBOLS,
+    finnhub_api_key,
     flatten_symbol_groups,
+    quote_symbol,
 )
 from optionbeacon_history import (
     HIGH_SCORE_THRESHOLD,
@@ -31,8 +45,8 @@ from live_trade_coach import coach_live_setup, coach_rows
 from live_trade_coach_dashboard import (
     latest_symbol_price,
     live_plan_trade_outcome,
+    matching_open_trade,
     open_trade_coach_output,
-    open_trade_coach_eligible,
     render_live_trade_coach_output,
 )
 from market_intelligence import (
@@ -56,6 +70,14 @@ from trade_journal import (
 )
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
+from option_trade_engine import capture_qualified_signals
+from option_position_tracker import (
+    OptionPositionStore,
+    completed_position_rows,
+    open_position_rows,
+    refresh_option_positions_safely,
+)
+from open_trade_quotes import enrich_open_trade_prices
 from signal_history import load_trade_outcomes
 from signal_outcomes import load_signal_outcomes, summarize_outcomes
 from tradier_options import tradier_configured
@@ -69,14 +91,29 @@ from trade_evidence import (
     actionable_trade_plan,
     format_evidence_metric,
     historical_evidence,
+    scanner_entry_eligibility,
 )
 from trade_journal_dashboard import (
     STATUS_OPTIONS,
+    active_edge_analytics,
     filter_trade_outcomes,
     format_metric,
+    format_signed_return,
     grouped_performance_rows,
+    journal_summary_metrics,
+    opened_alerts_analytics,
+    performance_caption,
     trade_history_rows,
 )
+from trade_desk_view_models import (
+    attention_positions,
+    daily_scorecard,
+    historical_edge_grade,
+    historical_edge_summary,
+    opportunity_entry_presentation,
+    trade_timeline,
+)
+from setup_intelligence import setup_intelligence
 from trade_management import coach_recommendation, trade_summary
 from trade_planning import trade_plan_view
 from trade_replay import (
@@ -97,9 +134,14 @@ from trade_storage import (
     update_position_stop,
 )
 from ui_polish import (
-    open_trade_summary,
     opportunity_summary,
     scanner_summary,
+)
+from ui_navigation import (
+    NO_ACTIONABLE_OPPORTUNITY_MESSAGE,
+    RECORDED_CANDIDATES_LABEL,
+    TRADE_DESK_SUBTITLE,
+    render_card_navigation,
 )
 
 
@@ -590,10 +632,11 @@ def render_decision_summary(summary, *, compact=False):
     """Render a responsive at-a-glance decision summary."""
     fields = (
         (
+            ("Eligibility", summary.get("eligibility", "QUALIFIED")),
+            ("Entry Status", summary.get("entry_status", summary["decision_state"])),
             ("Confidence", summary["confidence"]),
             ("Timing", summary["timing"]),
             ("Historical Grade", summary["historical_grade"]),
-            ("Coach Status", summary["coach_status"]),
             ("Entry / Trigger", summary["entry"]),
             ("Stop", summary["stop"]),
             ("Target 1", summary["target_1"]),
@@ -647,26 +690,6 @@ def render_decision_summary(summary, *, compact=False):
     )
 
 
-def render_open_trade_summary(summary):
-    """Render the default-visible OPEN-trade management fields."""
-    st.markdown(
-        f"### {escape(summary['symbol'])} · {escape(summary['direction'])}"
-    )
-    state_class = f'decision-{escape(summary["treatment"])}'
-    st.markdown(
-        f'<div class="decision-banner {state_class}">'
-        f'<strong>Suggested action · {escape(summary["coach_status"])}</strong><br>'
-        f'{escape(summary["coach_action"])}'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-    columns = st.columns(4)
-    columns[0].metric("Current Return", summary["current_return"])
-    columns[1].metric("Risk Remaining", summary["risk_remaining"])
-    columns[2].metric("Target 1 Progress", summary["target_progress"])
-    columns[3].metric("Historical Grade", summary["historical_grade"])
-
-
 def secret_configured(name):
     if os.getenv(name):
         return True
@@ -683,6 +706,23 @@ def health_card(label, state, detail, level="warn"):
         f'<div class="health-state health-{escape(level)}">{escape(state)}</div>'
         f'<div class="health-detail">{escape(detail)}</div>'
         '</div>'
+    )
+
+
+def render_journal_metric(column, label, value, treatment="neutral"):
+    """Render one journal value with text and existing theme treatment."""
+    level = {
+        "positive": "good",
+        "negative": "bad",
+        "caution": "warn",
+        "neutral": "neutral",
+    }.get(treatment, "neutral")
+    column.markdown(
+        '<div class="health-card">'
+        f'<div class="health-label">{escape(label)}</div>'
+        f'<div class="health-state health-{level}">{escape(str(value))}</div>'
+        '</div>',
+        unsafe_allow_html=True,
     )
 
 
@@ -743,6 +783,21 @@ def cached_generate_signal(symbol):
         return generate_signal(symbol), ""
     except Exception as exc:
         return None, str(exc)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_open_trade_quote(symbol):
+    """Fetch one quote through the existing Finnhub provider abstraction."""
+    api_key = finnhub_api_key().strip()
+    if not api_key:
+        return None, "Finnhub API key not configured"
+    try:
+        quote = quote_symbol(symbol, api_key)
+    except Exception as exc:
+        return None, str(exc)
+    if quote is None:
+        return None, "Finnhub returned no current quote"
+    return quote, "Finnhub quote"
 
 
 def normalize_market_signal(result, market_open):
@@ -2884,13 +2939,23 @@ def render_signal_outcomes():
         )
 
 
-def render_outcome_trade_journal(records=None, latest_results=None):
+def render_outcome_trade_journal(
+    records=None,
+    latest_results=None,
+    current_prices=None,
+    quote_status=None,
+):
     render_section_header(
-        "Trade Journal",
-        "Read-only performance history for generated OptionBeacon signals",
+        "Trade Desk",
+        TRADE_DESK_SUBTITLE,
     )
     records = list(records) if records is not None else load_trade_outcomes()
+    render_live_session_opportunity(latest_results or {}, records)
     if not records:
+        st.markdown("### Open Positions Needing Attention")
+        render_empty_state("No open positions currently require attention.")
+        st.markdown("### Today's Scorecard")
+        render_empty_state("No entered alerts have been recorded today.")
         render_empty_state("No trade history has been recorded yet.")
         return
 
@@ -2960,155 +3025,538 @@ def render_outcome_trade_journal(records=None, latest_results=None):
     )
     st.caption(f"Showing {len(filtered_records)} of {len(records)} recorded signals")
 
+    summary = journal_summary_metrics(filtered_records)
     analytics = analyze_trade_outcomes(filtered_records)
-    overall = analytics["overall"]
-    metric_rows = (
-        (
-            ("Total Signals", str(overall["total_signals"])),
-            ("Entered Trades", str(overall["entered_trades"])),
-            ("Closed Trades", str(overall["closed_trades"])),
-            ("Never Triggered", str(overall["never_triggered"])),
-            (
-                "Win Rate",
-                format_metric(overall["win_rate"], percentage=True),
-            ),
-        ),
-        (
-            (
-                "Average Return",
-                format_metric(overall["average_return"], percentage=True),
-            ),
-            ("Profit Factor", format_metric(overall["profit_factor"])),
-            (
-                "Expectancy",
-                format_metric(overall["expectancy"], percentage=True),
-            ),
-            (
-                "Average Hold Minutes",
-                format_metric(overall["average_hold_minutes"]),
-            ),
-        ),
+    now = eastern_now()
+    current_prices = current_prices or {
+        record.symbol: latest_symbol_price(latest_results or {}, record.symbol)
+        for record in filtered_records
+        if record.entry_time is not None and record.exit_time is None
+    }
+    opened_alerts = opened_alerts_analytics(
+        filtered_records,
+        current_prices,
+        now,
+        quote_status,
     )
-    for metric_row in metric_rows:
-        columns = st.columns(len(metric_row))
-        for column, (label, value) in zip(columns, metric_row):
-            column.metric(label, value)
-
-    st.markdown("**Grouped Performance**")
-    group_tabs = st.tabs(["Symbol", "Setup", "Direction", "Confidence Bucket"])
-    grouped_sets = (
-        analytics["by_symbol"],
-        analytics["by_setup"],
-        analytics["by_direction"],
-        analytics["by_confidence_bucket"],
+    active_edge = active_edge_analytics(
+        filtered_records,
+        current_prices,
+        now,
+        quote_status,
     )
-    for tab, grouped_rows in zip(group_tabs, grouped_sets):
-        with tab:
-            display_rows = grouped_performance_rows(grouped_rows)
-            if display_rows:
-                st.dataframe(
-                    pd.DataFrame(display_rows),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-            else:
-                render_empty_state("No closed trade performance is available.")
-
-    st.markdown("**Trade History**")
-    history_rows = trade_history_rows(filtered_records)
-    if history_rows:
+    st.markdown("### Open Positions Needing Attention")
+    attention = attention_positions(opened_alerts["rows"])
+    if attention:
+        attention_columns = [
+            "Symbol", "Direction", "Position Health", "Open Return",
+            "Coach Status", "Suggested Action",
+        ]
         st.dataframe(
-            pd.DataFrame(history_rows),
+            pd.DataFrame(attention)[attention_columns],
             use_container_width=True,
             hide_index=True,
         )
     else:
-        render_empty_state("No trade history matches the selected filters.")
+        render_empty_state("No open positions currently require attention.")
 
-    open_records = [
-        record for record in filtered_records if open_trade_coach_eligible(record)
-    ]
-    if open_records:
-        st.markdown("**Live Trade Coach — Open Trades**")
-        now = eastern_now()
-        for record in sorted(
-            open_records,
-            key=lambda item: item.timestamp,
-            reverse=True,
-        ):
-            current_price = latest_symbol_price(
-                latest_results or {},
-                record.symbol,
-            )
-            try:
-                evidence = historical_evidence(
-                    {
-                        "symbol": record.symbol,
-                        "bias": record.direction,
-                        "setup": record.setup,
-                        "confidence": record.confidence,
-                    },
-                    records,
+    st.markdown("### Today's Scorecard")
+    scorecard = daily_scorecard(filtered_records, now.date())
+    score_fields = (
+        ("Opened Alerts", scorecard["opened_alerts"], "neutral"),
+        ("Closed Trades", scorecard["closed_trades"], "neutral"),
+        ("Winners", scorecard["winners"], "positive"),
+        ("Losers", scorecard["losers"], "negative"),
+        ("Win Rate", format_metric(scorecard["win_rate"], percentage=True), "neutral"),
+        (
+            "Average Realized Return",
+            format_signed_return(scorecard["average_realized_return"]),
+            "positive" if (scorecard["average_realized_return"] or 0) > 0 else "negative"
+            if (scorecard["average_realized_return"] or 0) < 0 else "neutral",
+        ),
+    )
+    score_columns = st.columns(6)
+    for column, (label, value, treatment) in zip(score_columns, score_fields):
+        render_journal_metric(column, label, value, treatment)
+    if scorecard["best_trade"] is not None:
+        st.caption(
+            f"Best trade {format_signed_return(scorecard['best_trade'])} · "
+            f"Worst trade {format_signed_return(scorecard['worst_trade'])} · "
+            f"Average hold {format_metric(scorecard['average_hold_minutes'])} minutes"
+        )
+
+    st.divider()
+    st.markdown("### Opened Alerts")
+    if opened_alerts["rows"]:
+        primary_columns = [
+            "Entry Time", "Symbol", "Direction", "Setup", "Position Health",
+            "Entry", "Current Price", "Open Return", "Realized Return",
+            "Status", "Coach Status", "Quote Status",
+        ]
+        st.dataframe(
+            pd.DataFrame(opened_alerts["rows"])[primary_columns],
+            use_container_width=True,
+            hide_index=True,
+        )
+        entered_records = [
+            record for record in filtered_records if record.entry_time is not None
+        ]
+        selected_label = st.selectbox(
+            "Entered alert details",
+            [
+                f"{record.symbol} · {record.entry_time.strftime('%Y-%m-%d %H:%M')}"
+                for record in entered_records
+            ],
+            key="entered_alert_detail",
+        )
+        selected_record = entered_records[
+            [
+                f"{record.symbol} · {record.entry_time.strftime('%Y-%m-%d %H:%M')}"
+                for record in entered_records
+            ].index(selected_label)
+        ]
+        with st.expander("Trade Timeline"):
+            timeline = trade_timeline(selected_record)
+            for event in timeline:
+                detail = f" {event['detail']}" if event["detail"] else ""
+                event_time = event["timestamp"].strftime("%I:%M %p").lstrip("0")
+                st.write(
+                    f"{event_time} — {event['event']}{detail}"
                 )
-            except Exception:
-                evidence = None
-            coach = open_trade_coach_output(
-                record,
-                current_price,
-                now,
-                evidence,
+            st.caption(
+                "Past coach transitions are unavailable because coach changes "
+                "are not persisted in trade history."
             )
-            with st.expander(
-                f"{record.symbol} · {record.direction} · {record.setup}",
-            ):
-                if coach is not None:
-                    summary = open_trade_summary(record, coach)
-                    render_open_trade_summary(summary)
-                    if current_price is None:
-                        st.caption("Current market price is unavailable.")
-                    render_live_trade_coach_output(coach, show_overview=False)
+        record_evidence = setup_intelligence(
+            {
+                "symbol": selected_record.symbol,
+                "direction": selected_record.direction,
+                "setup": selected_record.setup,
+                "confidence": selected_record.confidence,
+            },
+            records,
+        )
+        st.caption(
+            f"Historical Edge: {historical_edge_grade(record_evidence)} · "
+            f"{historical_edge_summary(record_evidence)}"
+        )
+    else:
+        render_empty_state("No entered alerts match the current filters.")
+
+    st.markdown("### Active Edge")
+    st.caption(
+        "Active Edge reflects unrealized performance for currently open trades "
+        "using the latest available scanner prices."
+    )
+    if not active_edge["open_positions"]:
+        render_empty_state("No entered trades are currently open.")
+    else:
+        active_fields = (
+            ("Open Positions", active_edge["open_positions"], "neutral"),
+            ("Healthy", active_edge["healthy"], "positive"),
+            ("Need Attention", active_edge["need_attention"], "caution"),
+            (
+                "Average Open Return",
+                format_signed_return(active_edge["average_open_return"]),
+                "neutral",
+            ),
+            (
+                "Average Risk Remaining",
+                format_metric(active_edge["average_risk_remaining"], percentage=True),
+                "neutral",
+            ),
+        )
+        active_columns = st.columns(5)
+        for column, (label, value, treatment) in zip(active_columns, active_fields):
+            render_journal_metric(column, label, value, treatment)
+        with st.expander("Additional Open-Trade Metrics"):
+            detail_columns = st.columns(4)
+            detail_columns[0].metric("Winning Now", active_edge["winning_now"])
+            detail_columns[1].metric("Losing Now", active_edge["losing_now"])
+            detail_columns[2].metric("Breakeven Now", active_edge["breakeven_now"])
+            detail_columns[3].metric(
+                "Average Minutes Open",
+                format_metric(active_edge["average_minutes_open"]),
+            )
+            st.caption(
+                "Average Target 1 Progress "
+                f"{format_metric(active_edge['average_target_1_progress'], percentage=True)}"
+            )
+
+    option_positions = OptionPositionStore().load()
+    st.markdown("### Open Option Positions")
+    open_option_rows = open_position_rows(option_positions, now)
+    if open_option_rows:
+        option_frame = pd.DataFrame(open_option_rows)
+
+        def option_return_color(value):
+            try:
+                number = float(str(value).replace("%", ""))
+            except (TypeError, ValueError):
+                return ""
+            if number > 0:
+                return "color: #67d99a"
+            if number < 0:
+                return "color: #ff7b7b"
+            return "color: #b8c0cc"
+
+        st.dataframe(
+            option_frame.style.map(
+                option_return_color,
+                subset=["Current Return", "MFE", "MAE"],
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        render_empty_state("No paper option positions are currently open.")
+
+    st.markdown("### Completed Option Positions")
+    completed_option_rows = completed_position_rows(option_positions)
+    if completed_option_rows:
+        st.dataframe(
+            pd.DataFrame(completed_option_rows),
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        render_empty_state("No paper option positions have completed yet.")
+
+    with st.expander("Performance Details"):
+        performance_row = (
+            ("Open Trades", summary["open_trades"], "neutral"),
+            ("Closed Trades", summary["closed_trades"], "neutral"),
+            ("Winning Trades", summary["winning_trades"], "positive"),
+            ("Losing Trades", summary["losing_trades"], "negative"),
+            ("Breakeven Trades", summary["breakeven_trades"], "neutral"),
+            ("Win Rate", format_metric(summary["win_rate"], percentage=True), "neutral"),
+            ("Average Return", format_signed_return(summary["average_return"]), "neutral"),
+            ("Profit Factor", format_metric(summary["profit_factor"]), "neutral"),
+            ("Expectancy", format_signed_return(summary["expectancy"]), "neutral"),
+            ("Average Hold Minutes", format_metric(summary["average_hold_minutes"]), "neutral"),
+        )
+        performance_columns = st.columns(5)
+        for index, (label, value, treatment) in enumerate(performance_row):
+            render_journal_metric(
+                performance_columns[index % 5], label, value, treatment
+            )
+        st.caption(performance_caption(summary["closed_trades"], summary["open_trades"]))
+
+    with st.expander("Grouped Performance"):
+        group_tabs = st.tabs(["Symbol", "Setup", "Direction", "Confidence Bucket"])
+        grouped_sets = (
+            analytics["by_symbol"], analytics["by_setup"],
+            analytics["by_direction"], analytics["by_confidence_bucket"],
+        )
+        for tab, grouped_rows in zip(group_tabs, grouped_sets):
+            with tab:
+                display_rows = grouped_performance_rows(grouped_rows)
+                if display_rows:
+                    st.dataframe(pd.DataFrame(display_rows), use_container_width=True, hide_index=True)
+                else:
+                    render_empty_state("No closed trade performance is available.")
+
+    with st.expander("Complete Trade History"):
+        history_rows = trade_history_rows(filtered_records)
+        if history_rows:
+            st.dataframe(pd.DataFrame(history_rows), use_container_width=True, hide_index=True)
+        else:
+            render_empty_state("No trade history matches the selected filters.")
+
+
+def render_live_session_opportunity(latest_results, trade_history):
+    """Render one canonically eligible trade and an optional developing setup."""
+    rows = [
+        *opportunity_rows(latest_results, "Bullish", limit=5),
+        *opportunity_rows(latest_results, "Bearish", limit=5),
+    ]
+    directional_rows = [
+        row
+        for row in rows
+        if (row.get("result") or {}).get("trade_plan")
+        and (
+            ((row.get("result") or {}).get("trade_plan") or {}).get("direction")
+            or (row.get("result") or {}).get("bias")
+        ) in {"Bullish", "Bearish"}
+    ]
+    eligible_rows = [
+        row
+        for row in directional_rows
+        if actionable_trade_plan(row.get("result") or {})
+    ]
+    if not eligible_rows:
+        st.markdown("### Today's Best Trade")
+        render_empty_state("No trade currently meets the entry requirements.")
+        if directional_rows:
+            developing = max(
+                directional_rows,
+                key=lambda item: item.get("score") or 0,
+            )
+            developing_result = developing["result"]
+            eligibility = scanner_entry_eligibility(developing_result)
+            plan = developing_result.get("trade_plan") or {}
+            st.markdown("#### Best Developing Setup")
+            developing_columns = st.columns(6)
+            developing_columns[0].metric(
+                "Symbol",
+                developing_result.get("symbol") or "—",
+            )
+            developing_columns[1].metric(
+                "Direction",
+                plan.get("direction") or developing_result.get("bias") or "—",
+            )
+            developing_columns[2].metric(
+                "Setup",
+                plan.get("setup_type") or plan.get("setup") or "—",
+            )
+            developing_columns[3].metric(
+                "Confidence",
+                format_metric(
+                    developing_result.get("confidence"),
+                    percentage=True,
+                    decimals=0,
+                ),
+            )
+            developing_columns[4].metric(
+                "Timing",
+                developing_result.get("entry_timing")
+                or developing_result.get("timing_label")
+                or "—",
+            )
+            developing_columns[5].metric(
+                "Entry Trigger",
+                format_evidence_metric(
+                    plan.get("trigger_price")
+                    or plan.get("entry_price")
+                    or plan.get("entry_zone_low"),
+                ),
+            )
+            st.caption("WATCH — NOT ELIGIBLE")
+            for reason in eligibility["reasons"]:
+                st.caption(reason)
+        return
+
+    row = max(eligible_rows, key=lambda item: item.get("score") or 0)
+    result = row["result"]
+    try:
+        evidence = historical_evidence(result, trade_history)
+    except Exception:
+        evidence = historical_evidence(result, [])
+    open_record = matching_open_trade(result, trade_history)
+    coach = (
+        open_trade_coach_output(
+            open_record,
+            result.get("price"),
+            eastern_now(),
+            evidence,
+        )
+        if open_record is not None
+        else None
+    )
+    summary = opportunity_summary(result, evidence, coach)
+    summary["historical_grade"] = historical_edge_grade(evidence)
+    entry_presentation = opportunity_entry_presentation(
+        {"eligible": True},
+        is_open=open_record is not None,
+        coach=coach,
+    )
+    summary["eligibility"] = entry_presentation["eligibility"]
+    summary["entry_status"] = entry_presentation["entry_status"]
+    summary["decision_state"] = entry_presentation["suggested_action"]
+    summary["coach_status"] = entry_presentation["coach_status"]
+    summary["coach_action"] = entry_presentation["suggested_action"]
+    summary["treatment"] = entry_presentation["treatment"]
+    st.markdown("### Today's Best Trade")
+    render_decision_summary(summary, compact=True)
+    with st.expander("Why this trade?"):
+        st.write(
+            f"Historical Edge: {summary['historical_grade']} · "
+            f"{historical_edge_summary(evidence)}"
+        )
+        st.write(
+            "Average historical hold: "
+            f"{format_metric(evidence.get('average_hold_minutes'))} minutes"
+        )
+        if coach:
+            st.write(f"Coach rationale: {coach.get('summary') or '—'}")
+
+
+def render_developer_tools():
+    """Render read-only internal diagnostics without exposing provider secrets."""
+    render_section_header(
+        "Developer Tools",
+        "Internal provider and Option Engine diagnostics",
+    )
+    st.info(
+        "Developer Tools runs diagnostics only. It does not place trades or "
+        "modify production trade history."
+    )
+
+    st.markdown("### System Status")
+    st.dataframe(pd.DataFrame(system_status()), use_container_width=True, hide_index=True)
+
+    def run_diagnostic(button_label, key, diagnostic):
+        running_key = f"{key}_running"
+        if running_key not in st.session_state:
+            st.session_state[running_key] = False
+        clicked = st.button(
+            button_label,
+            key=key,
+            disabled=st.session_state[running_key],
+        )
+        if not clicked:
+            return None
+        st.session_state[running_key] = True
+        try:
+            with st.spinner(f"{button_label} in progress..."):
+                result = diagnostic()
+                save_diagnostic_result(result)
+                return result
+        except Exception:
+            result = {
+                "validation_type": button_label,
+                "timestamp": eastern_now().isoformat(),
+                "provider_mode": "NOT RUN",
+                "overall_result": "FAIL",
+                "checks": [],
+                "message": "unexpected internal error",
+                "contract": None,
+                "elapsed_seconds": None,
+            }
+            try:
+                save_diagnostic_result(result)
+            except Exception:
+                pass
+            return result
+        finally:
+            st.session_state[running_key] = False
+
+    def render_result(result):
+        if not result:
+            return
+        st.markdown(f"**Result: {result.get('overall_result') or 'NOT RUN'}**")
+        st.caption(
+            f"{result.get('provider_mode', 'NOT RUN')} · "
+            f"{result.get('elapsed_seconds', '—')} seconds · "
+            f"{result.get('timestamp', '—')}"
+        )
+        checks = result.get("checks") or []
+        if checks:
+            st.dataframe(pd.DataFrame(checks), use_container_width=True, hide_index=True)
+        if result.get("message"):
+            st.caption(result["message"])
+        contract = result.get("contract")
+        if contract:
+            st.markdown("**Selected contract (sanitized)**")
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "Field": key.replace("_", " ").title(),
+                            "Value": value if value is not None else "—",
+                        }
+                        for key, value in contract.items()
+                    ]
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    st.markdown("### Verify Tradier Connection")
+    render_result(
+        run_diagnostic(
+            "Verify Tradier Connection",
+            "developer_verify_tradier",
+            verify_tradier_connection,
+        )
+    )
+
+    st.markdown("### Verify Finnhub Connection")
+    render_result(
+        run_diagnostic(
+            "Verify Finnhub Connection",
+            "developer_verify_finnhub",
+            verify_finnhub_connection,
+        )
+    )
+
+    st.markdown("### Run Option Engine Verification")
+    render_result(
+        run_diagnostic(
+            "Run Option Engine Verification",
+            "developer_verify_option_engine",
+            option_engine_diagnostic,
+        )
+    )
+
+    st.markdown("### Verify Position Tracking")
+    render_result(
+        run_diagnostic(
+            "Verify Position Tracking",
+            "developer_verify_position_tracking",
+            verify_position_tracking,
+        )
+    )
+
+    st.markdown("### Latest Verification Result")
+    latest_result = load_latest_diagnostic()
+    if latest_result is None:
+        render_empty_state("No verification result has been recorded yet.")
+    else:
+        render_result(latest_result)
+
+    st.markdown("### Latest Production Option Ledger Entry")
+    latest_entry = latest_production_ledger_entry()
+    if latest_entry is None:
+        render_empty_state("No production option trade has been captured yet.")
+    else:
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "Field": key.replace("_", " ").title(),
+                        "Value": value if value is not None else "—",
+                    }
+                    for key, value in latest_entry.items()
+                ]
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
 
 
 def main():
     configure_page()
     require_app_access()
     render_header()
+    hosted_status = hosted_configuration_status()
+    if hosted_status["ready"]:
+        st.caption("Hosted configuration: Ready")
+    else:
+        st.warning(
+            "Hosted configuration incomplete. Missing: "
+            + ", ".join(hosted_status["missing"])
+        )
 
     latest_results, high_score_history, snapshot_time, symbol_groups = scan_symbols()
     trade_evidence_history = load_trade_evidence_history()
-    render_scanner_freshness_notice(latest_results, snapshot_time)
-
-    (
-        live_tab,
-        after_hours_tab,
-        opportunities_tab,
-        journal_tab,
-        history_tab,
-        tools_tab,
-    ) = st.tabs(
-        [
-            "Live Guide",
-            "After Hours",
-            "Opportunities",
-            "Trade Journal",
-            "History",
-            "Tools",
-        ]
+    capture_qualified_signals(
+        latest_results.values(),
+        history=trade_evidence_history,
+    )
+    refresh_option_positions_safely()
+    open_trade_prices, open_trade_quote_status = enrich_open_trade_prices(
+        trade_evidence_history,
+        latest_results,
+        cached_open_trade_quote,
     )
 
-    with live_tab:
-        render_market_snapshot(latest_results)
-        render_beacon_tape(latest_results)
-        render_beacon_board(latest_results, high_score_history)
-        st.divider()
-        render_live_trade_coach(latest_results, high_score_history)
-        st.divider()
-        render_live_coach_alerts()
+    active_page = render_card_navigation()
 
-    with after_hours_tab:
+    if active_page == "After Hours":
         render_after_hours(latest_results)
 
-    with opportunities_tab:
+    elif active_page == "Opportunities":
         render_top_opportunities(
             latest_results,
             high_score_history,
@@ -3125,13 +3573,15 @@ def main():
                 trade_evidence_history,
             )
 
-    with journal_tab:
+    elif active_page == "Trade Desk":
         render_outcome_trade_journal(
             trade_evidence_history,
             latest_results,
+            open_trade_prices,
+            open_trade_quote_status,
         )
 
-    with history_tab:
+    elif active_page == "History":
         render_coach_timeline()
         st.divider()
         render_recent_high_scores(high_score_history)
@@ -3140,14 +3590,11 @@ def main():
         st.divider()
         render_trade_journal()
 
-    with tools_tab:
+    elif active_page == "Tools":
         render_scanner_health(latest_results, snapshot_time, symbol_groups)
-        st.divider()
-        render_trade_replay_backtest()
-        st.divider()
-        render_score_guide()
-        st.divider()
-        render_active_trades(latest_results)
+
+    elif active_page == "Developer Tools":
+        render_developer_tools()
 
     st.markdown(
         '<div class="notice notice-warning">Decision-support dashboard only. Not financial advice.</div>',
@@ -3158,6 +3605,7 @@ def main():
         '<a href="https://option-beacon.com" target="_blank">option-beacon.com</a></div>',
         unsafe_allow_html=True,
     )
+    render_build_footer()
 
 
 try:
