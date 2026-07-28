@@ -1,3 +1,6 @@
+import math
+
+
 ACTION_ENTER = "Entry zone active"
 ACTION_WATCH = "Watch for trigger"
 ACTION_HOLD = "Manage active idea"
@@ -5,12 +8,345 @@ ACTION_AVOID = "Avoid chasing"
 ACTION_MONITOR = "Monitor setup"
 ACTION_WAIT = "Wait"
 
+TRADE_COACH_STATUSES = {
+    "HOLD",
+    "PROTECT PROFIT",
+    "TAKE PARTIAL",
+    "EXIT",
+    "CLOSED",
+    "UNAVAILABLE",
+}
+TRADE_COACH_URGENCIES = {"LOW", "MEDIUM", "HIGH"}
+STOP_THREAT_RISK_PERCENT = 25.0
+NEAR_TARGET_PROGRESS_PERCENT = 80.0
+MEANINGFUL_LOSS_PERCENT = -0.5
+MATERIAL_REVERSAL_FRACTION = 0.5
+
 from market_intelligence import (
     chase_risk,
     confidence_explanation,
     missing_confirmations,
     setup_momentum_snapshot,
 )
+
+
+def _finite_positive(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) and number > 0 else None
+
+
+def _direction_sign(direction):
+    if str(direction).lower() == "bullish":
+        return 1
+    if str(direction).lower() == "bearish":
+        return -1
+    return 0
+
+
+def _directional_return(entry, price, direction_sign):
+    return direction_sign * (price - entry) / entry * 100
+
+
+def _target_progress(entry, price, target, direction_sign):
+    target = _finite_positive(target)
+    if target is None:
+        return None
+    target_distance = direction_sign * (target - entry)
+    if target_distance <= 0:
+        return None
+    progress = direction_sign * (price - entry) / target_distance * 100
+    return max(0.0, min(200.0, progress))
+
+
+def _target_reached(price, target, direction_sign):
+    target = _finite_positive(target)
+    if target is None:
+        return False
+    return direction_sign * (price - target) >= 0
+
+
+def _historical_grade(historical_intelligence):
+    if not isinstance(historical_intelligence, dict):
+        return "INSUFFICIENT DATA"
+    grade = historical_intelligence.get("historical_grade")
+    if grade is None:
+        grade = historical_intelligence.get("grade")
+    grade = str(grade or "INSUFFICIENT DATA").upper()
+    return grade if grade in {
+        "STRONG",
+        "POSITIVE",
+        "MIXED",
+        "WEAK",
+        "INSUFFICIENT DATA",
+        "NO MATCH",
+    } else "INSUFFICIENT DATA"
+
+
+def _outcome_payload(
+    *,
+    status,
+    action,
+    urgency,
+    historical_grade,
+    summary,
+    reasons,
+    progress=None,
+    current_return=None,
+    risk_remaining=None,
+    reached=None,
+    stop_threatened=False,
+):
+    progress = progress or {}
+    reached = reached or {}
+    return {
+        "status": status,
+        "action": action,
+        "urgency": urgency,
+        "progress_to_target_1": progress.get("target_1"),
+        "progress_to_target_2": progress.get("target_2"),
+        "progress_to_target_3": progress.get("target_3"),
+        "current_return": current_return,
+        "risk_remaining": risk_remaining,
+        "target_1_reached": reached.get("target_1", False),
+        "target_2_reached": reached.get("target_2", False),
+        "target_3_reached": reached.get("target_3", False),
+        "stop_threatened": stop_threatened,
+        "historical_grade": historical_grade,
+        "summary": summary,
+        "reasons": reasons[:5],
+    }
+
+
+def coach_trade_outcome(
+    record,
+    current_price,
+    current_timestamp,
+    historical_intelligence=None,
+):
+    """Return deterministic management context for an entered TradeOutcome.
+
+    This is advisory only: it does not mutate the outcome, its planned levels,
+    or any lifecycle state.
+    """
+    del current_timestamp  # Reserved for time-aware coaching without changing lifecycle.
+    grade = _historical_grade(historical_intelligence)
+
+    if record.exit_time is not None:
+        return _outcome_payload(
+            status="CLOSED",
+            action="No action; this trade is already closed.",
+            urgency="LOW",
+            historical_grade=grade,
+            summary="This trade is closed and is not eligible for live coaching.",
+            reasons=[
+                "The outcome already has an exit time.",
+                "Closed records are never reconsidered by the Live Trade Coach.",
+            ],
+        )
+
+    if record.entry_time is None:
+        return _outcome_payload(
+            status="UNAVAILABLE",
+            action="Wait for the planned entry to trigger.",
+            urgency="LOW",
+            historical_grade=grade,
+            summary="Live coaching is unavailable until the candidate enters.",
+            reasons=[
+                "The outcome does not have an entry time.",
+                "Candidate signals are not treated as active trades.",
+            ],
+        )
+
+    entry = _finite_positive(record.entry)
+    price = _finite_positive(current_price)
+    direction_sign = _direction_sign(record.direction)
+    if entry is None or price is None or not direction_sign:
+        return _outcome_payload(
+            status="UNAVAILABLE",
+            action="Wait for valid trade and market data.",
+            urgency="LOW",
+            historical_grade=grade,
+            summary="Live coaching is unavailable because required price data is invalid.",
+            reasons=[
+                "A valid entry, current price, and direction are required.",
+                "No management recommendation is made from incomplete data.",
+            ],
+        )
+
+    targets = {
+        "target_1": record.target_1,
+        "target_2": record.target_2,
+        "target_3": record.target_3,
+    }
+    progress = {
+        name: _target_progress(entry, price, target, direction_sign)
+        for name, target in targets.items()
+    }
+    reached = {
+        name: _target_reached(price, target, direction_sign)
+        for name, target in targets.items()
+    }
+    current_return = _directional_return(entry, price, direction_sign)
+
+    stop = _finite_positive(record.stop)
+    risk_remaining = None
+    stop_breached = False
+    stop_threatened = False
+    if stop is not None:
+        original_risk = direction_sign * (entry - stop)
+        if original_risk > 0:
+            risk_remaining = direction_sign * (price - stop) / original_risk * 100
+            risk_remaining = max(0.0, min(200.0, risk_remaining))
+            stop_breached = direction_sign * (price - stop) <= 0
+            stop_threatened = (
+                stop_breached or risk_remaining <= STOP_THREAT_RISK_PERCENT
+            )
+
+    base_reasons = [
+        f"Current underlying return is {current_return:.2f}% from the planned entry."
+    ]
+    if stop is None:
+        base_reasons.append("No valid stop is available, so remaining risk is unavailable.")
+    elif stop_threatened:
+        base_reasons.append(
+            "Price has crossed the planned stop."
+            if stop_breached
+            else "Price is close to exhausting the original stop distance."
+        )
+    else:
+        base_reasons.append("The planned stop is not currently threatened.")
+
+    if stop_breached or (
+        risk_remaining is not None and risk_remaining <= 0
+    ):
+        return _outcome_payload(
+            status="EXIT",
+            action="Exit at the planned risk limit.",
+            urgency="HIGH",
+            historical_grade=grade,
+            summary="Price has reached or crossed the planned stop.",
+            reasons=base_reasons,
+            progress=progress,
+            current_return=current_return,
+            risk_remaining=risk_remaining,
+            reached=reached,
+            stop_threatened=True,
+        )
+
+    peak_return = _finite_positive(record.max_favorable_excursion)
+    target_1_return = (
+        _directional_return(entry, _finite_positive(record.target_1), direction_sign)
+        if _finite_positive(record.target_1) is not None
+        else None
+    )
+    reversed_after_target = (
+        peak_return is not None
+        and target_1_return is not None
+        and peak_return >= target_1_return
+        and current_return <= peak_return * MATERIAL_REVERSAL_FRACTION
+    )
+    if reversed_after_target:
+        return _outcome_payload(
+            status="EXIT",
+            action="Exit after the material reversal from prior favorable progress.",
+            urgency="HIGH",
+            historical_grade=grade,
+            summary="The trade has materially reversed after reaching target-level progress.",
+            reasons=base_reasons
+            + ["More than half of the recorded favorable excursion has been given back."],
+            progress=progress,
+            current_return=current_return,
+            risk_remaining=risk_remaining,
+            reached=reached,
+            stop_threatened=stop_threatened,
+        )
+
+    if grade == "WEAK" and current_return <= MEANINGFUL_LOSS_PERCENT:
+        return _outcome_payload(
+            status="EXIT",
+            action="Exit or reduce risk; weak historical evidence compounds the loss.",
+            urgency="HIGH",
+            historical_grade=grade,
+            summary="The trade is losing meaningfully and similar trades have weak history.",
+            reasons=base_reasons
+            + ["Historical evidence is weak, so manage the position defensively."],
+            progress=progress,
+            current_return=current_return,
+            risk_remaining=risk_remaining,
+            reached=reached,
+            stop_threatened=stop_threatened,
+        )
+
+    if reached["target_3"]:
+        status = "EXIT"
+        action = "Exit at the planned final target."
+        urgency = "HIGH"
+        summary = "Target 3 has been reached; the planned upside is complete."
+        reasons = base_reasons + ["The final available target has been reached."]
+    elif (
+        (reached["target_2"] and _finite_positive(record.target_3) is not None)
+        or (reached["target_1"] and _finite_positive(record.target_2) is not None)
+    ) and grade != "WEAK":
+        status = "TAKE PARTIAL"
+        action = "Reduce part of the position and keep a remainder open."
+        urgency = "MEDIUM"
+        reached_name = "Target 2" if reached["target_2"] else "Target 1"
+        summary = f"{reached_name} has been reached with planned upside remaining."
+        reasons = base_reasons + [
+            f"{reached_name} has been reached.",
+            "Historical evidence is not weak, so a managed remainder can stay open.",
+        ]
+    elif (
+        current_return > 0
+        and (
+            reached["target_1"]
+            or (
+                progress["target_1"] is not None
+                and progress["target_1"] >= NEAR_TARGET_PROGRESS_PERCENT
+            )
+        )
+    ):
+        status = "PROTECT PROFIT"
+        action = "Protect gains and consider moving the stop toward breakeven."
+        urgency = "MEDIUM"
+        summary = "Target 1 is near or reached; protect the open profit."
+        reasons = base_reasons + [
+            "The trade has achieved at least 80% of the move toward Target 1."
+        ]
+    else:
+        status = "HOLD"
+        action = "Hold while respecting the planned stop and targets."
+        urgency = "LOW"
+        summary = "The open trade remains within its planned risk and target structure."
+        reasons = base_reasons + ["Target 1 has not been reached."]
+
+    if grade == "STRONG":
+        reasons.append("Strong historical evidence reinforces the current plan.")
+    elif grade == "POSITIVE":
+        reasons.append("Positive historical evidence supports measured patience.")
+    elif grade == "MIXED":
+        reasons.append("Historical evidence is mixed, so remain cautious.")
+    elif grade == "WEAK":
+        reasons.append("Historical evidence is weak, so manage the position defensively.")
+    else:
+        reasons.append("History is insufficient for a reliable conclusion.")
+
+    return _outcome_payload(
+        status=status,
+        action=action,
+        urgency=urgency,
+        historical_grade=grade,
+        summary=summary,
+        reasons=reasons,
+        progress=progress,
+        current_return=current_return,
+        risk_remaining=risk_remaining,
+        reached=reached,
+        stop_threatened=stop_threatened,
+    )
 
 
 def exit_score_for_live_setup(result, coach=None):
