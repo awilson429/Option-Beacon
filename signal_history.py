@@ -6,6 +6,8 @@ import hashlib
 import json
 import logging
 import math
+import os
+import tempfile
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -111,6 +113,61 @@ def append_trade_outcome(
     return path
 
 
+def load_trade_outcomes(
+    file_name: str | Path = DEFAULT_HISTORY_FILE,
+) -> list[TradeOutcome]:
+    """Load valid history records, logging and skipping malformed lines."""
+    path = Path(file_name)
+    if not path.exists():
+        return []
+
+    records = []
+    with path.open("r", encoding="utf-8") as history_file:
+        for line_number, line in enumerate(history_file, start=1):
+            if not line.strip():
+                continue
+            try:
+                records.append(deserialize_trade_outcome(line))
+            except Exception:
+                LOGGER.exception(
+                    "Could not load signal outcome at %s:%s",
+                    path,
+                    line_number,
+                )
+    return records
+
+
+def rewrite_trade_outcomes(
+    records: list[TradeOutcome],
+    file_name: str | Path = DEFAULT_HISTORY_FILE,
+) -> Path:
+    """Atomically replace the history file with the supplied records."""
+    path = Path(file_name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as history_file:
+            temporary_path = Path(history_file.name)
+            for record in records:
+                history_file.write(serialize_trade_outcome(record))
+                history_file.write("\n")
+            history_file.flush()
+            os.fsync(history_file.fileno())
+        os.replace(temporary_path, path)
+    except Exception:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        raise
+    return path
+
+
 def _valid_price(value) -> Optional[float]:
     try:
         price = float(value)
@@ -130,6 +187,133 @@ def _signal_timestamp(result: dict) -> datetime:
     if timestamp.tzinfo is None:
         timestamp = timestamp.replace(tzinfo=timezone.utc)
     return timestamp
+
+
+def _current_timestamp(value: datetime | str) -> datetime:
+    if isinstance(value, datetime):
+        timestamp = value
+    else:
+        timestamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    return timestamp
+
+
+def _directional_return(direction: str, entry: float, price: float) -> float:
+    change = ((price - entry) / entry) * 100
+    return change if direction == "Bullish" else -change
+
+
+def update_trade_outcome(
+    record: TradeOutcome,
+    current_price: float,
+    current_timestamp: datetime | str,
+) -> TradeOutcome:
+    """Advance one candidate or entered outcome using the latest market price."""
+    if record.exit_time is not None:
+        return record
+
+    price = _valid_price(current_price)
+    entry = _valid_price(record.entry)
+    if price is None or entry is None:
+        return record
+
+    checked_at = _current_timestamp(current_timestamp)
+    if record.entry_time is None:
+        entry_reached = (
+            price >= entry if record.direction == "Bullish" else price <= entry
+        )
+        if entry_reached:
+            record.entry_time = checked_at
+        return record
+
+    entry_time = _current_timestamp(record.entry_time)
+    current_return = _directional_return(record.direction, entry, price)
+    record.max_favorable_excursion = max(
+        0.0,
+        record.max_favorable_excursion or 0.0,
+        current_return,
+    )
+    record.max_adverse_excursion = min(
+        0.0,
+        record.max_adverse_excursion or 0.0,
+        current_return,
+    )
+    record.hold_minutes = max(
+        0.0,
+        (checked_at - entry_time).total_seconds() / 60,
+    )
+
+    exit_reason = None
+    exit_level = None
+    stop = _valid_price(record.stop)
+    if stop is not None and (
+        (record.direction == "Bullish" and price <= stop)
+        or (record.direction == "Bearish" and price >= stop)
+    ):
+        exit_reason = "STOP"
+        exit_level = stop
+    else:
+        for reason, target in (
+            ("TARGET_3", record.target_3),
+            ("TARGET_2", record.target_2),
+            ("TARGET_1", record.target_1),
+        ):
+            target_price = _valid_price(target)
+            if target_price is not None and (
+                (record.direction == "Bullish" and price >= target_price)
+                or (record.direction == "Bearish" and price <= target_price)
+            ):
+                exit_reason = reason
+                exit_level = target_price
+                break
+
+    if exit_reason is not None:
+        record.exit_time = checked_at
+        record.exit_reason = exit_reason
+        record.realized_return = _directional_return(
+            record.direction,
+            entry,
+            exit_level,
+        )
+    return record
+
+
+def update_trade_outcomes_from_result(
+    result: dict,
+    file_name: str | Path = DEFAULT_HISTORY_FILE,
+) -> int:
+    """Update matching history records without allowing failures to stop scanning."""
+    try:
+        path = Path(file_name)
+        if not path.exists():
+            return 0
+
+        current_price = _valid_price((result or {}).get("price"))
+        symbol = str((result or {}).get("symbol") or "").upper()
+        if current_price is None or not symbol:
+            return 0
+
+        current_timestamp = _signal_timestamp(result)
+        records = load_trade_outcomes(path)
+        updated_count = 0
+        for record in records:
+            if record.symbol.upper() != symbol or record.exit_time is not None:
+                continue
+            before = serialize_trade_outcome(record)
+            update_trade_outcome(record, current_price, current_timestamp)
+            if serialize_trade_outcome(record) != before:
+                updated_count += 1
+
+        if updated_count:
+            rewrite_trade_outcomes(records, path)
+        return updated_count
+    except Exception:
+        LOGGER.exception(
+            "Could not update signal outcomes for %s",
+            (result or {}).get("symbol", "unknown"),
+        )
+        return 0
 
 
 def scanner_result_to_trade_outcome(

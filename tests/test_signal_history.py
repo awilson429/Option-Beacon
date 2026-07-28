@@ -1,13 +1,18 @@
-from datetime import datetime, timezone
+from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 
 from signal_history import (
     TradeOutcome,
     append_trade_outcome,
     create_trade_record,
     deserialize_trade_outcome,
+    load_trade_outcomes,
     record_scanner_result,
+    rewrite_trade_outcomes,
     scanner_result_to_trade_outcome,
     serialize_trade_outcome,
+    update_trade_outcome,
+    update_trade_outcomes_from_result,
 )
 
 
@@ -157,3 +162,194 @@ def test_write_failure_does_not_crash_scanning(monkeypatch, caplog, tmp_path):
         tmp_path / "signal_history.jsonl",
     ) is False
     assert "Could not record signal outcome for SPY" in caplog.text
+
+
+UPDATE_TIME = datetime(2026, 7, 27, 15, 0, tzinfo=timezone.utc)
+
+
+def lifecycle_record(direction="Bullish", entered=False, **overrides):
+    bearish = direction == "Bearish"
+    values = {
+        "direction": direction,
+        "entry": 100,
+        "stop": 105 if bearish else 95,
+        "target_1": 97 if bearish else 103,
+        "target_2": 94 if bearish else 106,
+        "target_3": 91 if bearish else 109,
+    }
+    values.update(overrides)
+    record = sample_record(**values)
+    record.entry_time = UPDATE_TIME if entered else None
+    return record
+
+
+def test_bullish_signal_does_not_enter_below_entry():
+    record = lifecycle_record()
+
+    update_trade_outcome(record, 99, UPDATE_TIME)
+
+    assert record.entry_time is None
+    assert record.max_favorable_excursion is None
+    assert record.max_adverse_excursion is None
+    assert record.realized_return is None
+    assert record.hold_minutes is None
+
+
+def test_bullish_signal_enters_at_or_above_entry():
+    record = lifecycle_record()
+    entered_at = UPDATE_TIME + timedelta(minutes=5)
+
+    update_trade_outcome(record, 100, entered_at)
+
+    assert record.entry_time == entered_at
+    assert record.max_favorable_excursion is None
+    assert record.max_adverse_excursion is None
+
+
+def test_bearish_signal_does_not_enter_above_entry():
+    record = lifecycle_record("Bearish")
+
+    update_trade_outcome(record, 101, UPDATE_TIME)
+
+    assert record.entry_time is None
+
+
+def test_bearish_signal_enters_at_or_below_entry():
+    record = lifecycle_record("Bearish")
+    entered_at = UPDATE_TIME + timedelta(minutes=5)
+
+    update_trade_outcome(record, 100, entered_at)
+
+    assert record.entry_time == entered_at
+
+
+def test_mfe_updates_correctly():
+    record = lifecycle_record(entered=True, stop=90, target_1=110)
+
+    update_trade_outcome(record, 104, UPDATE_TIME + timedelta(minutes=10))
+
+    assert record.max_favorable_excursion == 4
+    assert record.max_adverse_excursion == 0
+    assert record.hold_minutes == 10
+
+
+def test_mae_updates_correctly():
+    record = lifecycle_record(entered=True, stop=90)
+
+    update_trade_outcome(record, 96, UPDATE_TIME + timedelta(minutes=15))
+
+    assert record.max_favorable_excursion == 0
+    assert record.max_adverse_excursion == -4
+    assert record.hold_minutes == 15
+
+
+def test_bullish_stop_closes_correctly():
+    record = lifecycle_record(entered=True)
+    closed_at = UPDATE_TIME + timedelta(minutes=20)
+
+    update_trade_outcome(record, 94, closed_at)
+
+    assert record.exit_time == closed_at
+    assert record.exit_reason == "STOP"
+    assert record.realized_return == -5
+    assert record.hold_minutes == 20
+
+
+def test_bearish_stop_closes_correctly():
+    record = lifecycle_record("Bearish", entered=True)
+
+    update_trade_outcome(record, 106, UPDATE_TIME + timedelta(minutes=10))
+
+    assert record.exit_reason == "STOP"
+    assert record.realized_return == -5
+
+
+def test_target_1_closes_correctly():
+    record = lifecycle_record(entered=True)
+
+    update_trade_outcome(record, 103, UPDATE_TIME + timedelta(minutes=5))
+
+    assert record.exit_reason == "TARGET_1"
+    assert record.realized_return == 3
+
+
+def test_target_2_closes_correctly():
+    record = lifecycle_record(entered=True)
+
+    update_trade_outcome(record, 107, UPDATE_TIME + timedelta(minutes=5))
+
+    assert record.exit_reason == "TARGET_2"
+    assert record.realized_return == 6
+
+
+def test_target_3_closes_correctly():
+    record = lifecycle_record("Bearish", entered=True)
+
+    update_trade_outcome(record, 90, UPDATE_TIME + timedelta(minutes=5))
+
+    assert record.exit_reason == "TARGET_3"
+    assert record.realized_return == 9
+
+
+def test_closed_records_do_not_change():
+    record = lifecycle_record(entered=True)
+    record.exit_time = UPDATE_TIME + timedelta(minutes=5)
+    record.exit_reason = "TARGET_1"
+    record.realized_return = 3
+    original = deepcopy(record)
+
+    update_trade_outcome(record, 90, UPDATE_TIME + timedelta(minutes=30))
+
+    assert record == original
+
+
+def test_missing_history_file_is_safe(tmp_path):
+    history_file = tmp_path / "missing.jsonl"
+
+    assert load_trade_outcomes(history_file) == []
+    assert update_trade_outcomes_from_result(
+        {"symbol": "SPY", "price": 101, "timestamp": UPDATE_TIME.isoformat()},
+        history_file,
+    ) == 0
+    assert not history_file.exists()
+
+
+def test_malformed_history_record_is_logged_and_valid_records_continue(
+    tmp_path,
+    caplog,
+):
+    history_file = tmp_path / "signal_history.jsonl"
+    valid = lifecycle_record()
+    history_file.write_text(
+        f"not json\n{serialize_trade_outcome(valid)}\n",
+        encoding="utf-8",
+    )
+
+    records = load_trade_outcomes(history_file)
+
+    assert records == [valid]
+    assert "Could not load signal outcome" in caplog.text
+
+
+def test_update_write_failure_does_not_crash_scanning(
+    monkeypatch,
+    caplog,
+    tmp_path,
+):
+    history_file = tmp_path / "signal_history.jsonl"
+    rewrite_trade_outcomes([lifecycle_record(entered=True)], history_file)
+
+    def fail_write(*args, **kwargs):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr("signal_history.rewrite_trade_outcomes", fail_write)
+
+    assert update_trade_outcomes_from_result(
+        {
+            "symbol": "SPY",
+            "price": 101,
+            "last_candle_at": (UPDATE_TIME + timedelta(minutes=5)).isoformat(),
+        },
+        history_file,
+    ) == 0
+    assert "Could not update signal outcomes for SPY" in caplog.text

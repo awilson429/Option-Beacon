@@ -11,7 +11,7 @@ from finnhub_universe import (
     flatten_symbol_groups,
 )
 from optionbeacon_strategy import score_candle
-from signal_history import record_scanner_result
+from signal_history import record_scanner_result, update_trade_outcomes_from_result
 from trade_planning import enrich_with_trade_plan
 from tradier_options import enrich_with_option_liquidity
 
@@ -124,6 +124,7 @@ def generate_signal(symbol):
     result = enrich_with_option_liquidity(result)
     result["last_candle_at"] = eastern_candle_timestamp(df.index[i])
     result["timestamp"] = eastern_timestamp()
+    update_trade_outcomes_from_result(result)
     record_scanner_result(result)
     return result
 
