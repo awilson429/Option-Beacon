@@ -6,6 +6,10 @@ from html import escape
 
 WORKSPACE_CSS = """
 <style>
+[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"] {display:none}
+[data-testid="stAppViewContainer"] .main .block-container {
+  max-width:1024px;padding-left:24px;padding-right:24px;
+}
 .ob-desk-header {
   align-items:flex-start;display:flex;gap:1rem;justify-content:space-between;
   margin:.15rem 0 1.15rem;
@@ -38,6 +42,20 @@ WORKSPACE_CSS = """
 .ob-panel-title {
   color:#bcc4ce;font-size:.82rem;font-weight:800;letter-spacing:.04em;
   margin-bottom:.55rem;text-transform:uppercase;
+}
+.ob-panel-header {align-items:center;display:flex;justify-content:space-between;margin-bottom:.8rem}
+.ob-panel-header .ob-panel-title {margin:0}
+.ob-panel-link {color:#efc64b !important;font-size:.8rem;text-decoration:none !important}
+.ob-position-empty {
+  align-items:center;border:1px dashed #3c4651;border-radius:8px;color:#aeb7c2;
+  display:flex;flex-direction:column;justify-content:center;min-height:13rem;padding:1rem;text-align:center;
+}
+.ob-position-icon {color:#67717d;font-size:2.6rem;line-height:1}
+.ob-position-empty strong {color:#b8c0c9;font-size:1rem;margin-top:.75rem}
+.ob-position-empty span {font-size:.84rem;line-height:1.5;margin-top:.45rem;max-width:14rem}
+.ob-paper-settings {
+  border:1px solid #3b4550;border-radius:8px;color:#e1e5e9 !important;display:block;
+  font-size:.82rem;margin:.8rem auto 0;max-width:12rem;padding:.6rem;text-align:center;text-decoration:none !important;
 }
 .ob-workspace-strip {
   align-items:center;background:#10151b;border:1px solid #343c46;border-radius:10px;
@@ -156,7 +174,10 @@ def quick_actions_markup():
         f'<a class="ob-quick-action" href="{escape(target)}">{escape(label)}</a>'
         for label, target in actions
     )
-    return f'<nav class="ob-quick-actions" aria-label="Quick actions">{links}</nav>'
+    return (
+        '<section class="ob-panel-shell"><div class="ob-panel-title">Quick Actions</div>'
+        f'<nav class="ob-quick-actions" aria-label="Quick actions">{links}</nav></section>'
+    )
 
 
 def _record_time(record):
@@ -198,3 +219,45 @@ def recent_signals_markup(records):
             f'<span class="ob-signal-time">{escape(time_text)}</span></div>'
         )
     return '<div class="ob-signal-list">' + "".join(rows) + "</div>"
+
+
+def open_positions_panel_markup(records):
+    records = list(records)
+    if records:
+        rows = "".join(
+            '<div class="ob-signal-row">'
+            f'<span class="ob-signal-symbol">{escape(str(record.symbol))}</span>'
+            '<span class="ob-signal-status">OPEN</span>'
+            f'<span class="ob-signal-direction">{escape(str(record.direction))}</span>'
+            f'<span class="ob-signal-confidence">{escape(str(getattr(record, "confidence", "—")))}%</span>'
+            '<span class="ob-signal-time">›</span></div>'
+            for record in records[:5]
+        )
+        body = f'<div class="ob-signal-list">{rows}</div>'
+    else:
+        body = (
+            '<div class="ob-position-empty"><div class="ob-position-icon">▱</div>'
+            '<strong>No open positions</strong>'
+            '<span>When you take a trade, it will appear here.</span></div>'
+            '<a class="ob-paper-settings" href="?page=positions">⚙&nbsp; Paper Trade Settings</a>'
+        )
+    return (
+        '<section class="ob-panel-shell"><div class="ob-panel-header">'
+        '<div class="ob-panel-title">Open Positions</div>'
+        '<a class="ob-panel-link" href="?page=positions">View all</a></div>'
+        f"{body}</section>"
+    )
+
+
+def recent_signals_panel_markup(records):
+    records = list(records)
+    shown = recent_signal_records(records)
+    body = recent_signals_markup(shown) if shown else (
+        '<div class="ob-position-empty"><strong>No recent signals</strong></div>'
+    )
+    return (
+        '<section class="ob-panel-shell"><div class="ob-panel-header">'
+        '<div class="ob-panel-title">Recent Signals</div>'
+        '<a class="ob-panel-link" href="?page=journal">View all</a></div>'
+        f'{body}<div class="board-note">Showing {len(shown)} of {len(records)} signals</div></section>'
+    )

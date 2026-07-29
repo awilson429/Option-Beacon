@@ -6,9 +6,11 @@ from workspace_ui import (
     WORKSPACE_CSS,
     focus_tip_markup,
     market_status_markup,
+    open_positions_panel_markup,
     quick_actions_markup,
     recent_signal_records,
     recent_signals_markup,
+    recent_signals_panel_markup,
     trade_desk_header_markup,
     trade_desk_tabs_markup,
 )
@@ -91,6 +93,20 @@ def test_recent_signal_rows_include_complete_decision_fields():
     assert "WATCH" in markup
     assert "Bearish PUT" in markup
     assert "46%" in markup
+
+
+def test_lower_panels_match_empty_and_five_row_requirements():
+    empty = open_positions_panel_markup([])
+    signals = [record(f"S{minute}", minute) for minute in range(7)]
+    recent = recent_signals_panel_markup(signals)
+
+    assert "Open Positions" in empty
+    assert "No open positions" in empty
+    assert "When you take a trade, it will appear here." in empty
+    assert "Paper Trade Settings" in empty
+    assert "Recent Signals" in recent
+    assert recent.count('class="ob-signal-row"') == 5
+    assert "Showing 5 of 7 signals" in recent
 
 
 def test_workspace_routing_isolated_by_selected_page():

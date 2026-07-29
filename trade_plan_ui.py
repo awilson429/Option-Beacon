@@ -103,6 +103,18 @@ def _text(value):
     return str(value).strip() if value not in (None, "") else "—"
 
 
+def _ratio_pair(first, second):
+    left = _value(first)
+    right = _value(second)
+    if left == "—" and right == "—":
+        return "—"
+    if left == "—":
+        return f"{right}:1"
+    if right == "—":
+        return f"{left}:1"
+    return f"{left}:1 / {right}:1"
+
+
 def _field_markup(label, value, css_class):
     return (
         f'<div class="{css_class}">'
@@ -216,8 +228,12 @@ def trade_plan_display(plan: TradePlan) -> dict:
         "initial_stop": _value(plan.initial_stop, True),
         "target_1": _value(plan.target_1, True),
         "target_2": _value(plan.target_2, True),
-        "risk_reward": f"{plan.risk_reward_target_1:.2f}:1 / {plan.risk_reward_target_2:.2f}:1",
-        "confidence": f"{plan.confidence_score:.0f}/100",
+        "risk_reward": _ratio_pair(plan.risk_reward_target_1, plan.risk_reward_target_2),
+        "confidence": (
+            f"{float(plan.confidence_score):.0f}%"
+            if _value(plan.confidence_score) != "—"
+            else "—"
+        ),
         "late_entry_risk": plan.late_entry_risk.value,
         "breakeven_rule": f"Move stop to breakeven at {_value(plan.breakeven_trigger, True)}",
         "trailing_rule": f"Activate {plan.trailing_stop_method} at {_value(plan.trailing_stop_activation, True)}",

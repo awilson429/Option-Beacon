@@ -31,6 +31,10 @@ from finnhub_universe import (
     flatten_symbol_groups,
     quote_symbol,
 )
+from featured_setup_card import (
+    render_featured_setup_card,
+    render_scanner_featured_setup,
+)
 from optionbeacon_history import (
     HIGH_SCORE_THRESHOLD,
     add_high_score_snapshot,
@@ -118,7 +122,7 @@ from setup_intelligence import setup_intelligence
 from trade_management import coach_recommendation, trade_summary
 from trade_planning import trade_plan_view
 from trade_plan_engine import SUPPORTED_SYMBOLS, build_structured_trade_plan
-from trade_plan_ui import render_developing_setup_summary, render_trade_plan_card
+from trade_plan_ui import render_trade_plan_card
 from trade_replay import (
     DEFAULT_MAX_HOLD_CANDLES,
     DEFAULT_REPLAY_SYMBOLS,
@@ -150,7 +154,8 @@ from workspace_ui import (
     WORKSPACE_CSS,
     focus_tip_markup,
     quick_actions_markup,
-    recent_signals_markup,
+    open_positions_panel_markup,
+    recent_signals_panel_markup,
     trade_desk_header_markup,
     trade_desk_tabs_markup,
 )
@@ -3261,8 +3266,6 @@ def render_live_session_opportunity(latest_results, trade_history):
         if actionable_trade_plan(row.get("result") or {})
     ]
     if not eligible_rows:
-        st.markdown("### Today's Best Trade")
-        render_empty_state("No trade currently meets the entry requirements.")
         if directional_rows:
             developing = max(
                 directional_rows,
@@ -3270,18 +3273,22 @@ def render_live_session_opportunity(latest_results, trade_history):
             )
             developing_result = developing["result"]
             eligibility = scanner_entry_eligibility(developing_result)
-            st.markdown("#### Best Developing Setup")
-            render_developing_setup_summary(developing_result, eligibility)
             if developing_result.get("symbol") in SUPPORTED_SYMBOLS:
                 try:
-                    render_trade_plan_card(
+                    render_featured_setup_card(
                         build_structured_trade_plan(
                             developing_result,
                             evaluation_timestamp=eastern_now(),
-                        )
+                        ),
+                        developing_result.get("entry_timing")
+                        or developing_result.get("timing_label"),
                     )
                 except Exception:
-                    st.warning("Structured Trade Plan is temporarily unavailable.")
+                    render_scanner_featured_setup(developing_result, eligibility)
+            else:
+                render_scanner_featured_setup(developing_result, eligibility)
+        else:
+            render_empty_state("No developing setup is currently available.")
         return
 
     row = max(eligible_rows, key=lambda item: item.get("score") or 0)
@@ -3314,31 +3321,19 @@ def render_live_session_opportunity(latest_results, trade_history):
     summary["coach_status"] = entry_presentation["coach_status"]
     summary["coach_action"] = entry_presentation["suggested_action"]
     summary["treatment"] = entry_presentation["treatment"]
-    st.markdown("### Today's Best Trade")
-    render_decision_summary(summary, compact=True)
     if result.get("symbol") in SUPPORTED_SYMBOLS:
         try:
-            render_trade_plan_card(
+            render_featured_setup_card(
                 build_structured_trade_plan(
                     result,
                     evaluation_timestamp=eastern_now(),
-                )
+                ),
+                result.get("entry_timing") or result.get("timing_label"),
             )
         except Exception:
-            st.warning("Structured Trade Plan is temporarily unavailable.")
-    with st.expander("Why this trade?"):
-        st.write(
-            f"Historical Edge: {summary['historical_grade']} · "
-            f"{historical_edge_summary(evidence)}"
-        )
-        st.write(
-            "Average historical hold: "
-            f"{format_metric(evidence.get('average_hold_minutes'))} minutes"
-        )
-        if coach:
-            st.write(f"Coach rationale: {coach.get('summary') or '—'}")
-
-
+            render_scanner_featured_setup(result, {"status": "READY"})
+    else:
+        render_scanner_featured_setup(result, {"status": "READY"})
 def render_developer_tools():
     """Render read-only internal diagnostics without exposing provider secrets."""
     render_section_header(
@@ -3511,7 +3506,6 @@ def render_trade_desk_workspace(
     st.markdown(trade_desk_tabs_markup(), unsafe_allow_html=True)
     render_live_session_opportunity(latest_results, trade_history)
 
-    st.markdown("### Quick Actions")
     st.markdown(quick_actions_markup(), unsafe_allow_html=True)
 
     open_records = [
@@ -3519,58 +3513,15 @@ def render_trade_desk_workspace(
         for record in trade_history
         if record.entry_time is not None and record.exit_time is None
     ]
-    left, right = st.columns(2)
+    left, right = st.columns([0.42, 0.58])
     with left:
-        st.markdown("### Open Positions")
-        if not open_records:
-            render_empty_state("No entered trades are currently open.")
-        else:
-            open_rows = opened_alerts_analytics(
-                open_records,
-                current_prices,
-                now,
-                quote_status,
-            )["rows"]
-            columns = [
-                "Symbol",
-                "Direction",
-                "Open Return",
-                "Coach Status",
-                "Quote Status",
-            ]
-            st.dataframe(
-                pd.DataFrame(open_rows)[columns],
-                use_container_width=True,
-                hide_index=True,
-            )
-            st.caption(f"{len(open_records)} open position{'s' if len(open_records) != 1 else ''}")
+        st.markdown(open_positions_panel_markup(open_records), unsafe_allow_html=True)
     with right:
         st.markdown('<span id="recent-signals"></span>', unsafe_allow_html=True)
-        st.markdown("### Recent Signals")
-        if trade_history:
-            st.markdown(
-                recent_signals_markup(trade_history),
-                unsafe_allow_html=True,
-            )
-            st.caption("Showing the five newest signals. Use Journal to view all.")
-        else:
-            render_empty_state("No recent signals have been recorded.")
-
-    with st.expander("Market Overview & Watchlist"):
-        st.markdown('<span id="market-overview"></span>', unsafe_allow_html=True)
-        render_top_opportunities(
-            latest_results,
-            high_score_history,
-            trade_history,
+        st.markdown(
+            recent_signals_panel_markup(trade_history),
+            unsafe_allow_html=True,
         )
-        render_sector_strength(latest_results)
-        render_ranked_setup_table(latest_results)
-        st.markdown('<span id="watchlist"></span>', unsafe_allow_html=True)
-        render_current_scanner(latest_results, symbol_groups, trade_history)
-    with st.expander("After Hours"):
-        render_after_hours(latest_results)
-    with st.expander("Scanner Health"):
-        render_scanner_health(latest_results, snapshot_time, symbol_groups)
     st.markdown(focus_tip_markup(), unsafe_allow_html=True)
 
 
@@ -3817,16 +3768,17 @@ def main():
                 high_score_history,
             )
 
-    st.markdown(
-        '<div class="notice notice-warning">Decision-support dashboard only. Not financial advice.</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="footer-line">Option Beacon LLC - '
-        '<a href="https://option-beacon.com" target="_blank">option-beacon.com</a></div>',
-        unsafe_allow_html=True,
-    )
-    render_build_footer(info=build_info)
+    if active_page != "Trade Desk":
+        st.markdown(
+            '<div class="notice notice-warning">Decision-support dashboard only. Not financial advice.</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="footer-line">Option Beacon LLC - '
+            '<a href="https://option-beacon.com" target="_blank">option-beacon.com</a></div>',
+            unsafe_allow_html=True,
+        )
+        render_build_footer(info=build_info)
 
 
 try:
