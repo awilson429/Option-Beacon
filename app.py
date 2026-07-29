@@ -152,6 +152,7 @@ from ui_navigation import (
 )
 from ui.shared_layout import (
     SHARED_UI_CSS,
+    compact_table_markup,
     empty_state_markup,
     metric_strip_markup,
     page_header_markup,
@@ -3635,10 +3636,22 @@ def render_positions_workspace(
             section_header_markup("Active Positions", "Entered trades currently being monitored"),
             unsafe_allow_html=True,
         )
-        st.dataframe(
-            pd.DataFrame(opened["rows"]),
-            use_container_width=True,
-            hide_index=True,
+        st.markdown(
+            compact_table_markup(
+                opened["rows"],
+                (
+                    "Symbol",
+                    "Direction",
+                    "Setup",
+                    "Entry",
+                    "Current Price",
+                    "Stop",
+                    "Target 1",
+                    "Open Return",
+                    "Status",
+                ),
+            ),
+            unsafe_allow_html=True,
         )
     else:
         st.markdown(
@@ -3665,7 +3678,23 @@ def render_positions_workspace(
     option_positions = OptionPositionStore().load()
     open_rows = open_position_rows(option_positions, now)
     if open_rows:
-        st.dataframe(pd.DataFrame(open_rows), use_container_width=True, hide_index=True)
+        st.markdown(
+            compact_table_markup(
+                open_rows,
+                (
+                    "Ticker",
+                    "Direction",
+                    "Strike",
+                    "Expiration",
+                    "Current Return",
+                    "MFE",
+                    "MAE",
+                    "Status",
+                    "Age",
+                ),
+            ),
+            unsafe_allow_html=True,
+        )
     else:
         render_empty_state("No paper option positions are currently open.")
 
@@ -3685,10 +3714,21 @@ def render_positions_workspace(
         unsafe_allow_html=True,
     )
     if recently_closed:
-        st.dataframe(
-            pd.DataFrame(trade_history_rows(recently_closed)),
-            use_container_width=True,
-            hide_index=True,
+        st.markdown(
+            compact_table_markup(
+                trade_history_rows(recently_closed),
+                (
+                    "Symbol",
+                    "Direction",
+                    "Setup",
+                    "Entry Time",
+                    "Exit Time",
+                    "Exit Reason",
+                    "Realized Return",
+                    "Status",
+                ),
+            ),
+            unsafe_allow_html=True,
         )
     else:
         render_empty_state("No trades have closed yet.")
@@ -3795,7 +3835,22 @@ def render_journal_workspace(
         )
         rows = trade_history_rows(filtered)
         if rows:
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.markdown(
+                compact_table_markup(
+                    rows,
+                    (
+                        "Signal Time",
+                        "Symbol",
+                        "Direction",
+                        "Setup",
+                        "Confidence",
+                        "Exit Reason",
+                        "Realized Return",
+                        "Status",
+                    ),
+                ),
+                unsafe_allow_html=True,
+            )
         else:
             render_empty_state("No trade history matches the selected filters.")
         st.markdown('<span id="journal-analytics"></span>', unsafe_allow_html=True)

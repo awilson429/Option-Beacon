@@ -4,6 +4,7 @@ from ui.design_tokens import TOKENS
 from ui.shared_layout import (
     SHARED_UI_CSS,
     badge_markup,
+    compact_table_markup,
     empty_state_markup,
     metric_strip_markup,
     page_header_markup,
@@ -50,6 +51,9 @@ def test_shared_components_emit_common_card_badge_and_empty_classes():
     assert "ob-badge" in badge_markup("PASS")
     assert "ob-empty" in empty_state_markup("No records", "Nothing is available.")
     assert "ob-status-row" in status_rows_markup((("Tradier", "PASS", "Ready"),))
+    table = compact_table_markup(({"Symbol": "SPY", "Status": "OPEN"},))
+    assert "ob-table" in table
+    assert "SPY" in table
 
 
 def test_journal_filters_and_diagnostics_are_collapsed_by_default():

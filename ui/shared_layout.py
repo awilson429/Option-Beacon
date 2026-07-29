@@ -107,6 +107,21 @@ SHARED_UI_CSS = f"""
 .ob-status-row:last-child {{border-bottom:0}}
 .ob-status-name {{color:var(--ob-text);font-size:14px;font-weight:730}}
 .ob-status-detail {{color:var(--ob-text-muted);font-size:13px;overflow-wrap:anywhere}}
+.ob-table-wrap {{
+  background:var(--ob-panel);border:1px solid var(--ob-border);
+  border-radius:var(--ob-card-radius);overflow:hidden;
+}}
+.ob-table {{border-collapse:collapse;table-layout:fixed;width:100%}}
+.ob-table th {{
+  background:rgba(255,255,255,.025);color:var(--ob-text-muted);font-size:11px;
+  font-weight:850;letter-spacing:.04em;padding:10px 9px;text-align:left;text-transform:uppercase;
+}}
+.ob-table td {{
+  border-top:1px solid var(--ob-border-muted);color:var(--ob-text-secondary);
+  font-size:13px;line-height:1.35;overflow-wrap:anywhere;padding:11px 9px;vertical-align:middle;
+}}
+.ob-table tbody tr:hover {{background:rgba(255,255,255,.025)}}
+.ob-table td:first-child {{color:var(--ob-text);font-weight:730}}
 div[data-testid="stDataFrame"] {{
   background:var(--ob-panel);border:1px solid var(--ob-border);border-radius:var(--ob-card-radius);
   overflow:hidden;padding:4px;
@@ -213,3 +228,25 @@ def status_rows_markup(rows):
         for name, status, detail in rows
     )
     return f'<div class="ob-card ob-status-list">{body}</div>'
+
+
+def compact_table_markup(rows, columns=None):
+    """Render primary tabular content without Streamlit's light dataframe canvas."""
+    rows = list(rows)
+    if not rows:
+        return ""
+    columns = list(columns or rows[0].keys())
+    header = "".join(f"<th>{escape(str(column))}</th>" for column in columns)
+    body = "".join(
+        "<tr>"
+        + "".join(
+            f"<td>{escape(str(row.get(column, '—') if row.get(column) is not None else '—'))}</td>"
+            for column in columns
+        )
+        + "</tr>"
+        for row in rows
+    )
+    return (
+        '<div class="ob-table-wrap"><table class="ob-table">'
+        f"<thead><tr>{header}</tr></thead><tbody>{body}</tbody></table></div>"
+    )
