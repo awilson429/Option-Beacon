@@ -148,9 +148,11 @@ from ui_navigation import (
 )
 from workspace_ui import (
     WORKSPACE_CSS,
-    market_status_markup,
+    focus_tip_markup,
     quick_actions_markup,
     recent_signals_markup,
+    trade_desk_header_markup,
+    trade_desk_tabs_markup,
 )
 
 
@@ -3500,13 +3502,13 @@ def render_trade_desk_workspace(
     symbol_groups,
 ):
     """Render the focused live-decision workspace and secondary drill-downs."""
-    render_section_header("Trade Desk", TRADE_DESK_SUBTITLE)
     now = eastern_now()
     st.markdown(WORKSPACE_CSS, unsafe_allow_html=True)
     st.markdown(
-        market_status_markup(is_market_open_now(), now),
+        trade_desk_header_markup(is_market_open_now(), now),
         unsafe_allow_html=True,
     )
+    st.markdown(trade_desk_tabs_markup(), unsafe_allow_html=True)
     render_live_session_opportunity(latest_results, trade_history)
 
     st.markdown("### Quick Actions")
@@ -3543,6 +3545,7 @@ def render_trade_desk_workspace(
             )
             st.caption(f"{len(open_records)} open position{'s' if len(open_records) != 1 else ''}")
     with right:
+        st.markdown('<span id="recent-signals"></span>', unsafe_allow_html=True)
         st.markdown("### Recent Signals")
         if trade_history:
             st.markdown(
@@ -3568,6 +3571,7 @@ def render_trade_desk_workspace(
         render_after_hours(latest_results)
     with st.expander("Scanner Health"):
         render_scanner_health(latest_results, snapshot_time, symbol_groups)
+    st.markdown(focus_tip_markup(), unsafe_allow_html=True)
 
 
 def render_positions_workspace(
@@ -3763,7 +3767,8 @@ def main():
         environment=build_info["environment"],
         build_text=build_footer_text(build_info),
     )
-    render_header()
+    if active_page != "Trade Desk":
+        render_header()
     if active_page == "Developer Tools":
         hosted_status = hosted_configuration_status()
         if hosted_status["ready"]:

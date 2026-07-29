@@ -4,10 +4,13 @@ from types import SimpleNamespace
 
 from workspace_ui import (
     WORKSPACE_CSS,
+    focus_tip_markup,
     market_status_markup,
     quick_actions_markup,
     recent_signal_records,
     recent_signals_markup,
+    trade_desk_header_markup,
+    trade_desk_tabs_markup,
 )
 
 
@@ -44,6 +47,24 @@ def test_market_status_and_quick_actions_render_without_clipping():
         assert label in actions
     assert "text-overflow" not in WORKSPACE_CSS.lower()
     assert "overflow:hidden" not in WORKSPACE_CSS.lower().replace(" ", "")
+
+
+def test_trade_desk_visual_shell_matches_reference_hierarchy():
+    now = datetime(2026, 7, 29, 10, 42, 18, tzinfo=timezone.utc)
+    header = trade_desk_header_markup(True, now)
+    tabs = trade_desk_tabs_markup()
+    tip = focus_tip_markup()
+
+    assert "Trade Desk" in header
+    assert "Focus on the best setups. Trade with a plan." in header
+    assert "Market Open" in header
+    assert "10:42:18 AM ET" in header
+    assert "Refresh" in header
+    assert "Filters" in header
+    for label in ("Overview", "Signals", "Positions", "Journal", "Analytics"):
+        assert label in tabs
+    assert "ob-desk-tab-active" in tabs
+    assert "Focus Tip:" in tip
 
 
 def test_recent_signals_are_newest_first_and_limited_to_five():
