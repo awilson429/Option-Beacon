@@ -89,7 +89,7 @@ FEATURED_SETUP_CSS = """
 
 
 def _items(values, fallback):
-    items = list(values or [])[:5]
+    items = list(values or [])[:2]
     return " ".join(str(value) for value in items) if items else fallback
 
 

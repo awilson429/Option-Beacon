@@ -7,14 +7,15 @@ from html import escape
 WORKSPACE_CSS = """
 <style>
 [data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"] {display:none}
-[data-testid="stAppViewContainer"] .main .block-container {
-  max-width:1024px;padding-left:24px;padding-right:24px;
+[data-testid="stMainBlockContainer"] {
+  box-sizing:border-box;max-width:100% !important;padding:32px 24px 24px !important;
+  width:100% !important;
 }
 .ob-desk-header {
   align-items:flex-start;display:flex;gap:1rem;justify-content:space-between;
   margin:.15rem 0 1.15rem;
 }
-.ob-desk-title {color:#f5f6f8;font-size:clamp(2rem,4vw,3rem);font-weight:760;line-height:1.05;}
+.ob-desk-title {color:#f5f6f8;font-size:clamp(2rem,4vw,2.7rem);font-weight:740;line-height:1.05;}
 .ob-desk-subtitle {color:#aeb7c2;font-size:clamp(.9rem,1.4vw,1.08rem);margin-top:.55rem;}
 .ob-desk-controls {align-items:center;display:flex;flex-wrap:wrap;gap:.55rem;justify-content:flex-end;}
 .ob-desk-market {color:#60d985;font-size:.8rem;font-weight:800;letter-spacing:.025em;text-transform:uppercase;}
