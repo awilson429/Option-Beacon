@@ -42,6 +42,18 @@ from verify_option_engine import run_verification
 LOGGER = logging.getLogger(__name__)
 DEFAULT_DIAGNOSTICS_FILE = "runtime_diagnostics.json"
 UNAVAILABLE = "—"
+__all__ = (
+    "hosted_configuration_status",
+    "latest_production_ledger_entry",
+    "load_latest_diagnostic",
+    "option_engine_diagnostic",
+    "save_diagnostic_result",
+    "system_status",
+    "verify_finnhub_connection",
+    "verify_position_tracking",
+    "verify_trade_plan_engine",
+    "verify_tradier_connection",
+)
 HOSTED_SECRET_NAMES = (
     "TRADIER_ACCESS_TOKEN",
     "FINNHUB_API_KEY",
