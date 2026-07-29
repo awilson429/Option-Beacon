@@ -9,7 +9,7 @@ def test_app_opens_directly_to_dashboard():
     assert 'type="password"' not in source
     assert "st.stop()" not in source
     assert "render_header()" in source
-    assert "active_page = render_sidebar_navigation(" in source
+    assert "active_page = render_card_navigation()" in source
 
 
 def test_hosted_configuration_requires_provider_secrets_only():

@@ -91,54 +91,31 @@ CARD_NAVIGATION_SLUGS = {
 CARD_NAVIGATION_CSS = """
 <style>
 .ob-nav-grid {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0.75rem;
-    margin: 0.75rem 0 1.5rem;
+    margin: 0.75rem 0 0;
 }
-.ob-nav-card {
-    align-items: center;
+div[class*="st-key-ob_nav_"] button {
     background: #15191f;
     border: 1px solid #3a414b;
     border-radius: 0.75rem;
     color: #f3f4f6 !important;
-    display: flex;
     font-size: 0.92rem;
     font-weight: 650;
-    justify-content: center;
     min-height: 4.25rem;
     padding: 0.8rem 0.65rem;
-    text-align: center;
-    text-decoration: none !important;
     transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+    width: 100%;
 }
-.ob-nav-card:hover {
+div[class*="st-key-ob_nav_"] button:hover {
     background: #20252c;
     border-color: #c8a84e;
     color: #ffffff !important;
     transform: translateY(-1px);
 }
-.ob-nav-card-active {
-    background: linear-gradient(135deg, #332b18, #211d14);
-    border: 2px solid #d2ad4f;
-    box-shadow: 0 0 0 1px rgba(210, 173, 79, 0.16);
-    color: #f7df9a !important;
-}
-@media (max-width: 900px) {
-    .ob-nav-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 @media (max-width: 600px) {
-    .ob-nav-grid {
-        gap: 0.55rem;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .ob-nav-card {
+    div[class*="st-key-ob_nav_"] button {
         min-height: 3.75rem;
         padding: 0.65rem 0.5rem;
     }
-}
-@media (max-width: 360px) {
-    .ob-nav-grid { grid-template-columns: minmax(0, 1fr); }
 }
 </style>
 """
@@ -165,45 +142,71 @@ def selected_navigation_page(query_params=None, session_state=None):
     return slug_to_page.get(str(requested), aliases.get(str(requested), MAIN_NAVIGATION[0]))
 
 
-def _selected_card_navigation_page(query_params=None):
-    if query_params is None:
-        import streamlit as st
+def active_card_workspace(session_state):
+    """Return the active internal workspace, initializing a safe default."""
+    selected = session_state.get("active_workspace")
+    if selected not in CARD_NAVIGATION:
+        selected = CARD_NAVIGATION[0]
+        session_state["active_workspace"] = selected
+    return selected
 
-        query_params = st.query_params
-    requested = query_params.get(
-        "page",
-        CARD_NAVIGATION_SLUGS[CARD_NAVIGATION[0]],
+
+def set_active_workspace(workspace, session_state):
+    """Select one internal workspace without changing the application route."""
+    if workspace in CARD_NAVIGATION:
+        session_state["active_workspace"] = workspace
+
+
+def _card_key(workspace):
+    return "ob_nav_" + workspace.lower().replace(" ", "_")
+
+
+def _active_card_css(workspace):
+    key = _card_key(workspace)
+    return f"""
+<style>
+.st-key-{key} button {{
+    background: linear-gradient(135deg, #332b18, #211d14);
+    border: 2px solid #d2ad4f;
+    box-shadow: 0 0 0 1px rgba(210, 173, 79, 0.16);
+    color: #f7df9a !important;
+}}
+</style>
+"""
+
+
+def render_card_navigation(st_module=None):
+    """Render internal card controls backed by Streamlit session state."""
+    if st_module is None:
+        import streamlit as st_module
+
+    active_page = active_card_workspace(st_module.session_state)
+    st_module.markdown(CARD_NAVIGATION_CSS, unsafe_allow_html=True)
+    st_module.markdown(_active_card_css(active_page), unsafe_allow_html=True)
+    st_module.markdown(
+        '<div class="ob-nav-grid" aria-label="Primary navigation"></div>',
+        unsafe_allow_html=True,
     )
-    if isinstance(requested, (list, tuple)):
-        requested = requested[0] if requested else ""
-    slug_to_page = {
-        slug: page for page, slug in CARD_NAVIGATION_SLUGS.items()
-    }
-    return slug_to_page.get(str(requested), CARD_NAVIGATION[0])
 
-
-def navigation_markup(active_page):
-    """Return app-controlled card markup with no generated Streamlit selectors."""
-    cards = []
-    for page in CARD_NAVIGATION:
-        active = page == active_page
-        classes = "ob-nav-card ob-nav-card-active" if active else "ob-nav-card"
-        current = ' aria-current="page"' if active else ""
-        cards.append(
-            f'<a class="{classes}" href="?page={CARD_NAVIGATION_SLUGS[page]}"'
-            f'{current}>{escape(page)}</a>'
+    first_row = st_module.columns(5)
+    for column, workspace in zip(first_row, CARD_NAVIGATION[:5]):
+        column.button(
+            workspace,
+            key=_card_key(workspace),
+            on_click=set_active_workspace,
+            args=(workspace, st_module.session_state),
+            use_container_width=True,
         )
-    return '<nav class="ob-nav-grid" aria-label="Primary navigation">' + "".join(cards) + "</nav>"
 
-
-def render_card_navigation(query_params=None):
-    """Render the card navigation expected by the production application."""
-    import streamlit as st
-
-    active_page = _selected_card_navigation_page(query_params)
-    st.markdown(CARD_NAVIGATION_CSS, unsafe_allow_html=True)
-    st.markdown(navigation_markup(active_page), unsafe_allow_html=True)
-    return active_page
+    second_row = st_module.columns(5)
+    second_row[0].button(
+        CARD_NAVIGATION[5],
+        key=_card_key(CARD_NAVIGATION[5]),
+        on_click=set_active_workspace,
+        args=(CARD_NAVIGATION[5], st_module.session_state),
+        use_container_width=True,
+    )
+    return active_card_workspace(st_module.session_state)
 
 
 def sidebar_brand_markup(market_open, environment):

@@ -133,13 +133,12 @@ def test_brand_status_is_textual_and_environment_is_visible():
     assert "Development" in markup
 
 
-def test_app_uses_sidebar_without_top_navigation_fallback():
+def test_app_uses_internal_card_navigation_without_page_fallback():
     source = Path("app.py").read_text(encoding="utf-8")
+    navigation_source = Path("ui_navigation.py").read_text(encoding="utf-8")
 
-    assert "render_sidebar_navigation(" in source
-    assert "render_card_navigation()" not in source
+    assert "active_page = render_card_navigation()" in source
     assert "st.tabs(MAIN_NAVIGATION)" not in source
-    main_source = source[source.index("def main():") :]
-    assert main_source.index('active_page = render_sidebar_navigation(') < main_source.index(
-        "scan_symbols()"
-    )
+    assert "st.page_link" not in navigation_source
+    assert "st.switch_page" not in navigation_source
+    assert 'session_state["active_workspace"]' in navigation_source
