@@ -11,7 +11,7 @@ import streamlit as st
 from ui.theme import configure_page
 
 from after_hours import after_hours_focus_rows, fetch_after_hours_briefing
-from build_information import render_build_footer
+from build_information import build_information, render_build_footer
 from developer_tools import (
     hosted_configuration_status,
     latest_production_ledger_entry,
@@ -143,7 +143,12 @@ from ui_navigation import (
     TRADE_DESK_SUBTITLE,
     render_card_navigation,
 )
-from ui_modern_style import modern_style_enabled, render_modern_scorecard
+from ui_modern_style import (
+    demo_scorecard_enabled,
+    demo_scorecard_presentation,
+    modern_style_active,
+    render_modern_scorecard,
+)
 
 
 SYMBOL_GROUPS = DEFAULT_SYMBOL_GROUPS
@@ -2907,12 +2912,38 @@ def render_outcome_trade_journal(
     )
     records = list(records) if records is not None else load_trade_outcomes()
     render_live_session_opportunity(latest_results or {}, records)
+    build_branch = build_information()["branch"]
+    modern_scorecard = modern_style_active(st.query_params, build_branch)
+    demo_scorecard = demo_scorecard_enabled(st.query_params, build_branch)
     if not records:
         st.markdown("### Open Positions Needing Attention")
         render_empty_state("No open positions currently require attention.")
-        st.markdown("### Today's Scorecard")
-        render_empty_state("No entered alerts have been recorded today.")
-        render_empty_state("No trade history has been recorded yet.")
+        if modern_scorecard:
+            if demo_scorecard:
+                score_fields, scorecard_summary = demo_scorecard_presentation()
+            else:
+                score_fields = (
+                    ("Opened Alerts", 0, "neutral"),
+                    ("Closed Trades", 0, "neutral"),
+                    ("Winners", 0, "positive"),
+                    ("Losers", 0, "negative"),
+                    ("Win Rate", "—", "neutral"),
+                    ("Average Realized Return", "—", "neutral"),
+                )
+                scorecard_summary = None
+            render_modern_scorecard(
+                st,
+                score_fields,
+                scorecard_summary,
+                show_indicator=True,
+            )
+            if not demo_scorecard:
+                render_empty_state("No entered alerts have been recorded today.")
+                render_empty_state("No trade history has been recorded yet.")
+        else:
+            st.markdown("### Today's Scorecard")
+            render_empty_state("No entered alerts have been recorded today.")
+            render_empty_state("No trade history has been recorded yet.")
         return
 
     symbols = ["All", *sorted({record.symbol for record in records if record.symbol})]
@@ -3038,8 +3069,15 @@ def render_outcome_trade_journal(
             f"Average hold {format_metric(scorecard['average_hold_minutes'])} minutes"
         )
 
-    if modern_style_enabled(st.query_params):
-        render_modern_scorecard(st, score_fields, scorecard_summary)
+    if modern_scorecard:
+        if demo_scorecard:
+            score_fields, scorecard_summary = demo_scorecard_presentation()
+        render_modern_scorecard(
+            st,
+            score_fields,
+            scorecard_summary,
+            show_indicator=True,
+        )
     else:
         st.markdown("### Today's Scorecard")
         score_columns = st.columns(6)

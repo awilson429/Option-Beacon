@@ -4,6 +4,18 @@ from html import escape
 
 OPTIONBEACON_NEW_STYLE = False
 
+DEMO_SCORE_FIELDS = (
+    ("Opened Alerts", 10, "neutral"),
+    ("Closed Trades", 10, "neutral"),
+    ("Winners", 9, "positive"),
+    ("Losers", 1, "negative"),
+    ("Win Rate", "90.00%", "neutral"),
+    ("Average Realized Return", "+0.20%", "positive"),
+)
+DEMO_SCORE_SUMMARY = (
+    "Best trade +0.58% · Worst trade -0.73% · Average hold 27.50 minutes"
+)
+
 MODERN_STYLE_TOKENS = {
     "page_background": "#080d12",
     "panel_background": "#10171d",
@@ -54,6 +66,15 @@ SCORECARD_CSS = """
 <style>
 .ob-modern-shell.ob-scorecard {
     margin: 1rem 0 0;
+}
+.ob-modern-shell .ob-modern-indicator {
+    color: var(--ob-yellow-accent);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    margin-bottom: var(--ob-compact-gap);
+    opacity: 0.78;
+    text-transform: uppercase;
 }
 .ob-modern-shell .ob-section-header {
     color: var(--ob-primary-text);
@@ -125,13 +146,35 @@ def modern_style_enabled(query_params=None):
     return str(requested).strip().lower() in {"1", "true", "on", "yes"}
 
 
+def modern_style_active(query_params, branch):
+    """Gate temporary modern styling to an explicit develop-branch request."""
+    return str(branch).strip().lower() == "develop" and modern_style_enabled(
+        query_params
+    )
+
+
+def demo_scorecard_enabled(query_params, branch):
+    """Gate the in-memory visual fixture to explicit develop-only parameters."""
+    if not modern_style_active(query_params, branch):
+        return False
+    requested = query_params.get("demo_data")
+    if isinstance(requested, (list, tuple)):
+        requested = requested[0] if requested else None
+    return str(requested).strip().lower() in {"1", "true", "on", "yes"}
+
+
+def demo_scorecard_presentation():
+    """Return deterministic display values without reading or writing storage."""
+    return DEMO_SCORE_FIELDS, DEMO_SCORE_SUMMARY
+
+
 def inject_modern_style(st_module, enabled=False):
     """Inject scoped token variables only when the feature flag is enabled."""
     if enabled:
         st_module.markdown(MODERN_TOKEN_CSS, unsafe_allow_html=True)
 
 
-def scorecard_markup(score_fields, summary=None):
+def scorecard_markup(score_fields, summary=None, show_indicator=False):
     """Build presentation-only markup from already calculated Scorecard values."""
     cards = []
     for label, value, treatment in score_fields:
@@ -149,17 +192,28 @@ def scorecard_markup(score_fields, summary=None):
     )
     return (
         '<section class="ob-modern-shell ob-scorecard">'
+        + (
+            '<div class="ob-modern-indicator">MODERN STYLE ACTIVE</div>'
+            if show_indicator
+            else ""
+        )
+        +
         '<div class="ob-section-header">Today&#39;s Scorecard</div>'
         f'<div class="ob-scorecard-grid">{"".join(cards)}</div>'
         f"{summary_markup}</section>"
     )
 
 
-def render_modern_scorecard(st_module, score_fields, summary=None):
+def render_modern_scorecard(
+    st_module,
+    score_fields,
+    summary=None,
+    show_indicator=False,
+):
     """Render only the opt-in Scorecard presentation."""
     inject_modern_style(st_module, enabled=True)
     st_module.markdown(SCORECARD_CSS, unsafe_allow_html=True)
     st_module.markdown(
-        scorecard_markup(score_fields, summary),
+        scorecard_markup(score_fields, summary, show_indicator),
         unsafe_allow_html=True,
     )
