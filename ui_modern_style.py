@@ -1,5 +1,7 @@
 """Opt-in, narrowly scoped visual tokens for incremental UI modernization."""
 
+from html import escape
+
 OPTIONBEACON_NEW_STYLE = False
 
 MODERN_STYLE_TOKENS = {
@@ -48,6 +50,68 @@ MODERN_TOKEN_CSS = """
 </style>
 """
 
+SCORECARD_CSS = """
+<style>
+.ob-modern-shell.ob-scorecard {
+    margin: 1rem 0 0;
+}
+.ob-modern-shell .ob-section-header {
+    color: var(--ob-primary-text);
+    font-size: var(--ob-heading-size);
+    font-weight: 700;
+    line-height: 1.25;
+    margin: 0 0 var(--ob-standard-gap);
+}
+.ob-modern-shell .ob-scorecard-grid {
+    display: grid;
+    gap: var(--ob-standard-gap);
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.ob-modern-shell .ob-scorecard-card {
+    background: var(--ob-panel-background);
+    border: 1px solid var(--ob-primary-border);
+    border-radius: var(--ob-border-radius);
+    min-width: 0;
+    padding: var(--ob-panel-padding);
+}
+.ob-modern-shell .ob-scorecard-label {
+    color: var(--ob-muted-text);
+    font-size: var(--ob-label-size);
+    font-weight: 650;
+    letter-spacing: 0.025em;
+    line-height: 1.3;
+    margin-bottom: var(--ob-compact-gap);
+}
+.ob-modern-shell .ob-scorecard-value {
+    color: var(--ob-primary-text);
+    font-size: 1.35rem;
+    font-weight: 750;
+    line-height: 1.15;
+}
+.ob-modern-shell .ob-scorecard-card.ob-positive .ob-scorecard-value {
+    color: var(--ob-green-accent);
+}
+.ob-modern-shell .ob-scorecard-card.ob-negative .ob-scorecard-value {
+    color: var(--ob-red-accent);
+}
+.ob-modern-shell .ob-scorecard-summary {
+    color: var(--ob-secondary-text);
+    font-size: var(--ob-body-size);
+    margin-top: var(--ob-standard-gap);
+}
+@media (max-width: 900px) {
+    .ob-modern-shell .ob-scorecard-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+@media (max-width: 600px) {
+    .ob-modern-shell .ob-scorecard-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+</style>
+"""
+
 
 def modern_style_enabled(query_params=None):
     """Return whether the temporary modern style flag is explicitly enabled."""
@@ -66,3 +130,36 @@ def inject_modern_style(st_module, enabled=False):
     if enabled:
         st_module.markdown(MODERN_TOKEN_CSS, unsafe_allow_html=True)
 
+
+def scorecard_markup(score_fields, summary=None):
+    """Build presentation-only markup from already calculated Scorecard values."""
+    cards = []
+    for label, value, treatment in score_fields:
+        safe_treatment = treatment if treatment in {"positive", "negative"} else "neutral"
+        cards.append(
+            f'<div class="ob-scorecard-card ob-{safe_treatment}">'
+            f'<div class="ob-scorecard-label">{escape(str(label))}</div>'
+            f'<div class="ob-scorecard-value">{escape(str(value))}</div>'
+            "</div>"
+        )
+    summary_markup = (
+        f'<div class="ob-scorecard-summary">{escape(str(summary))}</div>'
+        if summary
+        else ""
+    )
+    return (
+        '<section class="ob-modern-shell ob-scorecard">'
+        '<div class="ob-section-header">Today&#39;s Scorecard</div>'
+        f'<div class="ob-scorecard-grid">{"".join(cards)}</div>'
+        f"{summary_markup}</section>"
+    )
+
+
+def render_modern_scorecard(st_module, score_fields, summary=None):
+    """Render only the opt-in Scorecard presentation."""
+    inject_modern_style(st_module, enabled=True)
+    st_module.markdown(SCORECARD_CSS, unsafe_allow_html=True)
+    st_module.markdown(
+        scorecard_markup(score_fields, summary),
+        unsafe_allow_html=True,
+    )

@@ -4,6 +4,8 @@ from ui_modern_style import (
     OPTIONBEACON_NEW_STYLE,
     inject_modern_style,
     modern_style_enabled,
+    render_modern_scorecard,
+    scorecard_markup,
 )
 
 
@@ -65,3 +67,41 @@ def test_token_injection_is_flag_gated():
     inject_modern_style(fake, enabled=True)
     assert len(fake.calls) == 1
     assert fake.calls[0][1]["unsafe_allow_html"] is True
+
+
+def test_scorecard_markup_preserves_labels_values_and_treatments():
+    fields = (
+        ("Opened Alerts", 4, "neutral"),
+        ("Closed Trades", 3, "neutral"),
+        ("Winners", 1, "positive"),
+        ("Losers", 1, "negative"),
+        ("Win Rate", "50.00%", "neutral"),
+        ("Average Realized Return", "+0.50%", "positive"),
+    )
+
+    markup = scorecard_markup(
+        fields,
+        "Best trade +2.00% · Worst trade -1.00% · Average hold 30 minutes",
+    )
+
+    for label, value, _treatment in fields:
+        assert label in markup
+        assert str(value) in markup
+    assert "ob-scorecard-grid" in markup
+    assert "ob-positive" in markup
+    assert "ob-negative" in markup
+    assert "Best trade +2.00%" in markup
+    assert "Worst trade -1.00%" in markup
+    assert "Average hold 30 minutes" in markup
+
+
+def test_modern_scorecard_renderer_is_scoped_and_presentation_only():
+    fake = FakeStreamlit()
+    fields = (("Opened Alerts", 0, "neutral"),)
+
+    render_modern_scorecard(fake, fields)
+
+    rendered = "\n".join(call[0] for call in fake.calls)
+    assert ".ob-modern-shell .ob-scorecard-card" in rendered
+    assert '<section class="ob-modern-shell ob-scorecard">' in rendered
+    assert "daily_scorecard" not in rendered

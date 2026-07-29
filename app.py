@@ -143,6 +143,7 @@ from ui_navigation import (
     TRADE_DESK_SUBTITLE,
     render_card_navigation,
 )
+from ui_modern_style import modern_style_enabled, render_modern_scorecard
 
 
 SYMBOL_GROUPS = DEFAULT_SYMBOL_GROUPS
@@ -3015,7 +3016,6 @@ def render_outcome_trade_journal(
     else:
         render_empty_state("No open positions currently require attention.")
 
-    st.markdown("### Today's Scorecard")
     scorecard = daily_scorecard(filtered_records, now.date())
     score_fields = (
         ("Opened Alerts", scorecard["opened_alerts"], "neutral"),
@@ -3030,15 +3030,23 @@ def render_outcome_trade_journal(
             if (scorecard["average_realized_return"] or 0) < 0 else "neutral",
         ),
     )
-    score_columns = st.columns(6)
-    for column, (label, value, treatment) in zip(score_columns, score_fields):
-        render_journal_metric(column, label, value, treatment)
+    scorecard_summary = None
     if scorecard["best_trade"] is not None:
-        st.caption(
+        scorecard_summary = (
             f"Best trade {format_signed_return(scorecard['best_trade'])} · "
             f"Worst trade {format_signed_return(scorecard['worst_trade'])} · "
             f"Average hold {format_metric(scorecard['average_hold_minutes'])} minutes"
         )
+
+    if modern_style_enabled(st.query_params):
+        render_modern_scorecard(st, score_fields, scorecard_summary)
+    else:
+        st.markdown("### Today's Scorecard")
+        score_columns = st.columns(6)
+        for column, (label, value, treatment) in zip(score_columns, score_fields):
+            render_journal_metric(column, label, value, treatment)
+        if scorecard_summary:
+            st.caption(scorecard_summary)
 
     st.divider()
     st.markdown("### Opened Alerts")
