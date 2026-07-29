@@ -6,33 +6,40 @@ from html import escape
 
 WORKSPACE_CSS = """
 <style>
-[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"] {display:none}
+[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],[data-testid="stHeader"] {display:none}
 [data-testid="stMainBlockContainer"] {
   box-sizing:border-box;margin:0 !important;max-width:1024px !important;
-  padding:32px 24px 24px !important;width:100% !important;
+  padding:40px 24px 24px !important;width:100% !important;
 }
 .ob-desk-header {
-  align-items:flex-start;display:flex;gap:1rem;justify-content:space-between;
-  margin:.15rem 0 1.15rem;
+  align-items:flex-start;display:flex;gap:1rem;height:90px;justify-content:space-between;
+  margin:0 0 1.5rem;
 }
 .ob-desk-title {color:#f5f6f8;font-size:clamp(2rem,4vw,2.7rem);font-weight:740;line-height:1.05;}
 .ob-desk-subtitle {color:#aeb7c2;font-size:clamp(.9rem,1.4vw,1.08rem);margin-top:.55rem;}
-.ob-desk-controls {align-items:center;display:flex;flex-wrap:wrap;gap:.55rem;justify-content:flex-end;}
+.ob-desk-controls {height:90px;position:relative;width:397px}
 .ob-desk-market {color:#60d985;font-size:.8rem;font-weight:800;letter-spacing:.025em;text-transform:uppercase;}
+.ob-desk-market {position:absolute;right:182px;top:0}
+.ob-desk-clock {position:absolute;right:0;top:0}
 .ob-desk-market::before {background:currentColor;border-radius:50%;content:"";display:inline-block;height:.55rem;margin-right:.45rem;width:.55rem;}
 .ob-desk-market-closed {color:#9ba3ad;}
 .ob-desk-clock {color:#aeb7c2;font-size:.82rem;margin-right:.35rem;}
 .ob-desk-action {
   background:#11161c;border:1px solid #343c46;border-radius:8px;color:#e7eaee !important;
-  font-size:.82rem;font-weight:700;padding:.55rem .8rem;text-decoration:none !important;
+  bottom:0;box-sizing:border-box;font-size:.82rem;font-weight:700;height:51px;
+  padding:.85rem .8rem;position:absolute;text-align:center;text-decoration:none !important;
 }
+.ob-desk-action:nth-of-type(1) {left:0;width:151px}
+.ob-desk-action:nth-of-type(2) {left:169px;width:139px}
+.ob-desk-action:nth-of-type(3) {right:0;width:72px}
 .ob-desk-action:hover {border-color:#c8a84e;color:#f7df9a !important;}
 .ob-desk-tabs {
-  border-bottom:1px solid #303741;display:flex;gap:clamp(1.2rem,4vw,3rem);
+  border-bottom:1px solid #303741;display:flex;gap:8px;
   margin:0 0 1.2rem;overflow-x:auto;padding:0 .05rem;
 }
 .ob-desk-tab {
-  color:#aeb7c2;font-size:.92rem;font-weight:650;padding:.7rem .2rem .75rem;
+  color:#aeb7c2;font-size:.92rem;font-weight:650;min-width:117px;padding:.7rem .2rem .75rem;
+  text-align:center;
   text-decoration:none !important;white-space:nowrap;
 }
 .ob-desk-tab-active {border-bottom:2px solid #e0b83f;color:#f0c84e !important;}
@@ -70,6 +77,7 @@ WORKSPACE_CSS = """
   display:grid;gap:0;grid-template-columns:repeat(6,minmax(0,1fr));margin:.5rem 0 1rem;
   padding:.7rem .55rem;
 }
+.ob-quick-panel {box-sizing:border-box;height:132px}
 .ob-quick-action {
   border-right:1px solid rgba(255,255,255,.08);color:#dce1e6 !important;
   font-size:.8rem;font-weight:700;padding:.55rem .45rem;text-align:center;text-decoration:none !important;
@@ -91,18 +99,33 @@ WORKSPACE_CSS = """
 .ob-focus-tip {
   align-items:center;background:linear-gradient(145deg,#111820,#0d1319);
   border:1px solid #343c46;border-radius:11px;color:#d8dde3;display:flex;
-  flex-wrap:wrap;font-size:.88rem;gap:.5rem;margin:1rem 0;padding:.8rem 1rem;
+  box-sizing:border-box;flex-wrap:wrap;font-size:.88rem;gap:.5rem;height:90px;
+  margin:20px 0 0;padding:1.25rem 1rem;
 }
 .ob-focus-tip strong {color:#efc64b}.ob-focus-tip a {color:#efc64b;margin-left:auto;text-decoration:none}
-@media (max-width:900px) {.ob-quick-actions{grid-template-columns:repeat(3,minmax(0,1fr));}}
+.ob-lower-panels {
+  display:grid;gap:18px;grid-template-columns:406px minmax(0,1fr);margin-top:20px;
+}
+.ob-lower-panels > .ob-panel-shell,
+.ob-lower-panels > .ob-recent-wrap > .ob-panel-shell {
+  box-sizing:border-box;height:480px;margin:0;min-width:0;
+}
+.ob-recent-wrap {min-width:0}
+@media (max-width:900px) {
+  .ob-quick-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .ob-lower-panels{grid-template-columns:minmax(0,.42fr) minmax(0,.58fr)}
+}
 @media (max-width:620px) {
   .ob-desk-header {flex-direction:column}
-  .ob-desk-controls {justify-content:flex-start}
+  .ob-desk-controls {max-width:100%}
   .ob-desk-tabs {gap:1.2rem}
   .ob-quick-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
   .ob-quick-action {border-bottom:1px solid rgba(255,255,255,.08);border-right:0}
   .ob-signal-row{grid-template-columns:.65fr .7fr 1.4fr .5fr}
   .ob-signal-time{display:none}
+  .ob-lower-panels{grid-template-columns:1fr}
+  .ob-lower-panels > .ob-panel-shell,
+  .ob-lower-panels > .ob-recent-wrap > .ob-panel-shell {height:auto;min-height:22rem}
 }
 </style>
 """
@@ -176,8 +199,19 @@ def quick_actions_markup():
         for label, target in actions
     )
     return (
-        '<section class="ob-panel-shell"><div class="ob-panel-title">Quick Actions</div>'
+        '<section class="ob-panel-shell ob-quick-panel"><div class="ob-panel-title">Quick Actions</div>'
         f'<nav class="ob-quick-actions" aria-label="Quick actions">{links}</nav></section>'
+    )
+
+
+def lower_panels_markup(open_records, history_records):
+    """Render the desktop lower panels in one stable, equal-height grid."""
+    return (
+        '<div class="ob-lower-panels">'
+        f"{open_positions_panel_markup(open_records)}"
+        '<div class="ob-recent-wrap"><span id="recent-signals"></span>'
+        f"{recent_signals_panel_markup(history_records)}"
+        "</div></div>"
     )
 
 

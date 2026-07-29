@@ -153,9 +153,8 @@ from ui_navigation import (
 from workspace_ui import (
     WORKSPACE_CSS,
     focus_tip_markup,
+    lower_panels_markup,
     quick_actions_markup,
-    open_positions_panel_markup,
-    recent_signals_panel_markup,
     trade_desk_header_markup,
     trade_desk_tabs_markup,
 )
@@ -3513,15 +3512,10 @@ def render_trade_desk_workspace(
         for record in trade_history
         if record.entry_time is not None and record.exit_time is None
     ]
-    left, right = st.columns([0.42, 0.58])
-    with left:
-        st.markdown(open_positions_panel_markup(open_records), unsafe_allow_html=True)
-    with right:
-        st.markdown('<span id="recent-signals"></span>', unsafe_allow_html=True)
-        st.markdown(
-            recent_signals_panel_markup(trade_history),
-            unsafe_allow_html=True,
-        )
+    st.markdown(
+        lower_panels_markup(open_records, trade_history),
+        unsafe_allow_html=True,
+    )
     st.markdown(focus_tip_markup(), unsafe_allow_html=True)
 
 

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from workspace_ui import (
     WORKSPACE_CSS,
     focus_tip_markup,
+    lower_panels_markup,
     market_status_markup,
     open_positions_panel_markup,
     quick_actions_markup,
@@ -107,6 +108,16 @@ def test_lower_panels_match_empty_and_five_row_requirements():
     assert "Recent Signals" in recent
     assert recent.count('class="ob-signal-row"') == 5
     assert "Showing 5 of 7 signals" in recent
+
+
+def test_lower_panels_use_one_equal_height_reference_grid():
+    markup = lower_panels_markup([], [record("SPY", 1)])
+
+    assert 'class="ob-lower-panels"' in markup
+    assert markup.count('class="ob-panel-shell') == 2
+    assert 'id="recent-signals"' in markup
+    assert "grid-template-columns:406px minmax(0,1fr)" in WORKSPACE_CSS
+    assert "height:480px" in WORKSPACE_CSS
 
 
 def test_workspace_routing_isolated_by_selected_page():

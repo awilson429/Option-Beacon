@@ -12,14 +12,15 @@ FEATURED_SETUP_CSS = """
 <style>
 .ob-featured {
   background:linear-gradient(135deg,#111820 0%,#0c1218 100%);
-  border:1px solid #35404a;border-radius:11px;margin:.25rem 0 1rem;padding:1.35rem;
+  border:1px solid #35404a;border-radius:11px;margin:.25rem 0 1rem;padding:1.65rem;
 }
 .ob-featured-label {
   color:#b8c1cb;font-size:.8rem;font-weight:800;letter-spacing:.045em;
   margin-bottom:1.15rem;text-transform:uppercase;
 }
 .ob-featured-layout {
-  display:grid;gap:1.4rem;grid-template-columns:1.05fr 2.25fr 1.2fr;min-width:0;
+  display:grid;gap:24px;grid-template-columns:170px minmax(0,1fr) 250px;
+  min-height:310px;min-width:0;
 }
 .ob-featured-identity {
   border-right:1px solid rgba(255,255,255,.11);min-width:0;padding-right:1.2rem;
