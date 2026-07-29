@@ -8,8 +8,8 @@ WORKSPACE_CSS = """
 <style>
 [data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"] {display:none}
 [data-testid="stMainBlockContainer"] {
-  box-sizing:border-box;max-width:100% !important;padding:32px 24px 24px !important;
-  width:100% !important;
+  box-sizing:border-box;margin:0 !important;max-width:1024px !important;
+  padding:32px 24px 24px !important;width:100% !important;
 }
 .ob-desk-header {
   align-items:flex-start;display:flex;gap:1rem;justify-content:space-between;
