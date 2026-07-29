@@ -8,6 +8,7 @@ __pycache__/
 venv/
 env/
 .pytest_cache/
+.test-temp-*/
 *.tmp
 *.log
 
