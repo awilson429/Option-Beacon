@@ -91,25 +91,46 @@ CARD_NAVIGATION_SLUGS = {
 CARD_NAVIGATION_CSS = """
 <style>
 .ob-nav-grid {
-    margin: 0.75rem 0 0;
+    height: 0;
 }
 div[class*="st-key-ob_nav_"] button {
+    align-items: center;
     background: #15191f;
     border: 1px solid #3a414b;
     border-radius: 0.75rem;
     color: #f3f4f6 !important;
-    font-size: 0.92rem;
-    font-weight: 650;
+    display: flex;
+    justify-content: center;
     min-height: 4.25rem;
     padding: 0.8rem 0.65rem;
+    text-align: center;
     transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
     width: 100%;
+}
+div[class*="st-key-ob_nav_"] button p {
+    color: #f3f4f6 !important;
+    font-size: 0.92rem;
+    font-weight: 650;
+    line-height: 1.2;
 }
 div[class*="st-key-ob_nav_"] button:hover {
     background: #20252c;
     border-color: #c8a84e;
     color: #ffffff !important;
     transform: translateY(-1px);
+}
+div[class*="st-key-ob_nav_"] button:hover p {
+    color: #ffffff !important;
+}
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-ob_nav_"]) {
+    gap: 0.75rem;
+}
+div[data-testid="stHorizontalBlock"]:has(.st-key-ob_nav_trade_desk) {
+    margin-top: 0.75rem;
+    margin-bottom: -0.25rem;
+}
+div[data-testid="stHorizontalBlock"]:has(.st-key-ob_nav_history) {
+    margin-bottom: 1.5rem;
 }
 @media (max-width: 600px) {
     div[class*="st-key-ob_nav_"] button {
@@ -165,11 +186,15 @@ def _active_card_css(workspace):
     key = _card_key(workspace)
     return f"""
 <style>
-.st-key-{key} button {{
+div.st-key-{key} button {{
     background: linear-gradient(135deg, #332b18, #211d14);
     border: 2px solid #d2ad4f;
-    box-shadow: 0 0 0 1px rgba(210, 173, 79, 0.16);
+    box-shadow: 0 0 0 1px rgba(210, 173, 79, 0.16) !important;
     color: #f7df9a !important;
+}}
+div.st-key-{key} button p {{
+    color: #f7df9a !important;
+    font-weight: 650;
 }}
 </style>
 """
@@ -181,15 +206,13 @@ def render_card_navigation(st_module=None):
         import streamlit as st_module
 
     active_page = active_card_workspace(st_module.session_state)
-    st_module.markdown(CARD_NAVIGATION_CSS, unsafe_allow_html=True)
-    st_module.markdown(_active_card_css(active_page), unsafe_allow_html=True)
     st_module.markdown(
-        '<div class="ob-nav-grid" aria-label="Primary navigation"></div>',
+        CARD_NAVIGATION_CSS + _active_card_css(active_page),
         unsafe_allow_html=True,
     )
 
-    first_row = st_module.columns(5)
-    for column, workspace in zip(first_row, CARD_NAVIGATION[:5]):
+    first_row = st_module.columns(3)
+    for column, workspace in zip(first_row, CARD_NAVIGATION[:3]):
         column.button(
             workspace,
             key=_card_key(workspace),
@@ -198,14 +221,15 @@ def render_card_navigation(st_module=None):
             use_container_width=True,
         )
 
-    second_row = st_module.columns(5)
-    second_row[0].button(
-        CARD_NAVIGATION[5],
-        key=_card_key(CARD_NAVIGATION[5]),
-        on_click=set_active_workspace,
-        args=(CARD_NAVIGATION[5], st_module.session_state),
-        use_container_width=True,
-    )
+    second_row = st_module.columns(3)
+    for column, workspace in zip(second_row, CARD_NAVIGATION[3:]):
+        column.button(
+            workspace,
+            key=_card_key(workspace),
+            on_click=set_active_workspace,
+            args=(workspace, st_module.session_state),
+            use_container_width=True,
+        )
     return active_card_workspace(st_module.session_state)
 
 
