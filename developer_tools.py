@@ -33,7 +33,6 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_DIAGNOSTICS_FILE = "runtime_diagnostics.json"
 UNAVAILABLE = "—"
 HOSTED_SECRET_NAMES = (
-    "APP_ACCESS_CODE",
     "TRADIER_ACCESS_TOKEN",
     "FINNHUB_API_KEY",
 )
@@ -42,7 +41,6 @@ HOSTED_SECRET_NAMES = (
 def hosted_configuration_status() -> dict:
     """Return hosted-secret readiness without exposing configured values."""
     configured = {
-        "APP_ACCESS_CODE": _configured_secret("APP_ACCESS_CODE"),
         "TRADIER_ACCESS_TOKEN": tradier_configured(),
         "FINNHUB_API_KEY": bool(finnhub_api_key()),
     }
@@ -490,19 +488,6 @@ def _streamlit_secrets_available() -> bool:
         import streamlit as st
 
         return bool(st.secrets)
-    except Exception:
-        return False
-
-
-def _configured_secret(name: str) -> bool:
-    import os
-
-    if os.getenv(name):
-        return True
-    try:
-        import streamlit as st
-
-        return bool(st.secrets.get(name))
     except Exception:
         return False
 
