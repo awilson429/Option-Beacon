@@ -19,8 +19,8 @@ WORKSPACE_CSS = """
   align-items:flex-start;display:flex;gap:1rem;height:90px;justify-content:space-between;
   margin:0 0 49px;
 }
-.ob-desk-title {color:#f5f6f8;font-size:clamp(2rem,4vw,2.7rem);font-weight:740;line-height:1.05;}
-.ob-desk-subtitle {color:#aeb7c2;font-size:clamp(.9rem,1.4vw,1.08rem);margin-top:.55rem;}
+.ob-desk-title {color:#f5f6f8;font-size:46px;font-weight:740;line-height:1.05;}
+.ob-desk-subtitle {color:#aeb7c2;font-size:clamp(.9rem,1.4vw,1.08rem);margin-top:9px;}
 .ob-desk-controls {height:90px;position:relative;width:397px}
 .ob-desk-market {color:#60d985;font-size:.8rem;font-weight:800;letter-spacing:.025em;text-transform:uppercase;}
 .ob-desk-market {position:absolute;right:182px;top:0}
@@ -81,7 +81,7 @@ WORKSPACE_CSS = """
   display:grid;gap:0;grid-template-columns:repeat(6,minmax(0,1fr));margin:.5rem 0 1rem;
   padding:.7rem .55rem;
 }
-.ob-quick-panel {box-sizing:border-box;height:132px;margin:21px 0 0}
+.ob-quick-panel {box-sizing:border-box;height:132px;margin:37px 0 0}
 .ob-quick-action {
   border-right:1px solid rgba(255,255,255,.08);color:#dce1e6 !important;
   font-size:.8rem;font-weight:700;padding:.55rem .45rem;text-align:center;text-decoration:none !important;
@@ -104,11 +104,11 @@ WORKSPACE_CSS = """
   align-items:center;background:linear-gradient(145deg,#111820,#0d1319);
   border:1px solid #343c46;border-radius:11px;color:#d8dde3;display:flex;
   box-sizing:border-box;flex-wrap:wrap;font-size:.88rem;gap:.5rem;height:90px;
-  margin:20px 0 0;padding:1.25rem 1rem;
+  margin:36px 0 0;padding:1.25rem 1rem;
 }
 .ob-focus-tip strong {color:#efc64b}.ob-focus-tip a {color:#efc64b;margin-left:auto;text-decoration:none}
 .ob-lower-panels {
-  display:grid;gap:18px;grid-template-columns:406px minmax(0,1fr);margin-top:20px;
+  display:grid;gap:18px;grid-template-columns:406px minmax(0,1fr);margin-top:36px;
 }
 .ob-lower-panels > .ob-panel-shell,
 .ob-lower-panels > .ob-recent-wrap > .ob-panel-shell {
@@ -120,6 +120,7 @@ WORKSPACE_CSS = """
   .ob-lower-panels{grid-template-columns:minmax(0,.42fr) minmax(0,.58fr)}
 }
 @media (max-width:620px) {
+  .ob-desk-title {font-size:clamp(2rem,10vw,2.875rem)}
   .ob-desk-header {flex-direction:column}
   .ob-desk-controls {max-width:100%}
   .ob-desk-tabs {gap:1.2rem}
