@@ -12,7 +12,7 @@ FEATURED_SETUP_CSS = """
 <style>
 .ob-featured {
   background:linear-gradient(135deg,#111820 0%,#0c1218 100%);
-  border:1px solid #35404a;border-radius:11px;margin:.25rem 0 1rem;padding:1.65rem;
+  border:1px solid #35404a;border-radius:11px;margin:26px 0 0;padding:31px;
 }
 .ob-featured-label {
   color:#b8c1cb;font-size:.8rem;font-weight:800;letter-spacing:.045em;
