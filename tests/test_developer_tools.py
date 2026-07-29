@@ -70,14 +70,12 @@ def test_tradier_success_state(monkeypatch):
 
 
 def test_hosted_configuration_status_exposes_names_not_values(monkeypatch):
-    monkeypatch.setattr("developer_tools._configured_secret", lambda name: True)
     monkeypatch.setattr("developer_tools.tradier_configured", lambda: True)
     monkeypatch.setattr("developer_tools.finnhub_api_key", lambda: "hidden-key")
     status = hosted_configuration_status()
     assert status["ready"] is True
     assert status["missing"] == []
     assert status["statuses"] == {
-        "APP_ACCESS_CODE": "Configured",
         "TRADIER_ACCESS_TOKEN": "Configured",
         "FINNHUB_API_KEY": "Configured",
     }

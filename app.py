@@ -533,55 +533,11 @@ def board_color_class(value):
 
 
 
-def app_access_configured():
-    return bool(st.secrets.get("APP_ACCESS_CODE"))
-
-
-def require_app_access():
-    expected_code = st.secrets.get("APP_ACCESS_CODE")
-    header_logo = logo_source()
-
-    if not expected_code:
-        return True
-
-    if st.session_state.get("app_access_granted"):
-        return True
-
-    st.markdown(
-        f"""
-        <div class="brand-shell">
-            <div class="brand-row">
-                <div class="brand-left">
-                    <img class="brand-logo" src="{header_logo}" alt="Option Beacon logo" />
-                    <div class="brand-copy">
-                        <div class="brand-title">Option Beacon</div>
-                        <div class="brand-subtitle">Private Scanner Access</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    entered_code = st.text_input("Access code", type="password")
-
-    if st.button("Enter", type="primary"):
-        if entered_code == expected_code:
-            st.session_state["app_access_granted"] = True
-            st.rerun()
-        else:
-            st.error("Invalid access code.")
-
-    st.stop()
-
-
 def render_header():
     market_open = is_market_open_now()
     market_status = "Market Open" if market_open else "Market Closed"
     market_class = "pill-open" if market_open else "pill-closed"
     refreshed_at = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-    access_status = "Private" if app_access_configured() else "Public"
     header_logo = logo_source()
 
     st.markdown(
@@ -607,7 +563,6 @@ def render_header():
                         <span>Refresh 1 min</span>
                         <span class="pill-subtext">Last refreshed {refreshed_at}</span>
                     </span>
-                    <span class="pill pill-secondary">{access_status}</span>
                 </div>
             </div>
         </div>
@@ -3527,7 +3482,6 @@ def render_developer_tools():
 
 def main():
     configure_page()
-    require_app_access()
     render_header()
     hosted_status = hosted_configuration_status()
     if hosted_status["ready"]:

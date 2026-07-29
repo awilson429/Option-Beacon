@@ -75,7 +75,6 @@ def test_secret_values_are_never_rendered():
             "GIT_COMMIT": "123456789",
             "TRADIER_ACCESS_TOKEN": secret,
             "FINNHUB_API_KEY": secret,
-            "APP_ACCESS_CODE": secret,
         },
         git_reader=no_git,
         streamlit_version="1.60.0",
