@@ -11,7 +11,7 @@ import streamlit as st
 from ui.theme import configure_page
 
 from after_hours import after_hours_focus_rows, fetch_after_hours_briefing
-from build_information import build_footer_text, build_information, render_build_footer
+from build_information import render_build_footer
 from developer_tools import (
     hosted_configuration_status,
     latest_production_ledger_entry,
@@ -21,7 +21,6 @@ from developer_tools import (
     system_status,
     verify_finnhub_connection,
     verify_position_tracking,
-    verify_trade_plan_engine,
     verify_tradier_connection,
 )
 from finnhub_universe import (
@@ -30,10 +29,6 @@ from finnhub_universe import (
     finnhub_api_key,
     flatten_symbol_groups,
     quote_symbol,
-)
-from featured_setup_card import (
-    render_featured_setup_card,
-    render_scanner_featured_setup,
 )
 from optionbeacon_history import (
     HIGH_SCORE_THRESHOLD,
@@ -121,8 +116,6 @@ from trade_desk_view_models import (
 from setup_intelligence import setup_intelligence
 from trade_management import coach_recommendation, trade_summary
 from trade_planning import trade_plan_view
-from trade_plan_engine import SUPPORTED_SYMBOLS, build_structured_trade_plan
-from trade_plan_ui import render_trade_plan_card
 from trade_replay import (
     DEFAULT_MAX_HOLD_CANDLES,
     DEFAULT_REPLAY_SYMBOLS,
@@ -148,25 +141,7 @@ from ui_navigation import (
     NO_ACTIONABLE_OPPORTUNITY_MESSAGE,
     RECORDED_CANDIDATES_LABEL,
     TRADE_DESK_SUBTITLE,
-    render_sidebar_navigation,
-)
-from ui.shared_layout import (
-    SHARED_UI_CSS,
-    compact_table_markup,
-    empty_state_markup,
-    metric_strip_markup,
-    page_header_markup,
-    section_header_markup,
-    status_rows_markup,
-    tabs_markup,
-)
-from workspace_ui import (
-    WORKSPACE_CSS,
-    focus_tip_markup,
-    lower_panels_markup,
-    quick_actions_markup,
-    trade_desk_header_markup,
-    trade_desk_tabs_markup,
+    render_card_navigation,
 )
 
 
@@ -605,10 +580,7 @@ def render_section_header(title, kicker=None):
 
 
 def render_empty_state(message):
-    st.markdown(
-        empty_state_markup("Nothing to display", message),
-        unsafe_allow_html=True,
-    )
+    st.markdown(f'<div class="empty-state">{message}</div>', unsafe_allow_html=True)
 
 
 def render_decision_summary(summary, *, compact=False):
@@ -1085,16 +1057,6 @@ def render_opportunity_card(
 
     with st.container(border=True):
         render_decision_summary(summary)
-        if result.get("symbol") in SUPPORTED_SYMBOLS:
-            try:
-                render_trade_plan_card(
-                    build_structured_trade_plan(
-                        result,
-                        evaluation_timestamp=eastern_now(),
-                    )
-                )
-            except Exception:
-                st.warning("Structured Trade Plan is temporarily unavailable.")
 
         render_historical_edge(result, trade_history or [], evidence=evidence)
         render_live_plan_trade_coach(
@@ -3278,6 +3240,8 @@ def render_live_session_opportunity(latest_results, trade_history):
         if actionable_trade_plan(row.get("result") or {})
     ]
     if not eligible_rows:
+        st.markdown("### Today's Best Trade")
+        render_empty_state("No trade currently meets the entry requirements.")
         if directional_rows:
             developing = max(
                 directional_rows,
@@ -3285,22 +3249,46 @@ def render_live_session_opportunity(latest_results, trade_history):
             )
             developing_result = developing["result"]
             eligibility = scanner_entry_eligibility(developing_result)
-            if developing_result.get("symbol") in SUPPORTED_SYMBOLS:
-                try:
-                    render_featured_setup_card(
-                        build_structured_trade_plan(
-                            developing_result,
-                            evaluation_timestamp=eastern_now(),
-                        ),
-                        developing_result.get("entry_timing")
-                        or developing_result.get("timing_label"),
-                    )
-                except Exception:
-                    render_scanner_featured_setup(developing_result, eligibility)
-            else:
-                render_scanner_featured_setup(developing_result, eligibility)
-        else:
-            render_empty_state("No developing setup is currently available.")
+            plan = developing_result.get("trade_plan") or {}
+            st.markdown("#### Best Developing Setup")
+            developing_columns = st.columns(6)
+            developing_columns[0].metric(
+                "Symbol",
+                developing_result.get("symbol") or "—",
+            )
+            developing_columns[1].metric(
+                "Direction",
+                plan.get("direction") or developing_result.get("bias") or "—",
+            )
+            developing_columns[2].metric(
+                "Setup",
+                plan.get("setup_type") or plan.get("setup") or "—",
+            )
+            developing_columns[3].metric(
+                "Confidence",
+                format_metric(
+                    developing_result.get("confidence"),
+                    percentage=True,
+                    decimals=0,
+                ),
+            )
+            developing_columns[4].metric(
+                "Timing",
+                developing_result.get("entry_timing")
+                or developing_result.get("timing_label")
+                or "—",
+            )
+            developing_columns[5].metric(
+                "Entry Trigger",
+                format_evidence_metric(
+                    plan.get("trigger_price")
+                    or plan.get("entry_price")
+                    or plan.get("entry_zone_low"),
+                ),
+            )
+            st.caption("WATCH — NOT ELIGIBLE")
+            for reason in eligibility["reasons"]:
+                st.caption(reason)
         return
 
     row = max(eligible_rows, key=lambda item: item.get("score") or 0)
@@ -3333,68 +3321,34 @@ def render_live_session_opportunity(latest_results, trade_history):
     summary["coach_status"] = entry_presentation["coach_status"]
     summary["coach_action"] = entry_presentation["suggested_action"]
     summary["treatment"] = entry_presentation["treatment"]
-    if result.get("symbol") in SUPPORTED_SYMBOLS:
-        try:
-            render_featured_setup_card(
-                build_structured_trade_plan(
-                    result,
-                    evaluation_timestamp=eastern_now(),
-                ),
-                result.get("entry_timing") or result.get("timing_label"),
-            )
-        except Exception:
-            render_scanner_featured_setup(result, {"status": "READY"})
-    else:
-        render_scanner_featured_setup(result, {"status": "READY"})
+    st.markdown("### Today's Best Trade")
+    render_decision_summary(summary, compact=True)
+    with st.expander("Why this trade?"):
+        st.write(
+            f"Historical Edge: {summary['historical_grade']} · "
+            f"{historical_edge_summary(evidence)}"
+        )
+        st.write(
+            "Average historical hold: "
+            f"{format_metric(evidence.get('average_hold_minutes'))} minutes"
+        )
+        if coach:
+            st.write(f"Coach rationale: {coach.get('summary') or '—'}")
+
+
 def render_developer_tools():
     """Render read-only internal diagnostics without exposing provider secrets."""
-    st.markdown(SHARED_UI_CSS, unsafe_allow_html=True)
-    st.markdown(
-        page_header_markup(
-            "Developer Tools",
-            "Diagnostics, integrations, and system health.",
-            (("Refresh status", "?page=developer-tools"),),
-        ),
-        unsafe_allow_html=True,
+    render_section_header(
+        "Developer Tools",
+        "Internal provider and Option Engine diagnostics",
     )
-    statuses = system_status()
-    healthy = sum(
-        row["status"] in {"Configured", "Available", "File present"}
-        for row in statuses
+    st.info(
+        "Developer Tools runs diagnostics only. It does not place trades or "
+        "modify production trade history."
     )
-    st.markdown(
-        metric_strip_markup(
-            (
-                ("Overall Health", f"{healthy}/{len(statuses)} checks", "positive" if healthy == len(statuses) else "caution"),
-                ("Finnhub", statuses[1]["status"], "positive" if statuses[1]["status"] == "Configured" else "caution"),
-                ("Tradier", statuses[0]["status"], "positive" if statuses[0]["status"] == "Configured" else "caution"),
-                ("Current Build", build_information().get("commit") or "—", "neutral"),
-            )
-        ),
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="ob-callout">Diagnostics are read-only. They do not place trades '
-        "or modify production trade history.</div>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        section_header_markup("System Health", "Configuration and persistence availability"),
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        status_rows_markup(
-            (
-                (
-                    row["name"],
-                    "PASS" if row["status"] in {"Configured", "Available", "File present"} else "WARNING",
-                    row["status"],
-                )
-                for row in statuses
-            )
-        ),
-        unsafe_allow_html=True,
-    )
+
+    st.markdown("### System Status")
+    st.dataframe(pd.DataFrame(system_status()), use_container_width=True, hide_index=True)
 
     def run_diagnostic(button_label, key, diagnostic):
         running_key = f"{key}_running"
@@ -3463,500 +3417,149 @@ def render_developer_tools():
                 hide_index=True,
             )
 
-    st.markdown(
-        section_header_markup("Provider Diagnostics", "Connectivity checks run only on demand"),
-        unsafe_allow_html=True,
+    st.markdown("### Verify Tradier Connection")
+    render_result(
+        run_diagnostic(
+            "Verify Tradier Connection",
+            "developer_verify_tradier",
+            verify_tradier_connection,
+        )
     )
-    with st.expander("Tradier connection"):
-        render_result(
-            run_diagnostic(
-                "Verify Tradier Connection",
-                "developer_verify_tradier",
-                verify_tradier_connection,
-            )
-        )
 
-    with st.expander("Finnhub connection"):
-        render_result(
-            run_diagnostic(
-                "Verify Finnhub Connection",
-                "developer_verify_finnhub",
-                verify_finnhub_connection,
-            )
+    st.markdown("### Verify Finnhub Connection")
+    render_result(
+        run_diagnostic(
+            "Verify Finnhub Connection",
+            "developer_verify_finnhub",
+            verify_finnhub_connection,
         )
-
-    st.markdown(
-        section_header_markup("Engine Verification", "Capture, lifecycle, and Trade Plan checks"),
-        unsafe_allow_html=True,
     )
-    with st.expander("Option Engine verification"):
-        render_result(
-            run_diagnostic(
-                "Run Option Engine Verification",
-                "developer_verify_option_engine",
-                option_engine_diagnostic,
-            )
-        )
 
-    with st.expander("Position tracking verification"):
-        render_result(
-            run_diagnostic(
-                "Verify Position Tracking",
-                "developer_verify_position_tracking",
-                verify_position_tracking,
-            )
+    st.markdown("### Run Option Engine Verification")
+    render_result(
+        run_diagnostic(
+            "Run Option Engine Verification",
+            "developer_verify_option_engine",
+            option_engine_diagnostic,
         )
-
-    with st.expander("Trade Plan Engine verification"):
-        render_result(
-            run_diagnostic(
-                "Verify Trade Plan Engine",
-                "developer_verify_trade_plan_engine",
-                verify_trade_plan_engine,
-            )
-        )
-
-    st.markdown(
-        section_header_markup("Persistence", "Sanitized verification and immutable capture summaries"),
-        unsafe_allow_html=True,
     )
-    with st.expander("Latest verification result"):
-        latest_result = load_latest_diagnostic()
-        if latest_result is None:
-            render_empty_state("No verification result has been recorded yet.")
-        else:
-            render_result(latest_result)
 
-    with st.expander("Latest production option ledger entry"):
-        latest_entry = latest_production_ledger_entry()
-        if latest_entry is None:
-            render_empty_state("No production option trade has been captured yet.")
-        else:
-            st.markdown(
-                compact_table_markup(
-                    [
+    st.markdown("### Verify Position Tracking")
+    render_result(
+        run_diagnostic(
+            "Verify Position Tracking",
+            "developer_verify_position_tracking",
+            verify_position_tracking,
+        )
+    )
+
+    st.markdown("### Latest Verification Result")
+    latest_result = load_latest_diagnostic()
+    if latest_result is None:
+        render_empty_state("No verification result has been recorded yet.")
+    else:
+        render_result(latest_result)
+
+    st.markdown("### Latest Production Option Ledger Entry")
+    latest_entry = latest_production_ledger_entry()
+    if latest_entry is None:
+        render_empty_state("No production option trade has been captured yet.")
+    else:
+        st.dataframe(
+            pd.DataFrame(
+                [
                     {
                         "Field": key.replace("_", " ").title(),
                         "Value": value if value is not None else "—",
                     }
                     for key, value in latest_entry.items()
-                    ],
-                    ("Field", "Value"),
-                ),
-                unsafe_allow_html=True,
-            )
-
-
-def render_trade_desk_workspace(
-    latest_results,
-    trade_history,
-    current_prices,
-    quote_status,
-    high_score_history,
-    snapshot_time,
-    symbol_groups,
-):
-    """Render the focused live-decision workspace and secondary drill-downs."""
-    now = eastern_now()
-    st.markdown(WORKSPACE_CSS, unsafe_allow_html=True)
-    st.markdown(
-        trade_desk_header_markup(is_market_open_now(), now),
-        unsafe_allow_html=True,
-    )
-    st.markdown(trade_desk_tabs_markup(), unsafe_allow_html=True)
-    render_live_session_opportunity(latest_results, trade_history)
-
-    st.markdown(quick_actions_markup(), unsafe_allow_html=True)
-
-    open_records = [
-        record
-        for record in trade_history
-        if record.entry_time is not None and record.exit_time is None
-    ]
-    st.markdown(
-        lower_panels_markup(open_records, trade_history),
-        unsafe_allow_html=True,
-    )
-    st.markdown(focus_tip_markup(), unsafe_allow_html=True)
-
-
-def render_positions_workspace(
-    latest_results,
-    trade_history,
-    current_prices,
-    quote_status,
-):
-    """Render active paper positions, risk, targets, and lifecycle management."""
-    st.markdown(SHARED_UI_CSS, unsafe_allow_html=True)
-    st.markdown(
-        page_header_markup(
-            "Positions",
-            "Manage active paper trades and exits.",
-            (("Refresh", "?page=positions"), ("Journal", "?page=journal")),
-        ),
-        unsafe_allow_html=True,
-    )
-    now = eastern_now()
-    open_records = [
-        record
-        for record in trade_history
-        if record.entry_time is not None and record.exit_time is None
-    ]
-    closed_today = sum(
-        bool(record.entry_time)
-        and bool(record.exit_time)
-        and record.exit_time.astimezone(now.tzinfo).date() == now.date()
-        for record in trade_history
-    )
-    if open_records:
-        opened = opened_alerts_analytics(
-            open_records,
-            current_prices,
-            now,
-            quote_status,
-        )
-        active = active_edge_analytics(
-            open_records,
-            current_prices,
-            now,
-            quote_status,
-        )
-        summary_fields = (
-            ("Open Positions", active["open_positions"], "neutral"),
-            ("Need Attention", active["need_attention"], "caution"),
-            (
-                "Unrealized Result",
-                format_signed_return(active["average_open_return"]),
-                "positive" if (active["average_open_return"] or 0) > 0 else "negative" if (active["average_open_return"] or 0) < 0 else "neutral",
+                ]
             ),
-            ("Closed Today", closed_today, "neutral"),
+            use_container_width=True,
+            hide_index=True,
         )
-        st.markdown(metric_strip_markup(summary_fields), unsafe_allow_html=True)
-        st.markdown(
-            section_header_markup("Active Positions", "Entered trades currently being monitored"),
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            compact_table_markup(
-                opened["rows"],
-                (
-                    "Symbol",
-                    "Direction",
-                    "Setup",
-                    "Entry",
-                    "Current Price",
-                    "Stop",
-                    "Target 1",
-                    "Open Return",
-                    "Status",
-                ),
-            ),
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            metric_strip_markup(
-                (
-                    ("Open Positions", 0, "neutral"),
-                    ("Need Attention", 0, "neutral"),
-                    ("Unrealized Result", "—", "neutral"),
-                    ("Closed Today", closed_today, "neutral"),
-                )
-            ),
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            section_header_markup("Active Positions", "Entered trades currently being monitored"),
-            unsafe_allow_html=True,
-        )
-        render_empty_state("No entered trades are currently open.")
-
-    st.markdown(
-        section_header_markup("Open Option Positions", "Captured contracts with live lifecycle tracking"),
-        unsafe_allow_html=True,
-    )
-    option_positions = OptionPositionStore().load()
-    open_rows = open_position_rows(option_positions, now)
-    if open_rows:
-        st.markdown(
-            compact_table_markup(
-                open_rows,
-                (
-                    "Ticker",
-                    "Direction",
-                    "Strike",
-                    "Expiration",
-                    "Current Return",
-                    "MFE",
-                    "MAE",
-                    "Status",
-                    "Age",
-                ),
-            ),
-            unsafe_allow_html=True,
-        )
-    else:
-        render_empty_state("No paper option positions are currently open.")
-
-    with st.expander("Position management and lifecycle details"):
-        render_active_trades(latest_results)
-
-    recently_closed = [
-        record
-        for record in sorted(
-            (record for record in trade_history if record.exit_time is not None),
-            key=lambda record: record.exit_time,
-            reverse=True,
-        )[:5]
-    ]
-    st.markdown(
-        section_header_markup("Recently Closed", "Most recent completed underlying trades"),
-        unsafe_allow_html=True,
-    )
-    if recently_closed:
-        st.markdown(
-            compact_table_markup(
-                trade_history_rows(recently_closed),
-                (
-                    "Symbol",
-                    "Direction",
-                    "Setup",
-                    "Entry Time",
-                    "Exit Time",
-                    "Exit Reason",
-                    "Realized Return",
-                    "Status",
-                ),
-            ),
-            unsafe_allow_html=True,
-        )
-    else:
-        render_empty_state("No trades have closed yet.")
-
-
-def render_journal_workspace(
-    trade_history,
-    latest_results,
-    high_score_history,
-):
-    """Render signal history, completed outcomes, analytics, and review tools."""
-    st.markdown(SHARED_UI_CSS, unsafe_allow_html=True)
-    st.markdown(
-        page_header_markup(
-            "Journal",
-            "Review signals, outcomes, and performance.",
-            (("Filters", "#journal-filters"),),
-        ),
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        tabs_markup(
-            (
-                ("Trades", "#journal-trades"),
-                ("Signals", "#journal-signals"),
-                ("Analytics", "#journal-analytics"),
-                ("Replay", "#journal-replay"),
-            ),
-            "Trades",
-        ),
-        unsafe_allow_html=True,
-    )
-    if not trade_history:
-        render_empty_state("No trade history has been recorded yet.")
-    else:
-        symbols = ["All", *sorted({record.symbol for record in trade_history if record.symbol})]
-        setups = ["All", *sorted({record.setup for record in trade_history if record.setup})]
-        directions = ["All", *sorted({record.direction for record in trade_history if record.direction})]
-        exit_reasons = ["All", *sorted({record.exit_reason for record in trade_history if record.exit_reason})]
-        bucket_values = {confidence_bucket(record.confidence) for record in trade_history}
-        confidence_values = [
-            "All",
-            *[
-                label
-                for label, _lower, _upper in CONFIDENCE_BUCKETS
-                if label in bucket_values
-            ],
-        ]
-        st.markdown('<span id="journal-filters"></span>', unsafe_allow_html=True)
-        with st.expander("Filters", expanded=False):
-            filter_1, filter_2, filter_3 = st.columns(3)
-            selected_symbol = filter_1.selectbox("Symbol", symbols, key="journal_symbol")
-            selected_setup = filter_2.selectbox("Setup", setups, key="journal_setup")
-            selected_direction = filter_3.selectbox("Direction", directions, key="journal_direction")
-            filter_4, filter_5, filter_6 = st.columns(3)
-            selected_exit_reason = filter_4.selectbox(
-                "Exit reason", exit_reasons, key="journal_exit_reason"
-            )
-            selected_confidence = filter_5.selectbox(
-                "Confidence bucket", confidence_values, key="journal_confidence"
-            )
-            selected_status = filter_6.selectbox(
-                "Status", STATUS_OPTIONS, key="journal_status"
-            )
-            search = st.text_input("Search signal history", key="journal_search")
-        filtered = filter_trade_outcomes(
-            trade_history,
-            symbol=selected_symbol,
-            setup=selected_setup,
-            direction=selected_direction,
-            exit_reason=selected_exit_reason,
-            confidence=selected_confidence,
-            status=selected_status,
-        )
-        if search.strip():
-            term = search.strip().lower()
-            filtered = [
-                record
-                for record in filtered
-                if term in " ".join(
-                    (
-                        str(record.symbol or ""),
-                        str(record.setup or ""),
-                        str(record.direction or ""),
-                        str(record.exit_reason or ""),
-                    )
-                ).lower()
-            ]
-        st.caption(f"Showing {len(filtered)} of {len(trade_history)} recorded signals")
-        summary = journal_summary_metrics(filtered)
-        summary_fields = (
-            ("Total Signals", len(filtered), "neutral"),
-            ("Closed Trades", summary["closed_trades"], "neutral"),
-            ("Winning Trades", summary["winning_trades"], "positive"),
-            ("Losing Trades", summary["losing_trades"], "negative"),
-            ("Win Rate", format_metric(summary["win_rate"], percentage=True), "neutral"),
-            ("Average Return", format_signed_return(summary["average_return"]), "neutral"),
-        )
-        st.markdown(metric_strip_markup(summary_fields), unsafe_allow_html=True)
-        st.markdown('<span id="journal-trades"></span>', unsafe_allow_html=True)
-        st.markdown(
-            section_header_markup("Trades", "Filtered signals and completed outcomes"),
-            unsafe_allow_html=True,
-        )
-        rows = trade_history_rows(filtered)
-        if rows:
-            st.markdown(
-                compact_table_markup(
-                    rows[:25],
-                    (
-                        "Signal Time",
-                        "Symbol",
-                        "Direction",
-                        "Setup",
-                        "Confidence",
-                        "Exit Reason",
-                        "Realized Return",
-                        "Status",
-                    ),
-                ),
-                unsafe_allow_html=True,
-            )
-            if len(rows) > 25:
-                st.caption(
-                    f"Showing the 25 newest rows. Use Filters to narrow {len(rows)} matching records."
-                )
-        else:
-            render_empty_state("No trade history matches the selected filters.")
-        st.markdown('<span id="journal-analytics"></span>', unsafe_allow_html=True)
-        with st.expander("Analytics and grouped performance"):
-            analytics = analyze_trade_outcomes(filtered)
-            tabs = st.tabs(["Symbol", "Setup", "Direction", "Confidence Bucket"])
-            grouped_sets = (
-                analytics["by_symbol"],
-                analytics["by_setup"],
-                analytics["by_direction"],
-                analytics["by_confidence_bucket"],
-            )
-            for tab, grouped_rows in zip(tabs, grouped_sets):
-                with tab:
-                    display_rows = grouped_performance_rows(grouped_rows)
-                    if display_rows:
-                        st.dataframe(
-                            pd.DataFrame(display_rows),
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-                    else:
-                        render_empty_state("No closed trade performance is available.")
-
-    completed_rows = completed_position_rows(OptionPositionStore().load())
-    st.markdown(
-        section_header_markup("Review Tools", "Secondary history and replay details"),
-        unsafe_allow_html=True,
-    )
-    with st.expander("Completed Option Positions"):
-        if completed_rows:
-            st.dataframe(pd.DataFrame(completed_rows), use_container_width=True, hide_index=True)
-        else:
-            render_empty_state("No paper option positions have completed yet.")
-    with st.expander("Coach Timeline"):
-        render_coach_timeline()
-    with st.expander("Recent High Scores"):
-        render_recent_high_scores(high_score_history)
-    with st.expander("Signal Outcome Review"):
-        render_signal_outcomes()
-    with st.expander("Closed Trade Journal"):
-        render_trade_journal()
-    st.markdown('<span id="journal-replay"></span>', unsafe_allow_html=True)
-    with st.expander("Trade Replay"):
-        render_trade_replay_backtest()
 
 
 def main():
     configure_page()
-    build_info = build_information()
-    active_page = render_sidebar_navigation(
-        market_open=is_market_open_now(),
-        environment=build_info["environment"],
-        build_text=build_footer_text(build_info),
-    )
-    if active_page == "Developer Tools":
-        render_developer_tools()
+    render_header()
+    hosted_status = hosted_configuration_status()
+    if hosted_status["ready"]:
+        st.caption("Hosted configuration: Ready")
     else:
-        latest_results, high_score_history, snapshot_time, symbol_groups = scan_symbols()
-        trade_evidence_history = load_trade_evidence_history()
-        capture_qualified_signals(
-            latest_results.values(),
-            history=trade_evidence_history,
+        st.warning(
+            "Hosted configuration incomplete. Missing: "
+            + ", ".join(hosted_status["missing"])
         )
-        refresh_option_positions_safely()
-        open_trade_prices, open_trade_quote_status = enrich_open_trade_prices(
+
+    latest_results, high_score_history, snapshot_time, symbol_groups = scan_symbols()
+    trade_evidence_history = load_trade_evidence_history()
+    capture_qualified_signals(
+        latest_results.values(),
+        history=trade_evidence_history,
+    )
+    refresh_option_positions_safely()
+    open_trade_prices, open_trade_quote_status = enrich_open_trade_prices(
+        trade_evidence_history,
+        latest_results,
+        cached_open_trade_quote,
+    )
+
+    active_page = render_card_navigation()
+
+    if active_page == "After Hours":
+        render_after_hours(latest_results)
+
+    elif active_page == "Opportunities":
+        render_top_opportunities(
+            latest_results,
+            high_score_history,
+            trade_evidence_history,
+        )
+        st.divider()
+        render_sector_strength(latest_results)
+        st.divider()
+        render_ranked_setup_table(latest_results)
+        with st.expander("Full Scanner"):
+            render_current_scanner(
+                latest_results,
+                symbol_groups,
+                trade_evidence_history,
+            )
+
+    elif active_page == "Trade Desk":
+        render_outcome_trade_journal(
             trade_evidence_history,
             latest_results,
-            cached_open_trade_quote,
+            open_trade_prices,
+            open_trade_quote_status,
         )
 
-        if active_page == "Trade Desk":
-            render_trade_desk_workspace(
-                latest_results,
-                trade_evidence_history,
-                open_trade_prices,
-                open_trade_quote_status,
-                high_score_history,
-                snapshot_time,
-                symbol_groups,
-            )
-        elif active_page == "Positions":
-            render_positions_workspace(
-                latest_results,
-                trade_evidence_history,
-                open_trade_prices,
-                open_trade_quote_status,
-            )
-        elif active_page == "Journal":
-            render_journal_workspace(
-                trade_evidence_history,
-                latest_results,
-                high_score_history,
-            )
+    elif active_page == "History":
+        render_coach_timeline()
+        st.divider()
+        render_recent_high_scores(high_score_history)
+        st.divider()
+        render_signal_outcomes()
+        st.divider()
+        render_trade_journal()
 
-    if active_page != "Trade Desk":
-        st.markdown(
-            '<div class="ob-helper-strip"><strong>Advisory only.</strong> '
-            "OptionBeacon is a decision-support and paper-trading workstation.</div>",
-            unsafe_allow_html=True,
-        )
-        render_build_footer(info=build_info)
+    elif active_page == "Tools":
+        render_scanner_health(latest_results, snapshot_time, symbol_groups)
+
+    elif active_page == "Developer Tools":
+        render_developer_tools()
+
+    st.markdown(
+        '<div class="notice notice-warning">Decision-support dashboard only. Not financial advice.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="footer-line">Option Beacon LLC - '
+        '<a href="https://option-beacon.com" target="_blank">option-beacon.com</a></div>',
+        unsafe_allow_html=True,
+    )
+    render_build_footer()
 
 
 try:
