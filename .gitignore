@@ -19,6 +19,7 @@ runtime_diagnostics.json
 runtime_diagnostics.json.tmp
 paper_option_positions.json
 paper_option_positions.json.tmp
+trade_plan_journal.jsonl
 optionbeacon_live_signals.csv
 latest_results.json
 high_score_history.csv

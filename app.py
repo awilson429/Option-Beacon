@@ -21,6 +21,7 @@ from developer_tools import (
     system_status,
     verify_finnhub_connection,
     verify_position_tracking,
+    verify_trade_plan_engine,
     verify_tradier_connection,
 )
 from finnhub_universe import (
@@ -116,6 +117,8 @@ from trade_desk_view_models import (
 from setup_intelligence import setup_intelligence
 from trade_management import coach_recommendation, trade_summary
 from trade_planning import trade_plan_view
+from trade_plan_engine import SUPPORTED_SYMBOLS, build_structured_trade_plan
+from trade_plan_ui import render_trade_plan_card
 from trade_replay import (
     DEFAULT_MAX_HOLD_CANDLES,
     DEFAULT_REPLAY_SYMBOLS,
@@ -1057,6 +1060,16 @@ def render_opportunity_card(
 
     with st.container(border=True):
         render_decision_summary(summary)
+        if result.get("symbol") in SUPPORTED_SYMBOLS:
+            try:
+                render_trade_plan_card(
+                    build_structured_trade_plan(
+                        result,
+                        evaluation_timestamp=eastern_now(),
+                    )
+                )
+            except Exception:
+                st.warning("Structured Trade Plan is temporarily unavailable.")
 
         render_historical_edge(result, trade_history or [], evidence=evidence)
         render_live_plan_trade_coach(
@@ -3289,6 +3302,16 @@ def render_live_session_opportunity(latest_results, trade_history):
             st.caption("WATCH — NOT ELIGIBLE")
             for reason in eligibility["reasons"]:
                 st.caption(reason)
+            if developing_result.get("symbol") in SUPPORTED_SYMBOLS:
+                try:
+                    render_trade_plan_card(
+                        build_structured_trade_plan(
+                            developing_result,
+                            evaluation_timestamp=eastern_now(),
+                        )
+                    )
+                except Exception:
+                    st.warning("Structured Trade Plan is temporarily unavailable.")
         return
 
     row = max(eligible_rows, key=lambda item: item.get("score") or 0)
@@ -3323,6 +3346,16 @@ def render_live_session_opportunity(latest_results, trade_history):
     summary["treatment"] = entry_presentation["treatment"]
     st.markdown("### Today's Best Trade")
     render_decision_summary(summary, compact=True)
+    if result.get("symbol") in SUPPORTED_SYMBOLS:
+        try:
+            render_trade_plan_card(
+                build_structured_trade_plan(
+                    result,
+                    evaluation_timestamp=eastern_now(),
+                )
+            )
+        except Exception:
+            st.warning("Structured Trade Plan is temporarily unavailable.")
     with st.expander("Why this trade?"):
         st.write(
             f"Historical Edge: {summary['historical_grade']} · "
@@ -3450,6 +3483,15 @@ def render_developer_tools():
             "Verify Position Tracking",
             "developer_verify_position_tracking",
             verify_position_tracking,
+        )
+    )
+
+    st.markdown("### Verify Trade Plan Engine")
+    render_result(
+        run_diagnostic(
+            "Verify Trade Plan Engine",
+            "developer_verify_trade_plan_engine",
+            verify_trade_plan_engine,
         )
     )
 

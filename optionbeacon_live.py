@@ -13,6 +13,7 @@ from finnhub_universe import (
 from optionbeacon_strategy import score_candle
 from signal_history import record_scanner_result, update_trade_outcomes_from_result
 from trade_planning import enrich_with_trade_plan
+from trade_plan_service import process_scanner_trade_plan
 from tradier_options import enrich_with_option_liquidity
 
 ETF_SYMBOLS = DEFAULT_ETF_SYMBOLS
@@ -124,6 +125,7 @@ def generate_signal(symbol):
     result = enrich_with_option_liquidity(result)
     result["last_candle_at"] = eastern_candle_timestamp(df.index[i])
     result["timestamp"] = eastern_timestamp()
+    process_scanner_trade_plan(result)
     update_trade_outcomes_from_result(result)
     record_scanner_result(result)
     return result
