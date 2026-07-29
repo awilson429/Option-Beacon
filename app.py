@@ -3527,24 +3527,24 @@ def render_developer_tools():
         else:
             render_result(latest_result)
 
-    st.markdown("#### Latest production option ledger entry")
-    latest_entry = latest_production_ledger_entry()
-    if latest_entry is None:
-        render_empty_state("No production option trade has been captured yet.")
-    else:
-        st.dataframe(
-            pd.DataFrame(
-                [
+    with st.expander("Latest production option ledger entry"):
+        latest_entry = latest_production_ledger_entry()
+        if latest_entry is None:
+            render_empty_state("No production option trade has been captured yet.")
+        else:
+            st.markdown(
+                compact_table_markup(
+                    [
                     {
                         "Field": key.replace("_", " ").title(),
                         "Value": value if value is not None else "—",
                     }
                     for key, value in latest_entry.items()
-                ]
-            ),
-            use_container_width=True,
-            hide_index=True,
-        )
+                    ],
+                    ("Field", "Value"),
+                ),
+                unsafe_allow_html=True,
+            )
 
 
 def render_trade_desk_workspace(
@@ -3837,7 +3837,7 @@ def render_journal_workspace(
         if rows:
             st.markdown(
                 compact_table_markup(
-                    rows,
+                    rows[:25],
                     (
                         "Signal Time",
                         "Symbol",
@@ -3851,6 +3851,10 @@ def render_journal_workspace(
                 ),
                 unsafe_allow_html=True,
             )
+            if len(rows) > 25:
+                st.caption(
+                    f"Showing the 25 newest rows. Use Filters to narrow {len(rows)} matching records."
+                )
         else:
             render_empty_state("No trade history matches the selected filters.")
         st.markdown('<span id="journal-analytics"></span>', unsafe_allow_html=True)

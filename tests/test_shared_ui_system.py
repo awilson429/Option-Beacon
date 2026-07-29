@@ -67,6 +67,7 @@ def test_journal_filters_and_diagnostics_are_collapsed_by_default():
         "Option Engine verification",
         "Position tracking verification",
         "Trade Plan Engine verification",
+        "Latest production option ledger entry",
     ):
         assert f'st.expander("{label}")' in developer
 
