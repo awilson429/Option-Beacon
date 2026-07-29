@@ -18,6 +18,7 @@ from trade_plan_ui import (
     render_developing_setup_summary,
     render_trade_plan_card,
     trade_level_grid_markup,
+    trade_plan_context_markup,
     trade_plan_display,
 )
 from signal_history import create_trade_record, serialize_trade_outcome
@@ -278,6 +279,17 @@ def test_trade_plan_css_wraps_core_values_without_ellipsis_or_clipping():
     assert "overflow-wrap:anywhere" in lowered.replace(" ", "")
     assert "repeat(4,minmax(0,1fr))" in lowered.replace(" ", "")
     assert "repeat(2,minmax(0,1fr))" in lowered.replace(" ", "")
+
+
+def test_trade_plan_context_prioritizes_why_missing_and_invalidation():
+    value = plan(relative_volume=0.2)
+    view = trade_plan_display(value)
+    markup = trade_plan_context_markup(view)
+
+    assert "Why This Setup" in markup
+    assert "What&#x27;s Missing" in markup
+    assert "Invalidation" in markup
+    assert "ob-plan-context" in markup
 
 
 def test_no_secret_values_are_serialized_or_displayed():

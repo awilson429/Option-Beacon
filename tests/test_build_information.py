@@ -111,5 +111,7 @@ def test_footer_renderer_uses_shared_low_priority_markup():
 def test_footer_appears_through_shared_app_layout():
     source = Path("app.py").read_text(encoding="utf-8")
 
-    assert source.count("render_build_footer()") == 1
-    assert source.index("render_build_footer()") > source.index("active_page = render_card_navigation()")
+    assert source.count("render_build_footer(info=build_info)") == 1
+    assert source.index("render_build_footer(info=build_info)") > source.index(
+        "active_page = render_sidebar_navigation("
+    )

@@ -68,12 +68,21 @@ TRADE_PLAN_CSS = """
 .ob-status-message strong {color:#e0c56f;}
 .ob-detail-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem 1.25rem;}
 .ob-detail-grid section {min-width:0;overflow-wrap:anywhere;}
+.ob-plan-context {
+  display:grid;gap:.65rem;grid-template-columns:repeat(3,minmax(0,1fr));margin:.65rem 0;
+}
+.ob-context-panel {
+  background:#10151b;border:1px solid #343c46;border-radius:10px;min-width:0;
+  padding:.65rem .75rem;overflow-wrap:anywhere;
+}
+.ob-context-panel strong {color:#d9dee4;font-size:.8rem;letter-spacing:.04em;text-transform:uppercase;}
+.ob-context-panel ul {color:#aeb7c2;font-size:.84rem;line-height:1.4;margin:.4rem 0 0;padding-left:1.05rem;}
 @media (max-width:1050px) {
   .ob-summary-grid {grid-template-columns:repeat(3,minmax(0,1fr));}
   .ob-level-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 @media (max-width:620px) {
-  .ob-summary-grid,.ob-level-grid,.ob-detail-grid {grid-template-columns:minmax(0,1fr);}
+  .ob-summary-grid,.ob-level-grid,.ob-detail-grid,.ob-plan-context {grid-template-columns:minmax(0,1fr);}
   .ob-summary-item,.ob-level-item {min-height:0;}
 }
 </style>
@@ -229,6 +238,21 @@ def _detail_list(items, fallback):
     return "<ul>" + "".join(f"<li>{escape(_text(item))}</li>" for item in values) + "</ul>"
 
 
+def trade_plan_context_markup(view):
+    """Render concise decision context while keeping full detail on demand."""
+    panels = (
+        ("Why This Setup", view.get("reasons_for_trade"), "No supporting reason is available."),
+        ("What's Missing", view.get("missing_requirements"), "No entry blocker remains."),
+        ("Invalidation", view.get("invalidation_conditions"), "No invalidation detail is available."),
+    )
+    body = "".join(
+        '<section class="ob-context-panel">'
+        f"<strong>{escape(title)}</strong>{_detail_list((items or [])[:5], fallback)}</section>"
+        for title, items, fallback in panels
+    )
+    return f'<div class="ob-plan-context">{body}</div>'
+
+
 def render_trade_plan_card(plan: TradePlan, st_module=None):
     if st_module is None:
         import streamlit as st_module
@@ -242,7 +266,8 @@ def render_trade_plan_card(plan: TradePlan, st_module=None):
         unsafe_allow_html=True,
     )
     st_module.markdown(trade_level_grid_markup(view), unsafe_allow_html=True)
-    with st_module.expander("Trade Plan Details"):
+    st_module.markdown(trade_plan_context_markup(view), unsafe_allow_html=True)
+    with st_module.expander("View Full Trade Plan"):
         detail_html = (
             '<div class="ob-detail-grid">'
             f'<section><strong>Why This Setup</strong>{_detail_list(view["reasons_for_trade"], "None identified")}</section>'
