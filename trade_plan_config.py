@@ -41,6 +41,10 @@ class TradePlanConfig:
     poor_risk_reward_penalty: float = 20.0
     stale_data_penalty: float = 25.0
     trend_conflict_penalty: float = 15.0
+    volume_confirmation_penalty: float = 10.0
+    vwap_conflict_penalty: float = 5.0
+    ema_conflict_penalty: float = 5.0
+    conflicting_signal_penalty: float = 10.0
 
     def validate(self) -> list[str]:
         errors = []

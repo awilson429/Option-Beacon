@@ -356,6 +356,26 @@ def build_structured_trade_plan(
         confidence -= config.stale_data_penalty
     if "Trend alignment" in missing:
         confidence -= config.trend_conflict_penalty
+    if relative_volume < config.volume_confirmation_threshold:
+        confidence -= config.volume_confirmation_penalty
+    vwap = _number(result, "vwap", default=price)
+    ema9 = _number(result, "ema9", "ema20", default=price)
+    ema21 = _number(result, "ema21", "ema20", default=price)
+    if (direction == "Bullish" and price < vwap) or (
+        direction == "Bearish" and price > vwap
+    ):
+        confidence -= config.vwap_conflict_penalty
+    if (direction == "Bullish" and ema9 < ema21) or (
+        direction == "Bearish" and ema9 > ema21
+    ):
+        confidence -= config.ema_conflict_penalty
+    momentum_state = str(
+        result.get("momentum") or result.get("momentum_state") or ""
+    ).lower()
+    if any(word in momentum_state for word in ("weak", "exhaust", "fade")):
+        confidence -= config.weakening_momentum_penalty
+    if result.get("conflicting_signal"):
+        confidence -= config.conflicting_signal_penalty
     confidence = round(max(0.0, min(100.0, confidence)), 1)
     if confidence < config.minimum_confidence and status == PlanStatus.READY:
         status = PlanStatus.WAIT

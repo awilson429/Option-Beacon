@@ -224,6 +224,27 @@ def test_confidence_penalties_are_bounded_and_transparent():
     assert 0 <= blocked.confidence_score < clean.confidence_score <= 100
 
 
+def test_confidence_penalizes_volume_vwap_ema_momentum_and_conflicts():
+    clean = build_structured_trade_plan(market(confidence=95), evaluation_timestamp=NOW)
+    penalized = build_structured_trade_plan(
+        market(
+            confidence=95,
+            relative_volume=0.5,
+            price=499,
+            confirmation_reached=False,
+            vwap=500,
+            ema9=499,
+            ema21=500,
+            momentum="weakening",
+            conflicting_signal=True,
+        ),
+        evaluation_timestamp=NOW,
+    )
+
+    assert penalized.confidence_score < clean.confidence_score
+    assert penalized.confidence_score == 47
+
+
 def test_distance_metrics_are_explicit():
     plan = build_structured_trade_plan(market(), evaluation_timestamp=NOW)
 
