@@ -118,7 +118,7 @@ from setup_intelligence import setup_intelligence
 from trade_management import coach_recommendation, trade_summary
 from trade_planning import trade_plan_view
 from trade_plan_engine import SUPPORTED_SYMBOLS, build_structured_trade_plan
-from trade_plan_ui import render_trade_plan_card
+from trade_plan_ui import render_developing_setup_summary, render_trade_plan_card
 from trade_replay import (
     DEFAULT_MAX_HOLD_CANDLES,
     DEFAULT_REPLAY_SYMBOLS,
@@ -3262,46 +3262,8 @@ def render_live_session_opportunity(latest_results, trade_history):
             )
             developing_result = developing["result"]
             eligibility = scanner_entry_eligibility(developing_result)
-            plan = developing_result.get("trade_plan") or {}
             st.markdown("#### Best Developing Setup")
-            developing_columns = st.columns(6)
-            developing_columns[0].metric(
-                "Symbol",
-                developing_result.get("symbol") or "—",
-            )
-            developing_columns[1].metric(
-                "Direction",
-                plan.get("direction") or developing_result.get("bias") or "—",
-            )
-            developing_columns[2].metric(
-                "Setup",
-                plan.get("setup_type") or plan.get("setup") or "—",
-            )
-            developing_columns[3].metric(
-                "Confidence",
-                format_metric(
-                    developing_result.get("confidence"),
-                    percentage=True,
-                    decimals=0,
-                ),
-            )
-            developing_columns[4].metric(
-                "Timing",
-                developing_result.get("entry_timing")
-                or developing_result.get("timing_label")
-                or "—",
-            )
-            developing_columns[5].metric(
-                "Entry Trigger",
-                format_evidence_metric(
-                    plan.get("trigger_price")
-                    or plan.get("entry_price")
-                    or plan.get("entry_zone_low"),
-                ),
-            )
-            st.caption("WATCH — NOT ELIGIBLE")
-            for reason in eligibility["reasons"]:
-                st.caption(reason)
+            render_developing_setup_summary(developing_result, eligibility)
             if developing_result.get("symbol") in SUPPORTED_SYMBOLS:
                 try:
                     render_trade_plan_card(

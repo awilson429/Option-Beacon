@@ -11,7 +11,15 @@ from trade_plan_journal import (
 )
 from trade_plan_lifecycle import update_trade_plan
 from trade_plan_models import PlanStatus
-from trade_plan_ui import render_trade_plan_card, trade_plan_display
+from trade_plan_ui import (
+    TRADE_PLAN_CSS,
+    compact_summary_markup,
+    developing_setup_display,
+    render_developing_setup_summary,
+    render_trade_plan_card,
+    trade_level_grid_markup,
+    trade_plan_display,
+)
 from signal_history import create_trade_record, serialize_trade_outcome
 
 
@@ -97,10 +105,6 @@ def test_wait_ready_active_and_closed_display_shapes():
 
 
 def test_wait_ready_active_and_closed_cards_render():
-    class Column:
-        def metric(self, *_args, **_kwargs):
-            return None
-
     class Expander:
         def __enter__(self):
             return self
@@ -115,17 +119,9 @@ def test_wait_ready_active_and_closed_cards_render():
         def markdown(cls, value, **_kwargs):
             cls.calls.append(value)
 
-        @staticmethod
-        def columns(count):
-            return [Column() for _ in range(count)]
-
-        @staticmethod
-        def caption(*_args, **_kwargs):
-            return None
-
-        @staticmethod
-        def write(*_args, **_kwargs):
-            return None
+        @classmethod
+        def write(cls, value, **_kwargs):
+            cls.calls.append(value)
 
         @staticmethod
         def expander(*_args, **_kwargs):
@@ -144,6 +140,144 @@ def test_wait_ready_active_and_closed_cards_render():
         assert rendered["status"] == value.status.value
 
     assert any("ob-plan-card" in call for call in FakeStreamlit.calls)
+
+
+def test_primary_trade_values_render_in_full_without_metric_clipping():
+    value = plan()
+    value.setup_name = "Bullish momentum continuation above a multi-session resistance level"
+    view = trade_plan_display(value)
+    markup = trade_level_grid_markup(view)
+    header_streamlit = type(
+        "Capture",
+        (),
+        {
+            "calls": [],
+            "markdown": classmethod(
+                lambda cls, text, **_kwargs: cls.calls.append(text)
+            ),
+            "expander": staticmethod(
+                lambda *_args, **_kwargs: type(
+                    "Context",
+                    (),
+                    {
+                        "__enter__": lambda self: self,
+                        "__exit__": lambda self, *_args: False,
+                    },
+                )()
+            ),
+            "write": staticmethod(lambda *_args, **_kwargs: None),
+        },
+    )
+
+    render_trade_plan_card(value, header_streamlit)
+    rendered = "\n".join(header_streamlit.calls)
+
+    for expected in (
+        value.direction,
+        value.setup_name,
+        view["entry_zone"],
+        view["confirmation_level"],
+        view["maximum_entry"],
+        view["initial_stop"],
+        view["target_1"],
+        view["target_2"],
+        view["risk_reward"],
+        view["confidence"],
+    ):
+        assert expected in rendered or expected in markup
+
+
+def test_developing_summary_preserves_full_setup_timing_and_trigger():
+    result = {
+        "symbol": "SPY",
+        "bias": "Bearish",
+        "confidence": 54,
+        "entry_timing": "Too Early — confirmation candle has not closed",
+        "entry_timing_reason": "Wait for the full confirmation candle to close above volume.",
+        "trade_plan": {
+            "direction": "Bearish",
+            "option_bias": "PUT",
+            "setup_type": "Bearish breakdown beneath a long multi-session support level",
+            "trigger_price": 499.125,
+        },
+    }
+    view = developing_setup_display(
+        result,
+        {"eligible": False, "status": "WATCH", "reasons": ["Confidence is below 65%."]},
+    )
+    markup = compact_summary_markup(
+        (
+            ("Direction / Bias", view["direction_option"]),
+            ("Setup", view["setup"]),
+            ("Timing", view["timing"]),
+        )
+    )
+
+    assert "Bearish PUT" in markup
+    assert result["trade_plan"]["setup_type"] in markup
+    assert result["entry_timing"] in markup
+    assert view["entry_trigger"] == "$499.12"
+
+
+def test_developing_summary_renderer_includes_status_reason_timing_and_trigger():
+    class Capture:
+        calls = []
+
+        @classmethod
+        def markdown(cls, text, **_kwargs):
+            cls.calls.append(text)
+
+    result = {
+        "symbol": "QQQ",
+        "bias": "Bullish",
+        "confidence": 64,
+        "entry_timing": "Wait for confirmation",
+        "entry_timing_reason": "Price has not confirmed the trigger.",
+        "trade_plan": {
+            "direction": "Bullish",
+            "setup_type": "Bullish breakout",
+            "trigger_price": 601.5,
+        },
+    }
+    render_developing_setup_summary(
+        result,
+        {"eligible": False, "status": "WAIT", "reasons": ["Confidence is below 65%."]},
+        Capture,
+    )
+    rendered = "\n".join(Capture.calls)
+
+    assert "WAIT — NOT ELIGIBLE" in rendered
+    assert "Confidence is below 65%." in rendered
+    assert "Price has not confirmed the trigger." in rendered
+    assert "Entry trigger: $601.50" in rendered
+
+
+def test_all_primary_plan_states_have_text_and_treatment():
+    value = plan()
+    for status in (PlanStatus.WATCH, PlanStatus.READY, PlanStatus.WAIT, PlanStatus.ACTIVE):
+        value.status = status
+        view = trade_plan_display(value)
+        assert view["status"] == status.value
+        assert f"ob-plan-{view['treatment']}" in (
+            f"ob-plan-{view['treatment']}"
+        )
+
+
+def test_missing_optional_grid_values_show_safe_placeholder():
+    markup = trade_level_grid_markup({})
+
+    assert markup.count("—") == 8
+
+
+def test_trade_plan_css_wraps_core_values_without_ellipsis_or_clipping():
+    lowered = TRADE_PLAN_CSS.lower()
+
+    assert "text-overflow" not in lowered
+    assert "overflow:hidden" not in lowered.replace(" ", "")
+    assert "white-space:normal" in lowered.replace(" ", "")
+    assert "overflow-wrap:anywhere" in lowered.replace(" ", "")
+    assert "repeat(4,minmax(0,1fr))" in lowered.replace(" ", "")
+    assert "repeat(2,minmax(0,1fr))" in lowered.replace(" ", "")
 
 
 def test_no_secret_values_are_serialized_or_displayed():

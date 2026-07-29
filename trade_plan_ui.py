@@ -1,5 +1,6 @@
 """Pure formatting and Streamlit rendering for structured Trade Plans."""
 
+from datetime import datetime
 from html import escape
 import math
 
@@ -16,6 +17,68 @@ STATUS_TREATMENTS = {
     PlanStatus.CLOSED: "closed",
 }
 
+TRADE_PLAN_CSS = """
+<style>
+.ob-summary-grid,.ob-level-grid {
+  display:grid; gap:.65rem; margin:.65rem 0;
+}
+.ob-summary-grid {grid-template-columns:repeat(6,minmax(0,1fr));}
+.ob-level-grid {grid-template-columns:repeat(4,minmax(0,1fr));}
+.ob-summary-item,.ob-level-item {
+  min-width:0; min-height:4.5rem; box-sizing:border-box;
+  border:1px solid #39414b; border-radius:10px; padding:.7rem .8rem;
+  background:#11161c; color:#f2f5f7;
+  white-space:normal; overflow:visible; overflow-wrap:anywhere; word-break:normal;
+}
+.ob-field-label {
+  color:#aeb7c2; font-size:clamp(.78rem,1vw,.9rem); font-weight:700;
+  letter-spacing:.035em; line-height:1.25; text-transform:uppercase;
+}
+.ob-field-value {
+  margin-top:.28rem; color:#f7f8fa; font-size:clamp(1.15rem,2vw,1.7rem);
+  font-weight:700; line-height:1.2; white-space:normal;
+  overflow:visible; overflow-wrap:anywhere; word-break:normal;
+}
+.ob-summary-item .ob-field-value {font-size:clamp(1rem,1.5vw,1.35rem);}
+.ob-plan-card {
+  border:1px solid #39414b; border-radius:12px; padding:.72rem .9rem;
+  background:#11161c; margin:.75rem 0 .5rem;
+}
+.ob-plan-heading {
+  color:#f7f8fa; font-size:clamp(1.15rem,1.8vw,1.5rem); font-weight:750;
+  line-height:1.3; white-space:normal; overflow-wrap:anywhere;
+}
+.ob-plan-status {
+  margin-bottom:.2rem; font-size:.8rem; font-weight:800;
+  letter-spacing:.08em; line-height:1.3; text-transform:uppercase;
+}
+.ob-plan-ready,.ob-plan-active {border-color:#5abf84;}
+.ob-plan-ready .ob-plan-status,.ob-plan-active .ob-plan-status {color:#75d59d;}
+.ob-plan-wait,.ob-plan-watch {border-color:#c8a84e;}
+.ob-plan-wait .ob-plan-status,.ob-plan-watch .ob-plan-status {color:#e0c56f;}
+.ob-plan-invalidated,.ob-plan-expired {border-color:#d65f5f;}
+.ob-plan-invalidated .ob-plan-status,.ob-plan-expired .ob-plan-status {color:#ef8181;}
+.ob-plan-closed {border-color:#68717d;}
+.ob-plan-closed .ob-plan-status {color:#b8c0c9;}
+.ob-status-message {
+  border-left:3px solid #c8a84e; margin:.45rem 0 .8rem; padding:.45rem .75rem;
+  background:#17191b; color:#dce1e6; font-size:clamp(.88rem,1.2vw,1rem);
+  line-height:1.45; white-space:normal; overflow-wrap:anywhere;
+}
+.ob-status-message strong {color:#e0c56f;}
+.ob-detail-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem 1.25rem;}
+.ob-detail-grid section {min-width:0;overflow-wrap:anywhere;}
+@media (max-width:1050px) {
+  .ob-summary-grid {grid-template-columns:repeat(3,minmax(0,1fr));}
+  .ob-level-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media (max-width:620px) {
+  .ob-summary-grid,.ob-level-grid,.ob-detail-grid {grid-template-columns:minmax(0,1fr);}
+  .ob-summary-item,.ob-level-item {min-height:0;}
+}
+</style>
+"""
+
 
 def _value(value, money=False):
     try:
@@ -27,12 +90,106 @@ def _value(value, money=False):
     return f"${number:.2f}" if money else f"{number:.2f}"
 
 
+def _text(value):
+    return str(value).strip() if value not in (None, "") else "—"
+
+
+def _field_markup(label, value, css_class):
+    return (
+        f'<div class="{css_class}">'
+        f'<div class="ob-field-label">{escape(_text(label))}</div>'
+        f'<div class="ob-field-value">{escape(_text(value))}</div>'
+        "</div>"
+    )
+
+
+def compact_summary_markup(fields):
+    """Return a responsive summary strip without Streamlit metric truncation."""
+    items = "".join(_field_markup(label, value, "ob-summary-item") for label, value in fields)
+    return f'<div class="ob-summary-grid">{items}</div>'
+
+
+def trade_level_grid_markup(view):
+    """Return the primary trade levels in a responsive, wrapping grid."""
+    fields = (
+        ("Entry Zone", view.get("entry_zone")),
+        ("Confirmation", view.get("confirmation_level")),
+        ("Maximum Entry", view.get("maximum_entry")),
+        ("Initial Stop", view.get("initial_stop")),
+        ("Target 1", view.get("target_1")),
+        ("Target 2", view.get("target_2")),
+        ("Risk / Reward", view.get("risk_reward")),
+        ("Confidence", view.get("confidence")),
+    )
+    items = "".join(_field_markup(label, value, "ob-level-item") for label, value in fields)
+    return f'<div class="ob-level-grid">{items}</div>'
+
+
+def developing_setup_display(result, eligibility):
+    """Build the compact, presentation-only summary for a developing setup."""
+    plan = result.get("trade_plan") or {}
+    direction = plan.get("direction") or result.get("bias")
+    option_bias = plan.get("option_bias") or (
+        "CALL" if direction == "Bullish" else "PUT" if direction == "Bearish" else None
+    )
+    confidence = result.get("confidence")
+    try:
+        confidence_text = f"{float(confidence):.0f}%" if math.isfinite(float(confidence)) else "—"
+    except (TypeError, ValueError):
+        confidence_text = "—"
+    reasons = list(eligibility.get("reasons") or [])
+    return {
+        "symbol": _text(result.get("symbol")),
+        "direction_option": " ".join(value for value in (_text(direction), _text(option_bias)) if value != "—") or "—",
+        "setup": _text(plan.get("setup_type") or plan.get("setup")),
+        "status": _text(eligibility.get("status") or "WATCH"),
+        "confidence": confidence_text,
+        "timing": _text(result.get("entry_timing") or result.get("timing_label")),
+        "entry_trigger": _value(
+            plan.get("trigger_price") or plan.get("entry_price") or plan.get("entry_zone_low"),
+            money=True,
+        ),
+        "blocking_reason": reasons[0] if reasons else "Entry requirements are still developing.",
+        "timing_explanation": _text(
+            result.get("entry_timing_reason") or result.get("timing_explanation")
+        ),
+    }
+
+
+def render_developing_setup_summary(result, eligibility, st_module=None):
+    if st_module is None:
+        import streamlit as st_module
+    view = developing_setup_display(result, eligibility)
+    fields = (
+        ("Symbol", view["symbol"]),
+        ("Direction / Bias", view["direction_option"]),
+        ("Setup", view["setup"]),
+        ("Status", view["status"]),
+        ("Confidence", view["confidence"]),
+        ("Timing", view["timing"]),
+    )
+    st_module.markdown(TRADE_PLAN_CSS, unsafe_allow_html=True)
+    st_module.markdown(compact_summary_markup(fields), unsafe_allow_html=True)
+    timing = (
+        f'<br><span>Timing: {escape(view["timing_explanation"])}</span>'
+        if view["timing_explanation"] != "—"
+        else ""
+    )
+    st_module.markdown(
+        '<div class="ob-status-message">'
+        f'<strong>{escape(view["status"])} — NOT ELIGIBLE</strong><br>'
+        f'{escape(view["blocking_reason"])}{timing}<br>'
+        f'<span>Entry trigger: {escape(view["entry_trigger"])}</span>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    return view
+
+
 def trade_plan_display(plan: TradePlan) -> dict:
     hold_minutes = None
     entry_timestamp = plan.current_status.get("entry_timestamp")
     if entry_timestamp:
-        from datetime import datetime
-
         entered = datetime.fromisoformat(str(entry_timestamp).replace("Z", "+00:00"))
         hold_minutes = max(0.0, (plan.market_timestamp - entered).total_seconds() / 60)
     return {
@@ -67,67 +224,39 @@ def trade_plan_display(plan: TradePlan) -> dict:
     }
 
 
+def _detail_list(items, fallback):
+    values = items or [fallback]
+    return "<ul>" + "".join(f"<li>{escape(_text(item))}</li>" for item in values) + "</ul>"
+
+
 def render_trade_plan_card(plan: TradePlan, st_module=None):
     if st_module is None:
         import streamlit as st_module
     view = trade_plan_display(plan)
-    st_module.markdown(
-        """
-        <style>
-        .ob-plan-card {border:1px solid #39414b;border-radius:12px;padding:1rem;background:#11161c;margin:.75rem 0;}
-        .ob-plan-status {font-size:.78rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;}
-        .ob-plan-ready,.ob-plan-active {border-color:#5abf84;}
-        .ob-plan-wait,.ob-plan-watch {border-color:#c8a84e;}
-        .ob-plan-invalidated,.ob-plan-expired {border-color:#d65f5f;}
-        .ob-plan-closed {border-color:#68717d;}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    st_module.markdown(TRADE_PLAN_CSS, unsafe_allow_html=True)
     st_module.markdown(
         f'<div class="ob-plan-card ob-plan-{view["treatment"]}">'
         f'<div class="ob-plan-status">{escape(view["status"])}</div>'
-        f'<strong>{escape(view["symbol"])} · {escape(view["direction"])} · '
-        f'{escape(view["option_bias"])}</strong><br>{escape(view["setup_name"])}</div>',
+        f'<div class="ob-plan-heading">{escape(view["symbol"])} · {escape(view["direction"])} · '
+        f'{escape(view["option_bias"])} · {escape(view["setup_name"])}</div></div>',
         unsafe_allow_html=True,
     )
-    columns = st_module.columns(4)
-    fields = (
-        ("Entry Zone", view["entry_zone"]),
-        ("Confirmation", view["confirmation_level"]),
-        ("Maximum Entry", view["maximum_entry"]),
-        ("Initial Stop", view["initial_stop"]),
-        ("Target 1", view["target_1"]),
-        ("Target 2", view["target_2"]),
-        ("Risk / Reward", view["risk_reward"]),
-        ("Confidence", view["confidence"]),
-    )
-    for index, (label, value) in enumerate(fields):
-        columns[index % 4].metric(label, value)
-    st_module.caption(
-        f"Late-entry risk: {view['late_entry_risk']} · "
-        f"Current hold: {view['hold_time']} · Maximum hold: {view['maximum_hold']} · "
-        f"Signal: {view['signal_time']}"
-    )
-    st_module.write(f"**Breakeven:** {view['breakeven_rule']}")
-    st_module.write(f"**Trailing stop:** {view['trailing_rule']}")
-    if plan.status in {PlanStatus.WAIT, PlanStatus.WATCH}:
-        st_module.markdown("**What needs to happen next**")
-        for item in view["missing_requirements"] or ["Setup confirmation is still developing"]:
-            st_module.write(f"- {item}")
-        st_module.markdown("**Activate if**")
-        for item in view["activation_requirements"] or ["All confirmation and risk requirements are satisfied"]:
-            st_module.write(f"- {item}")
+    st_module.markdown(trade_level_grid_markup(view), unsafe_allow_html=True)
     with st_module.expander("Trade Plan Details"):
-        for title, items in (
-            ("Why now", view["reasons_for_trade"]),
-            ("Reasons to avoid", view["reasons_to_avoid"]),
-            ("Invalidate if", view["invalidation_conditions"]),
-        ):
-            st_module.markdown(f"**{title}**")
-            for item in items or ["None identified"]:
-                st_module.write(f"- {item}")
-        st_module.caption(f"Latest lifecycle event: {view['latest_event']}")
+        detail_html = (
+            '<div class="ob-detail-grid">'
+            f'<section><strong>Why This Setup</strong>{_detail_list(view["reasons_for_trade"], "None identified")}</section>'
+            f'<section><strong>What Is Missing</strong>{_detail_list(view["missing_requirements"], "Nothing required")}</section>'
+            f'<section><strong>Activation Conditions</strong>{_detail_list(view["activation_requirements"], "All requirements are satisfied")}</section>'
+            f'<section><strong>Invalidation</strong>{_detail_list(view["invalidation_conditions"], "None identified")}</section>'
+            f'<section><strong>Lifecycle</strong><p>Latest event: {escape(view["latest_event"])}<br>'
+            f'Current hold: {escape(view["hold_time"])}<br>Maximum hold: {escape(view["maximum_hold"])}</p></section>'
+            f'<section><strong>Diagnostics</strong><p>Late-entry risk: {escape(view["late_entry_risk"])}<br>'
+            f'Signal: {escape(view["signal_time"])}<br>{escape(view["breakeven_rule"])}<br>'
+            f'{escape(view["trailing_rule"])}</p></section>'
+            "</div>"
+        )
+        st_module.markdown(detail_html, unsafe_allow_html=True)
         if plan.status == PlanStatus.CLOSED:
             st_module.write(f"**Final outcome:** {view['final_outcome']}")
     return view
