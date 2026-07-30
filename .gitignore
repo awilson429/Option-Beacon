@@ -37,3 +37,4 @@ live_preview.py
 .DS_Store
 Thumbs.db
 .analysis-cache/
+experiment_001_shadow.jsonl

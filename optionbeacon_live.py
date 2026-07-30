@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import time
+import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -25,6 +26,7 @@ INTERVAL = "5m"
 DATA_PERIODS = ["5d", "10d", "1mo"]
 
 SCAN_SECONDS = 300  # 5 minutes
+LOGGER = logging.getLogger(__name__)
 
 
 def eastern_timestamp():
@@ -128,6 +130,16 @@ def generate_signal(symbol):
     process_scanner_trade_plan(result)
     update_trade_outcomes_from_result(result)
     record_scanner_result(result)
+    try:
+        from false_breakout_experiment import record_live_shadow
+
+        record_live_shadow(result, df, i)
+    except Exception as exc:
+        LOGGER.warning(
+            "Experiment 001 shadow evaluation failed for %s: %s",
+            symbol,
+            exc,
+        )
     return result
 
 
