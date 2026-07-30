@@ -20,8 +20,14 @@ must use PostgreSQL through `DATABASE_URL`.
   state instead of local SQLite fallback.
 - `FINNHUB_API_KEY`: existing quote/news provider credential.
 - `TRADIER_ACCESS_TOKEN`: existing options provider credential.
+- `OPTIONBEACON_DB_CONNECT_TIMEOUT_SECONDS`: optional PostgreSQL connection
+  timeout from 1 through 60 seconds; defaults to 10.
 
 Do not commit values. The application sanitizes repository/provider errors.
+Worker commands read `DATABASE_URL` from the process environment only. The
+Streamlit dashboard resolves it from the environment or `st.secrets` and passes
+the value explicitly into the repository factory. CLI commands never use
+Streamlit secrets as an implicit database configuration fallback.
 
 ## Local development
 

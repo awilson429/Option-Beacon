@@ -12,6 +12,7 @@ from ui.theme import configure_page
 
 from after_hours import after_hours_focus_rows, fetch_after_hours_briefing
 from build_information import build_information, render_build_footer
+from dashboard_storage_config import dashboard_database_url
 from developer_tools import (
     latest_production_ledger_entry,
     load_latest_diagnostic,
@@ -862,7 +863,8 @@ def cached_after_hours_briefing():
 def load_trade_evidence_history(trade_state=None):
     """Load authoritative records without converting storage failures to empty data."""
     state = trade_state or authoritative_trade_state(
-        branch=build_information()["branch"]
+        branch=build_information()["branch"],
+        database_url=dashboard_database_url(),
     )
     return list(state["records"])
 
@@ -3567,7 +3569,8 @@ def main():
     render_header()
     latest_results, high_score_history, snapshot_time, symbol_groups = scan_symbols()
     trade_state = authoritative_trade_state(
-        branch=build_information()["branch"]
+        branch=build_information()["branch"],
+        database_url=dashboard_database_url(),
     )
     trade_evidence_history = load_trade_evidence_history(trade_state)
     capture_qualified_signals(

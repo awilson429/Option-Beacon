@@ -43,6 +43,7 @@ Exit codes:
    - `OPTIONBEACON_ENVIRONMENT=production`
    - `OPTIONBEACON_SCAN_SECONDS=300` (or another validated 30-3600 value)
    - `OPTIONBEACON_SCANNER_ID=optionbeacon-production`
+   - `OPTIONBEACON_DB_CONNECT_TIMEOUT_SECONDS=10` (optional, valid range 1-60)
    - `FINNHUB_API_KEY`
    - `TRADIER_ACCESS_TOKEN`
 6. Omit public networking. The worker opens no HTTP port.

@@ -4,6 +4,8 @@ import sqlite3
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from trade_repository import database_connect_timeout_seconds
+
 
 DB_FILE = "optionbeacon_trades.db"
 
@@ -61,7 +63,10 @@ def connect(db_file=DB_FILE):
             ) from exc
 
         url = database_url()
-        kwargs = {"cursor_factory": RealDictCursor}
+        kwargs = {
+            "cursor_factory": RealDictCursor,
+            "connect_timeout": database_connect_timeout_seconds(),
+        }
         if "sslmode=" not in url:
             kwargs["sslmode"] = "require"
 

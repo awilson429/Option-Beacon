@@ -25,9 +25,6 @@ from trade_repository import (
     parse_utc,
     utc_now,
 )
-from trade_storage import database_url as configured_database_url
-
-
 LOGGER = logging.getLogger(__name__)
 DEFAULT_STALE_MINUTES = 15
 
@@ -49,7 +46,7 @@ def repository_for_runtime(
         explicitly_required or production_environment or branch == "main"
     )
     resolved_database_url = (
-        configured_database_url()
+        os.getenv("DATABASE_URL", "").strip()
         if database_url is None
         else database_url
     )

@@ -56,7 +56,7 @@ def failure_backoff_seconds(consecutive_failures, interval_seconds):
 
 
 def startup_record(repository, interval_seconds, scanner_id):
-    build = build_information()
+    build = build_information(streamlit_version="not-applicable")
     return {
         "event": "worker_start",
         "application_version": build["commit"],

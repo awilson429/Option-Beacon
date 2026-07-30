@@ -1,13 +1,17 @@
 import json
 import os
+import sys
 import threading
+import time
+import traceback
+from types import SimpleNamespace
 from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
 
 from optionbeacon.worker import run as worker
-from optionbeacon.worker.healthcheck import check_health
+from optionbeacon.worker.healthcheck import check_health, main as healthcheck_main
 from optionbeacon.worker.scan_once import main as scan_once_main
 from reliability_dashboard import reliability_status_model
 from trade_repository import RepositoryUnavailable, TradeRepository
@@ -78,7 +82,7 @@ def test_broken_production_configuration_never_falls_back(monkeypatch, tmp_path)
     assert "No open trades" not in model["summary"]
 
 
-def test_streamlit_and_worker_configuration_share_repository_factory(monkeypatch):
+def test_worker_repository_configuration_uses_environment_only(monkeypatch):
     captured = {}
 
     class FakeRepository:
@@ -91,10 +95,8 @@ def test_streamlit_and_worker_configuration_share_repository_factory(monkeypatch
                 }
             )
 
-    monkeypatch.setattr(
-        trade_state_service,
-        "configured_database_url",
-        lambda: "postgresql://configured-without-printing",
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql://configured-without-printing"
     )
     monkeypatch.setattr(trade_state_service, "TradeRepository", FakeRepository)
     repository_for_runtime(branch="main")
@@ -103,11 +105,92 @@ def test_streamlit_and_worker_configuration_share_repository_factory(monkeypatch
     assert captured["require_durable"] is True
 
 
-def test_scan_once_returns_nonzero_when_durable_storage_missing(monkeypatch):
+def test_scan_once_returns_quickly_when_durable_storage_missing(
+    monkeypatch, tmp_path
+):
+    class SecretsThatMustNotBeRead(dict):
+        def get(self, *_args, **_kwargs):
+            raise AssertionError("CLI attempted to read Streamlit secrets")
+
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("OPTIONBEACON_REQUIRE_DURABLE_STORAGE", "true")
     monkeypatch.setenv("OPTIONBEACON_ENVIRONMENT", "production")
+    monkeypatch.setitem(
+        sys.modules,
+        "streamlit",
+        SimpleNamespace(secrets=SecretsThatMustNotBeRead()),
+    )
+    monkeypatch.chdir(tmp_path)
+
+    started = time.monotonic()
     assert scan_once_main() == 1
+    assert time.monotonic() - started < 5
+    assert not (tmp_path / "optionbeacon_state.db").exists()
+
+
+def test_worker_factory_does_not_read_streamlit_database_secret(monkeypatch, tmp_path):
+    class SecretsThatMustNotBeRead(dict):
+        def get(self, *_args, **_kwargs):
+            raise AssertionError("CLI attempted to read Streamlit secrets")
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("OPTIONBEACON_REQUIRE_DURABLE_STORAGE", "true")
+    monkeypatch.setitem(
+        sys.modules,
+        "streamlit",
+        SimpleNamespace(
+            secrets=SecretsThatMustNotBeRead(
+                {"DATABASE_URL": "postgresql://must-not-be-used"}
+            )
+        ),
+    )
+
+    with pytest.raises(RepositoryUnavailable):
+        repository_for_runtime(db_file=tmp_path / "must-not-exist.db")
+    assert not (tmp_path / "must-not-exist.db").exists()
+
+
+def test_all_cli_entrypoints_ignore_streamlit_database_secret(monkeypatch, tmp_path):
+    class SecretsThatMustNotBeRead(dict):
+        def get(self, *_args, **_kwargs):
+            raise AssertionError("CLI attempted to read Streamlit secrets")
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("OPTIONBEACON_REQUIRE_DURABLE_STORAGE", "true")
+    monkeypatch.setenv("OPTIONBEACON_ENVIRONMENT", "production")
+    monkeypatch.setitem(
+        sys.modules,
+        "streamlit",
+        SimpleNamespace(
+            secrets=SecretsThatMustNotBeRead(
+                {"DATABASE_URL": "postgresql://must-not-be-used"}
+            )
+        ),
+    )
+    monkeypatch.chdir(tmp_path)
+
+    started = time.monotonic()
+    assert scan_once_main() == 1
+    assert worker.main(["--max-runs", "0"]) == 2
+    assert healthcheck_main() == 2
+    assert time.monotonic() - started < 5
+    assert not (tmp_path / "optionbeacon_state.db").exists()
+
+
+def test_dashboard_can_explicitly_resolve_streamlit_database_url(monkeypatch):
+    from dashboard_storage_config import dashboard_database_url
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    fake_streamlit = SimpleNamespace(
+        secrets={"DATABASE_URL": "postgresql://dashboard-explicit"}
+    )
+
+    assert (
+        dashboard_database_url(st_module=fake_streamlit)
+        == "postgresql://dashboard-explicit"
+    )
+    source = open("app.py", encoding="utf-8").read()
+    assert "database_url=dashboard_database_url()" in source
 
 
 def test_invalid_database_error_does_not_disclose_url(monkeypatch, tmp_path):
@@ -122,6 +205,71 @@ def test_invalid_database_error_does_not_disclose_url(monkeypatch, tmp_path):
     assert state["storage_state"] == "UNAVAILABLE"
     assert secret_url not in encoded
     assert "super-secret" not in encoded
+    assert not (tmp_path / "no-fallback.db").exists()
+
+
+def test_postgresql_connection_uses_bounded_timeout_and_sanitized_error(
+    monkeypatch, tmp_path
+):
+    import psycopg2
+
+    captured = {}
+    secret_url = "postgresql://user:super-secret@unreachable.invalid/db"
+
+    def fail_connect(_url, **kwargs):
+        captured.update(kwargs)
+        raise psycopg2.OperationalError("connection failed")
+
+    monkeypatch.setattr(psycopg2, "connect", fail_connect)
+    monkeypatch.setenv("OPTIONBEACON_DB_CONNECT_TIMEOUT_SECONDS", "3")
+    started = time.monotonic()
+    with pytest.raises(RepositoryUnavailable) as error:
+        TradeRepository(
+            tmp_path / "no-fallback.db",
+            database_url=secret_url,
+            require_durable=True,
+        )
+
+    assert time.monotonic() - started < 5
+    assert captured["connect_timeout"] == 3
+    assert secret_url not in str(error.value)
+    assert "super-secret" not in str(error.value)
+    rendered_traceback = "".join(
+        traceback.format_exception(
+            type(error.value),
+            error.value,
+            error.value.__traceback__,
+        )
+    )
+    assert secret_url not in rendered_traceback
+    assert "super-secret" not in rendered_traceback
+    assert not (tmp_path / "no-fallback.db").exists()
+
+
+@pytest.mark.parametrize("value", ["", "zero", "0", "61", "1.5"])
+def test_invalid_database_timeout_fails_before_connection(
+    monkeypatch, tmp_path, value
+):
+    import psycopg2
+
+    attempted = False
+
+    def unexpected_connect(*_args, **_kwargs):
+        nonlocal attempted
+        attempted = True
+
+    monkeypatch.setattr(psycopg2, "connect", unexpected_connect)
+    monkeypatch.setenv("OPTIONBEACON_DB_CONNECT_TIMEOUT_SECONDS", value)
+
+    with pytest.raises(RepositoryUnavailable) as error:
+        TradeRepository(
+            tmp_path / "no-fallback.db",
+            database_url="postgresql://configured",
+            require_durable=True,
+        )
+
+    assert attempted is False
+    assert "DATABASE_URL" not in str(error.value)
     assert not (tmp_path / "no-fallback.db").exists()
 
 

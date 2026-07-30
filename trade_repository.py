@@ -14,11 +14,40 @@ from uuid import uuid4
 
 DEFAULT_REPOSITORY_FILE = "optionbeacon_state.db"
 DEFAULT_SCANNER_ID = "optionbeacon-scanner"
+DEFAULT_DB_CONNECT_TIMEOUT_SECONDS = 10
+MIN_DB_CONNECT_TIMEOUT_SECONDS = 1
+MAX_DB_CONNECT_TIMEOUT_SECONDS = 60
 UTC = timezone.utc
 
 
 class RepositoryUnavailable(RuntimeError):
     """Raised when authoritative storage cannot be reached."""
+
+
+def database_connect_timeout_seconds(value=None) -> int:
+    raw = (
+        os.getenv(
+            "OPTIONBEACON_DB_CONNECT_TIMEOUT_SECONDS",
+            str(DEFAULT_DB_CONNECT_TIMEOUT_SECONDS),
+        )
+        if value is None
+        else value
+    )
+    try:
+        timeout = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise RepositoryUnavailable(
+            "OPTIONBEACON_DB_CONNECT_TIMEOUT_SECONDS must be an integer "
+            f"between {MIN_DB_CONNECT_TIMEOUT_SECONDS} and "
+            f"{MAX_DB_CONNECT_TIMEOUT_SECONDS}."
+        ) from exc
+    if not MIN_DB_CONNECT_TIMEOUT_SECONDS <= timeout <= MAX_DB_CONNECT_TIMEOUT_SECONDS:
+        raise RepositoryUnavailable(
+            "OPTIONBEACON_DB_CONNECT_TIMEOUT_SECONDS must be an integer "
+            f"between {MIN_DB_CONNECT_TIMEOUT_SECONDS} and "
+            f"{MAX_DB_CONNECT_TIMEOUT_SECONDS}."
+        )
+    return timeout
 
 
 def utc_now() -> datetime:
@@ -73,6 +102,7 @@ class TradeRepository:
         *,
         database_url: str | None = None,
         require_durable: bool = False,
+        connect_timeout_seconds: int | None = None,
     ):
         self.db_file = str(db_file)
         self.database_url = (
@@ -87,6 +117,11 @@ class TradeRepository:
             raise RepositoryUnavailable(
                 "Durable trade storage is required but DATABASE_URL is not configured."
             )
+        self.connect_timeout_seconds = (
+            database_connect_timeout_seconds(connect_timeout_seconds)
+            if self.durable
+            else None
+        )
         self.initialize()
 
     @contextmanager
@@ -96,7 +131,10 @@ class TradeRepository:
                 import psycopg2
                 from psycopg2.extras import RealDictCursor
 
-                kwargs = {"cursor_factory": RealDictCursor}
+                kwargs = {
+                    "cursor_factory": RealDictCursor,
+                    "connect_timeout": self.connect_timeout_seconds,
+                }
                 if "sslmode=" not in self.database_url:
                     kwargs["sslmode"] = "require"
                 connection = psycopg2.connect(self.database_url, **kwargs)
@@ -117,7 +155,7 @@ class TradeRepository:
         except Exception as exc:
             raise RepositoryUnavailable(
                 f"Trade repository unavailable: {type(exc).__name__}"
-            ) from exc
+            ) from None
         finally:
             if "connection" in locals():
                 connection.close()

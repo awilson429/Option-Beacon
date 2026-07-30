@@ -25,10 +25,13 @@ No credential values are recorded.
 - Streamlit and Railway share the database when given connection strings for
   the same Neon project/database/schema
 - real PostgreSQL lifecycle test: available through `TEST_DATABASE_URL`
-- current workspace result: **not live-verified because `TEST_DATABASE_URL` is
-  absent**
+- 2026-07-30 configured PostgreSQL run: **passed** for schema creation,
+  concurrent idempotency, opening, retrieval, heartbeat/error persistence,
+  update, closure, reinitialization, and cleanup
+- provider-specific Neon verification: **not completed** because the available
+  local dashboard connection targets a different hosted PostgreSQL provider
 
-This state must not be described as completed Neon verification.
+Do not describe the successful PostgreSQL run as Neon-specific verification.
 
 ## C. Broken production configuration
 

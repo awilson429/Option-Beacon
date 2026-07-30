@@ -20,11 +20,16 @@ from trade_state_service import process_scanner_result, repository_for_runtime
 LOGGER = logging.getLogger(__name__)
 
 
+def environment_symbol_groups():
+    """Load the CLI universe without consulting Streamlit secrets."""
+    return active_symbol_groups(api_key=os.getenv("FINNHUB_API_KEY", "").strip())
+
+
 def run_scan_once(
     *,
     repository=None,
     signal_generator=generate_signal,
-    symbol_groups_loader=active_symbol_groups,
+    symbol_groups_loader=environment_symbol_groups,
     snapshot_writer=save_latest_results,
     scanner_id=None,
 ) -> int:
@@ -37,7 +42,7 @@ def run_scan_once(
         LOGGER.warning("Scanner invocation skipped because another scan owns the lock")
         return 2
     started = datetime.now(timezone.utc)
-    build = build_information()
+    build = build_information(streamlit_version="not-applicable")
     repository.record_scan_heartbeat(
         scanner_id,
         started_at=started,
