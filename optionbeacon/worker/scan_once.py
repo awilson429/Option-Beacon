@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -25,15 +26,20 @@ def run_scan_once(
     signal_generator=generate_signal,
     symbol_groups_loader=active_symbol_groups,
     snapshot_writer=save_latest_results,
+    scanner_id=None,
 ) -> int:
     repository = repository or repository_for_runtime()
-    owner = repository.acquire_scan_lock(DEFAULT_SCANNER_ID)
+    scanner_id = scanner_id or os.getenv(
+        "OPTIONBEACON_SCANNER_ID", DEFAULT_SCANNER_ID
+    )
+    owner = repository.acquire_scan_lock(scanner_id)
     if owner is None:
         LOGGER.warning("Scanner invocation skipped because another scan owns the lock")
         return 2
     started = datetime.now(timezone.utc)
     build = build_information()
     repository.record_scan_heartbeat(
+        scanner_id,
         started_at=started,
         code_version=build["commit"],
         market_data_state="SCANNING",
@@ -68,6 +74,7 @@ def run_scan_once(
         snapshot_writer(results)
         completed = datetime.now(timezone.utc)
         repository.record_scan_heartbeat(
+            scanner_id,
             completed_at=completed,
             success_at=completed,
             symbols_processed=len(results),
@@ -86,11 +93,12 @@ def run_scan_once(
         LOGGER.exception("Fatal scanner failure")
         repository.record_scan_error(
             f"{type(exc).__name__}: scanner failed",
+            scanner_id,
             code_version=build["commit"],
         )
         return 1
     finally:
-        repository.release_scan_lock(DEFAULT_SCANNER_ID, owner)
+        repository.release_scan_lock(scanner_id, owner)
 
 
 def main() -> int:

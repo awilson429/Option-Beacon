@@ -41,7 +41,13 @@ def repository_for_runtime(
     explicitly_required = os.getenv(
         "OPTIONBEACON_REQUIRE_DURABLE_STORAGE", ""
     ).lower() in {"1", "true", "yes"}
-    require_durable = explicitly_required or branch == "main"
+    production_environment = (
+        os.getenv("OPTIONBEACON_ENVIRONMENT", "").strip().lower()
+        == "production"
+    )
+    require_durable = (
+        explicitly_required or production_environment or branch == "main"
+    )
     resolved_database_url = (
         configured_database_url()
         if database_url is None

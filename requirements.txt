@@ -3,4 +3,4 @@ pandas
 streamlit==1.60.0
 streamlit-autorefresh
 pandas-market-calendars
-psycopg2-binary
+psycopg2-binary>=2.9.9,<3

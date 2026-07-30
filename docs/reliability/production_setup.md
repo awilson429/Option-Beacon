@@ -35,6 +35,30 @@ streamlit run app.py
 The local database is `optionbeacon_state.db` and is ignored. It survives
 ordinary local reruns but is not a production durability mechanism.
 
+## Neon PostgreSQL
+
+1. Create a Neon project and database.
+2. In the Neon dashboard, copy a PostgreSQL connection string for the intended
+   database and role.
+3. Keep SSL required. Neon connection strings normally include
+   `sslmode=require`; the repository adds it when absent.
+4. Store the same `DATABASE_URL` value in Streamlit Secrets and Railway
+   Variables. Never paste it into source, logs, screenshots, or issue text.
+5. Set `OPTIONBEACON_REQUIRE_DURABLE_STORAGE=true` and
+   `OPTIONBEACON_ENVIRONMENT=production` in Railway. The Streamlit build from
+   `main` also requires durable storage.
+6. Initialize the schema with a trusted one-off process.
+7. Run the healthcheck and PostgreSQL integration test without printing the
+   connection value.
+
+Neon offers direct and pooled connection strings. The worker is a long-running,
+low-concurrency process and may use a direct connection. Streamlit creates
+short-lived connections across reruns and can use Neon's pooled connection
+string. Both strings must target the same project, database, role permissions,
+and schema. The current psycopg2 driver works with either; transaction-pooling
+limitations should be reviewed before introducing session-level database
+features.
+
 ## PostgreSQL initialization
 
 Schema initialization is explicit and idempotent:
@@ -98,7 +122,18 @@ Not durable unless separately externalized:
 ```bash
 python -c "from trade_state_service import authoritative_trade_state; print(authoritative_trade_state()['storage_state'])"
 python -m optionbeacon.worker.scan_once
+python -m optionbeacon.worker.healthcheck
 ```
 
 Inspect the dashboard reliability area or query `scanner_health` and
 `authoritative_trades` with read-only database tooling.
+
+Run the real integration path against a disposable/test Neon database:
+
+```bash
+TEST_DATABASE_URL=postgresql://... python -m pytest \
+  tests/test_production_storage_modes.py -q
+```
+
+The test is skipped when `TEST_DATABASE_URL` is absent. A skipped result is not
+production database verification.
