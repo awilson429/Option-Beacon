@@ -55,8 +55,9 @@ def test_active_symbol_groups_includes_market_context_when_movers_available(monk
 
     groups, source, error = active_symbol_groups(api_key="test")
 
-    assert source == "Finnhub daily movers"
+    assert source == "Finnhub attention + daily movers"
     assert error == ""
     assert groups["Market Context"] == MARKET_CONTEXT_SYMBOLS
+    assert "Attention Movers" in groups
     assert groups["Top Bullish Movers"] == ["NVDA"]
     assert groups["Top Bearish Movers"] == ["JPM"]

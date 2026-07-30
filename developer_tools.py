@@ -8,8 +8,9 @@ import logging
 import math
 import time
 import tempfile
+from copy import deepcopy
 from dataclasses import asdict, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from finnhub_universe import finnhub_api_key, quote_symbol
@@ -26,12 +27,33 @@ from option_position_tracker import (
     update_position,
 )
 from tradier_options import tradier_configured
+from trade_plan_config import DEFAULT_TRADE_PLAN_CONFIG
+from trade_plan_engine import build_structured_trade_plan
+from trade_plan_journal import (
+    load_legacy_trade_outcomes,
+    load_trade_plan_journal,
+    save_trade_plan,
+)
+from trade_plan_lifecycle import update_trade_plan
+from trade_plan_models import LifecycleEventType, PlanStatus
 from verify_option_engine import run_verification
 
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_DIAGNOSTICS_FILE = "runtime_diagnostics.json"
 UNAVAILABLE = "—"
+__all__ = (
+    "hosted_configuration_status",
+    "latest_production_ledger_entry",
+    "load_latest_diagnostic",
+    "option_engine_diagnostic",
+    "save_diagnostic_result",
+    "system_status",
+    "verify_finnhub_connection",
+    "verify_position_tracking",
+    "verify_trade_plan_engine",
+    "verify_tradier_connection",
+)
 HOSTED_SECRET_NAMES = (
     "TRADIER_ACCESS_TOKEN",
     "FINNHUB_API_KEY",
@@ -321,6 +343,233 @@ def verify_position_tracking(now=None, provider=None) -> dict:
         "validation_type": "Position Tracking",
         "timestamp": checked_at.isoformat(),
         "provider_mode": provider_mode,
+        "overall_result": overall,
+        "checks": checks,
+        "message": "",
+        "elapsed_seconds": round(time.perf_counter() - started, 3),
+        "contract": None,
+    }
+
+
+def verify_trade_plan_engine(now=None) -> dict:
+    """Run deterministic, temporary, paper-only Trade Plan Engine checks."""
+    checked_at = now or datetime.now(timezone.utc)
+    started = time.perf_counter()
+    checks = []
+    try:
+        scenario_time = checked_at.replace(hour=14, minute=0, second=0, microsecond=0)
+        base = {
+            "symbol": "SPY",
+            "bias": "Bullish",
+            "price": 501.0,
+            "support": 498.0,
+            "resistance": 500.5,
+            "atr": 2.0,
+            "vwap": 500.0,
+            "ema9": 500.2,
+            "ema21": 499.8,
+            "rsi": 58,
+            "relative_volume": 1.5,
+            "confidence": 82,
+            "confirmation_reached": True,
+            "timestamp": scenario_time,
+            "last_candle_at": scenario_time,
+        }
+        ready = build_structured_trade_plan(base, evaluation_timestamp=scenario_time)
+        bearish = build_structured_trade_plan(
+            {
+                **base,
+                "symbol": "QQQ",
+                "bias": "Bearish",
+                "price": 449.0,
+                "support": 449.5,
+                "resistance": 452.0,
+            },
+            evaluation_timestamp=scenario_time,
+        )
+        wait = build_structured_trade_plan(
+            {**base, "relative_volume": 0.5},
+            evaluation_timestamp=scenario_time,
+        )
+        bullish_watch = build_structured_trade_plan(
+            {**base, "price": 499.5, "confirmation_reached": False},
+            evaluation_timestamp=scenario_time,
+        )
+        bearish_watch = build_structured_trade_plan(
+            {
+                **base,
+                "symbol": "QQQ",
+                "bias": "Bearish",
+                "price": 450.5,
+                "support": 449.5,
+                "resistance": 452,
+                "confirmation_reached": False,
+            },
+            evaluation_timestamp=scenario_time,
+        )
+        trend_wait = build_structured_trade_plan(
+            {**base, "trend_alignment": "conflict"},
+            evaluation_timestamp=scenario_time,
+        )
+        reward_wait = build_structured_trade_plan(
+            {**base, "target_1": 500.6},
+            evaluation_timestamp=scenario_time,
+        )
+        stale_wait = build_structured_trade_plan(
+            {**base, "last_candle_at": scenario_time - timedelta(minutes=20)},
+            evaluation_timestamp=scenario_time,
+        )
+        late_bullish = build_structured_trade_plan(
+            {**base, "price": 503.5, "candles_since_trigger": 6},
+            evaluation_timestamp=scenario_time,
+        )
+        late_bearish = build_structured_trade_plan(
+            {
+                **base,
+                "symbol": "QQQ",
+                "bias": "Bearish",
+                "price": 446.5,
+                "support": 449.5,
+                "resistance": 452,
+                "candles_since_trigger": 6,
+            },
+            evaluation_timestamp=scenario_time,
+        )
+        invalidated = build_structured_trade_plan(
+            {**base, "setup_invalidated": True},
+            evaluation_timestamp=scenario_time,
+        )
+        expired = build_structured_trade_plan(
+            {**base, "price": 499, "confirmation_reached": False, "setup_expired": True},
+            evaluation_timestamp=scenario_time,
+        )
+        original = ready.original_signal_snapshot
+        checks.extend(
+            [
+                _check("Trade Plan Engine import and initialization", ready.status == PlanStatus.READY),
+                _check("configuration validation", not DEFAULT_TRADE_PLAN_CONFIG.validate()),
+                _check("entry calculation", ready.entry_zone_low < ready.entry_zone_high),
+                _check("stop calculation", ready.initial_stop < ready.confirmation_level and bearish.initial_stop > bearish.confirmation_level),
+                _check("Target 1 calculation", ready.target_1 > ready.confirmation_level),
+                _check("Target 2 calculation", ready.target_2 > ready.target_1),
+                _check("risk/reward calculation", ready.risk_reward_target_1 >= 1),
+                _check("late-entry filter", bool(ready.late_entry_explanation)),
+                _check("WAIT-state generation", wait.status in {PlanStatus.WAIT, PlanStatus.WATCH} and bool(wait.missing_requirements)),
+                _check("lifecycle event creation", ready.lifecycle_events[0].event_type == LifecycleEventType.CREATED),
+                _check("valid bullish READY setup", ready.status == PlanStatus.READY),
+                _check("valid bearish READY setup", bearish.status == PlanStatus.READY),
+                _check("bullish WATCH setup", bullish_watch.status == PlanStatus.WATCH),
+                _check("bearish WATCH setup", bearish_watch.status == PlanStatus.WATCH),
+                _check("missing volume WAIT setup", wait.status == PlanStatus.WAIT),
+                _check("trend-conflict WAIT setup", trend_wait.status == PlanStatus.WAIT),
+                _check("insufficient risk/reward WAIT setup", reward_wait.status == PlanStatus.WAIT),
+                _check("stale-data WAIT setup", stale_wait.status == PlanStatus.WAIT),
+                _check("late bullish setup", late_bullish.status == PlanStatus.WAIT),
+                _check("late bearish setup", late_bearish.status == PlanStatus.WAIT),
+                _check("invalidated setup", invalidated.status == PlanStatus.INVALIDATED),
+                _check("expired setup", expired.status == PlanStatus.EXPIRED),
+            ]
+        )
+        update_trade_plan(
+            ready,
+            current_price=ready.confirmation_level,
+            current_timestamp=scenario_time + timedelta(minutes=1),
+        )
+        checks.append(_check("entry activation", ready.status == PlanStatus.ACTIVE))
+        stop_plan = deepcopy(ready)
+        update_trade_plan(
+            stop_plan,
+            current_price=stop_plan.initial_stop,
+            current_timestamp=scenario_time + timedelta(minutes=5),
+        )
+        target_1_plan = deepcopy(ready)
+        update_trade_plan(
+            target_1_plan,
+            current_price=target_1_plan.target_1,
+            current_timestamp=scenario_time + timedelta(minutes=5),
+        )
+        breakeven_plan = deepcopy(target_1_plan)
+        update_trade_plan(
+            breakeven_plan,
+            current_price=breakeven_plan.current_status["entry_underlying_price"],
+            current_timestamp=scenario_time + timedelta(minutes=10),
+        )
+        trailing_plan = deepcopy(ready)
+        update_trade_plan(
+            trailing_plan,
+            current_price=trailing_plan.trailing_stop_activation,
+            current_timestamp=scenario_time + timedelta(minutes=5),
+        )
+        update_trade_plan(
+            trailing_plan,
+            current_price=trailing_plan.current_stop,
+            current_timestamp=scenario_time + timedelta(minutes=10),
+        )
+        target_2_plan = deepcopy(ready)
+        update_trade_plan(
+            target_2_plan,
+            current_price=target_2_plan.target_2,
+            current_timestamp=scenario_time + timedelta(minutes=10),
+        )
+        timeout_plan = deepcopy(ready)
+        update_trade_plan(
+            timeout_plan,
+            current_price=timeout_plan.confirmation_level,
+            current_timestamp=scenario_time + timedelta(minutes=121),
+        )
+        end_of_day_plan = deepcopy(ready)
+        update_trade_plan(
+            end_of_day_plan,
+            current_price=end_of_day_plan.confirmation_level,
+            current_timestamp=scenario_time.replace(hour=19, minute=51),
+        )
+        technical_plan = deepcopy(ready)
+        update_trade_plan(
+            technical_plan,
+            current_price=technical_plan.confirmation_level,
+            current_timestamp=scenario_time + timedelta(minutes=5),
+            technical_valid=False,
+        )
+        checks.extend(
+            [
+                _check("stop hit", stop_plan.final_outcome.exit_reason.value == "STOP_HIT"),
+                _check("Target 1 hit", target_1_plan.current_status["target_1_reached"]),
+                _check("breakeven stop hit", breakeven_plan.final_outcome.exit_reason.value == "BREAKEVEN_STOP_HIT"),
+                _check("trailing stop hit", trailing_plan.final_outcome.exit_reason.value == "TRAILING_STOP_HIT"),
+                _check("Target 2 hit", target_2_plan.final_outcome.exit_reason.value == "TARGET_2_HIT"),
+                _check("maximum hold timeout", timeout_plan.final_outcome.exit_reason.value == "MAX_HOLD_TIME"),
+                _check("end-of-day exit", end_of_day_plan.final_outcome.exit_reason.value == "END_OF_DAY"),
+                _check("technical invalidation", technical_plan.final_outcome.exit_reason.value == "TECHNICAL_INVALIDATION"),
+            ]
+        )
+        checks.append(_check("signal immutability", ready.original_signal_snapshot == original))
+        with tempfile.TemporaryDirectory(prefix="trade-plan-verify-") as directory:
+            journal = Path(directory) / "trade_plans.jsonl"
+            legacy = Path(directory) / "legacy.jsonl"
+            save_trade_plan(ready, journal)
+            loaded = load_trade_plan_journal(journal)
+            legacy.write_text("", encoding="utf-8")
+            checks.extend(
+                [
+                    _check("paper-journal write", journal.exists()),
+                    _check("paper-journal read", len(loaded) == 1),
+                    _check("legacy journal compatibility", load_legacy_trade_outcomes(legacy) == []),
+                ]
+            )
+        checks.extend(
+            [
+                _check("market-data freshness", ready.market_data_freshness["status"] == "FRESH"),
+                _check("no-live-order safety assertion", not hasattr(ready, "submit_order")),
+            ]
+        )
+    except Exception:
+        LOGGER.exception("Trade Plan Engine diagnostic failed")
+        checks = [_check("Trade Plan Engine", False, "verification failed")]
+    overall = "PASS" if checks and all(check["status"] == "PASS" for check in checks) else "FAIL"
+    return {
+        "validation_type": "Trade Plan Engine",
+        "timestamp": checked_at.isoformat(),
+        "provider_mode": "DETERMINISTIC MOCK",
         "overall_result": overall,
         "checks": checks,
         "message": "",

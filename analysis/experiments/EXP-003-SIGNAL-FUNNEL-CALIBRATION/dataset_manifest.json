@@ -1,0 +1,38 @@
+[
+  {
+    "bars": 4680,
+    "duplicate_bars": 0,
+    "end": "2026-07-29T15:55:00-04:00",
+    "interval": "5m",
+    "missing_bars": 0,
+    "normalized_rows": 4680,
+    "normalized_sha256": "39457a03e3de6954c0b5ed02e29120c8c1b53aeacfc1398197a923f331a78a62",
+    "normalized_snapshot": ".analysis-cache\\EXP-003-SIGNAL-FUNNEL-CALIBRATION\\20260730T071559-0400\\spy-normalized.csv",
+    "provider": "Yahoo Finance via yfinance",
+    "raw_sha256": "bc56f17b025e7883f49814ea39b591571628a486c5a4bac12c3ebaf3d01197f7",
+    "raw_snapshot": ".analysis-cache\\EXP-003-SIGNAL-FUNNEL-CALIBRATION\\20260730T071559-0400\\spy-raw.csv",
+    "requested_period": "60d",
+    "retrieved_at": "2026-07-30T07:15:59.507490-04:00",
+    "snapshot_committed": false,
+    "start": "2026-05-04T09:30:00-04:00",
+    "symbol": "SPY"
+  },
+  {
+    "bars": 4680,
+    "duplicate_bars": 0,
+    "end": "2026-07-29T15:55:00-04:00",
+    "interval": "5m",
+    "missing_bars": 0,
+    "normalized_rows": 4680,
+    "normalized_sha256": "8c038bc496d4175e0172e15d3f4c8e593a02fdf409d1fda73868f65a99d0d18e",
+    "normalized_snapshot": ".analysis-cache\\EXP-003-SIGNAL-FUNNEL-CALIBRATION\\20260730T071559-0400\\qqq-normalized.csv",
+    "provider": "Yahoo Finance via yfinance",
+    "raw_sha256": "a96d7b611348768db579cd0b973b61e6ab0bff66ab8eb1eaa49f4bbc86c33e9e",
+    "raw_snapshot": ".analysis-cache\\EXP-003-SIGNAL-FUNNEL-CALIBRATION\\20260730T071559-0400\\qqq-raw.csv",
+    "requested_period": "60d",
+    "retrieved_at": "2026-07-30T07:15:59.507490-04:00",
+    "snapshot_committed": false,
+    "start": "2026-05-04T09:30:00-04:00",
+    "symbol": "QQQ"
+  }
+]

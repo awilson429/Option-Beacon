@@ -6,7 +6,7 @@ from developer_tools import HOSTED_SECRET_NAMES
 def test_app_opens_directly_to_dashboard():
     source = Path("app.py").read_text(encoding="utf-8")
 
-    assert "st.text_input(" not in source
+    assert 'type="password"' not in source
     assert "st.stop()" not in source
     assert "render_header()" in source
     assert "active_page = render_card_navigation()" in source

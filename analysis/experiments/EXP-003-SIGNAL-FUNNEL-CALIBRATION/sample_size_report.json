@@ -1,0 +1,16 @@
+{
+  "assumptions": "two-sided 5% alpha, 80% power, two independent equal-sized groups",
+  "effective_sample_concerns": [
+    "signals from the same day are not independent",
+    "SPY and QQQ returns are correlated",
+    "holding periods overlap",
+    "regime representation is imbalanced",
+    "serial correlation reduces effective sample size",
+    "multiple comparisons require more evidence than nominal calculations"
+  ],
+  "expectancy_minus_0052_to_0000_per_group": 861,
+  "expectancy_minus_0052_to_plus_0025_per_group": 393,
+  "observed_return_standard_deviation_percent": 0.3849201365887312,
+  "stop_first_72_to_60_per_group": 245,
+  "win_rate_28_to_40_per_group": 245
+}

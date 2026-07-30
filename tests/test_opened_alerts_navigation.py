@@ -155,6 +155,12 @@ def test_manual_validation_fields_are_read_only_not_recorded():
 def test_trade_desk_is_first_and_live_guide_is_removed():
     assert MAIN_NAVIGATION[0] == "Trade Desk"
     assert MAIN_NAVIGATION[-1] == "Developer Tools"
+    assert MAIN_NAVIGATION == (
+        "Trade Desk",
+        "Positions",
+        "Journal",
+        "Developer Tools",
+    )
     assert "Trade Journal" not in MAIN_NAVIGATION
     assert "Live Guide" not in MAIN_NAVIGATION
 
@@ -168,27 +174,24 @@ def test_tools_show_scanner_health_only():
 
 def test_trade_desk_layout_and_removed_live_guide_labels():
     assert TRADE_DESK_SECTIONS == (
-        "Today's Best Trade",
-        "Open Positions Needing Attention",
-        "Today's Scorecard",
-        "Opened Alerts",
-        "Active Edge",
-        "Performance Details",
-        "Grouped Performance",
-        "Complete Trade History",
+        "Market Status",
+        "Best Developing Setup",
+        "Quick Actions",
+        "Open Positions",
+        "Recent Signals",
     )
-    assert "Market Status" not in TRADE_DESK_SECTIONS
+    assert "Market Status" in TRADE_DESK_SECTIONS
     assert "Scanner Health" not in TRADE_DESK_SECTIONS
     assert "Guide Queue" not in TRADE_DESK_SECTIONS
     assert "Risk Watch" not in TRADE_DESK_SECTIONS
     assert "Recent Guide Alerts" not in TRADE_DESK_SECTIONS
-    assert TRADE_DESK_SECTIONS.count("Today's Best Trade") == 1
+    assert TRADE_DESK_SECTIONS.count("Best Developing Setup") == 1
     assert "Live Trade Coach Summary" not in TRADE_DESK_SECTIONS
 
 
 def test_trade_desk_labels_are_current():
     assert TRADE_DESK_SUBTITLE == (
-        "Live alert validation, open-trade management, and system performance."
+        "Focused live setup, entry, risk, and target decisions."
     )
     assert RECORDED_CANDIDATES_LABEL == "Recorded Candidates"
 

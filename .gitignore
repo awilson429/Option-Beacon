@@ -8,6 +8,7 @@ __pycache__/
 venv/
 env/
 .pytest_cache/
+.test-temp-*/
 *.tmp
 *.log
 
@@ -19,6 +20,7 @@ runtime_diagnostics.json
 runtime_diagnostics.json.tmp
 paper_option_positions.json
 paper_option_positions.json.tmp
+trade_plan_journal.jsonl
 optionbeacon_live_signals.csv
 latest_results.json
 high_score_history.csv
@@ -34,3 +36,7 @@ live_preview.py
 
 .DS_Store
 Thumbs.db
+.analysis-cache/
+experiment_001_shadow.jsonl
+experiment_002_shadow.jsonl
+experiment_003_signal_funnel.jsonl

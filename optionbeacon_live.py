@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import time
+import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -13,6 +14,7 @@ from finnhub_universe import (
 from optionbeacon_strategy import score_candle
 from signal_history import record_scanner_result, update_trade_outcomes_from_result
 from trade_planning import enrich_with_trade_plan
+from trade_plan_service import process_scanner_trade_plan
 from tradier_options import enrich_with_option_liquidity
 
 ETF_SYMBOLS = DEFAULT_ETF_SYMBOLS
@@ -24,6 +26,7 @@ INTERVAL = "5m"
 DATA_PERIODS = ["5d", "10d", "1mo"]
 
 SCAN_SECONDS = 300  # 5 minutes
+LOGGER = logging.getLogger(__name__)
 
 
 def eastern_timestamp():
@@ -124,8 +127,39 @@ def generate_signal(symbol):
     result = enrich_with_option_liquidity(result)
     result["last_candle_at"] = eastern_candle_timestamp(df.index[i])
     result["timestamp"] = eastern_timestamp()
+    process_scanner_trade_plan(result)
     update_trade_outcomes_from_result(result)
     record_scanner_result(result)
+    try:
+        from false_breakout_experiment import record_live_shadow
+
+        record_live_shadow(result, df, i)
+    except Exception as exc:
+        LOGGER.warning(
+            "Experiment 001 shadow evaluation failed for %s: %s",
+            symbol,
+            exc,
+        )
+    try:
+        from regime_selection_experiment import record_live_shadow
+
+        record_live_shadow(result, df, i)
+    except Exception as exc:
+        LOGGER.warning(
+            "Experiment 002 shadow evaluation failed for %s: %s",
+            symbol,
+            exc,
+        )
+    try:
+        from signal_funnel_experiment import record_live_shadow
+
+        record_live_shadow(result)
+    except Exception as exc:
+        LOGGER.warning(
+            "Experiment 003 signal funnel shadow evaluation failed for %s: %s",
+            symbol,
+            exc,
+        )
     return result
 
 

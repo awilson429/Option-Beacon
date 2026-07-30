@@ -22,6 +22,24 @@ import verify_option_engine
 NOW = datetime(2026, 7, 28, 15, 0, tzinfo=timezone.utc)
 
 
+def test_app_developer_tool_imports_are_explicitly_exported():
+    expected = {
+        "hosted_configuration_status",
+        "latest_production_ledger_entry",
+        "load_latest_diagnostic",
+        "option_engine_diagnostic",
+        "save_diagnostic_result",
+        "system_status",
+        "verify_finnhub_connection",
+        "verify_position_tracking",
+        "verify_trade_plan_engine",
+        "verify_tradier_connection",
+    }
+
+    assert set(developer_tools.__all__) == expected
+    assert all(callable(getattr(developer_tools, name)) for name in expected)
+
+
 class TradierSuccess:
     def expirations(self, ticker):
         return ["2026-07-31", "2026-08-07"], ""
