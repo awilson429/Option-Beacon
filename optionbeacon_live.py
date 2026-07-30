@@ -150,6 +150,16 @@ def generate_signal(symbol):
             symbol,
             exc,
         )
+    try:
+        from signal_funnel_experiment import record_live_shadow
+
+        record_live_shadow(result)
+    except Exception as exc:
+        LOGGER.warning(
+            "Experiment 003 signal funnel shadow evaluation failed for %s: %s",
+            symbol,
+            exc,
+        )
     return result
 
 

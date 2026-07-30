@@ -1,0 +1,144 @@
+{
+  "counts": {
+    "BASE CONDITIONS PASSED": {
+      "conversion_from_prior_percent": 100.0,
+      "evaluated": 7366,
+      "passed": 7366
+    },
+    "DIRECTION ASSIGNED": {
+      "conversion_from_prior_percent": 98.7134816403109,
+      "evaluated": 7462,
+      "passed": 7366
+    },
+    "FINAL ALERT": {
+      "conversion_from_prior_percent": 100.0,
+      "evaluated": 25,
+      "passed": 25
+    },
+    "INDICATORS AVAILABLE": {
+      "conversion_from_prior_percent": 100.0,
+      "evaluated": 7366,
+      "passed": 7366
+    },
+    "LIFECYCLE ELIGIBLE": {
+      "conversion_from_prior_percent": 78.125,
+      "evaluated": 32,
+      "passed": 25
+    },
+    "RAW CANDIDATE": {
+      "conversion_from_prior_percent": null,
+      "evaluated": 9256,
+      "passed": 7462
+    },
+    "SCORE CALCULATED": {
+      "conversion_from_prior_percent": 100.0,
+      "evaluated": 7366,
+      "passed": 7366
+    },
+    "SCORE THRESHOLD PASSED": {
+      "conversion_from_prior_percent": 0.4344284550638067,
+      "evaluated": 7366,
+      "passed": 32
+    },
+    "STRUCTURE DETECTED": {
+      "conversion_from_prior_percent": 100.0,
+      "evaluated": 7462,
+      "passed": 7462
+    },
+    "TRADE PLAN VALID": {
+      "conversion_from_prior_percent": 100.0,
+      "evaluated": 25,
+      "passed": 25
+    }
+  },
+  "rejections": {
+    "BASE CONDITIONS PASSED": {},
+    "DIRECTION ASSIGNED": {
+      "Neutral directional score": 96
+    },
+    "FINAL ALERT": {},
+    "INDICATORS AVAILABLE": {},
+    "LIFECYCLE ELIGIBLE": {
+      "prior lifecycle still active": 7
+    },
+    "RAW CANDIDATE": {
+      "outside production trade-time window": 1794
+    },
+    "SCORE CALCULATED": {},
+    "SCORE THRESHOLD PASSED": {
+      "score 17 below unchanged threshold 90": 6,
+      "score 19 below unchanged threshold 90": 17,
+      "score 20 below unchanged threshold 90": 9,
+      "score 21 below unchanged threshold 90": 18,
+      "score 22 below unchanged threshold 90": 18,
+      "score 23 below unchanged threshold 90": 70,
+      "score 24 below unchanged threshold 90": 47,
+      "score 25 below unchanged threshold 90": 48,
+      "score 26 below unchanged threshold 90": 113,
+      "score 27 below unchanged threshold 90": 109,
+      "score 28 below unchanged threshold 90": 74,
+      "score 29 below unchanged threshold 90": 264,
+      "score 30 below unchanged threshold 90": 167,
+      "score 31 below unchanged threshold 90": 50,
+      "score 32 below unchanged threshold 90": 199,
+      "score 33 below unchanged threshold 90": 254,
+      "score 34 below unchanged threshold 90": 136,
+      "score 35 below unchanged threshold 90": 146,
+      "score 36 below unchanged threshold 90": 428,
+      "score 37 below unchanged threshold 90": 238,
+      "score 38 below unchanged threshold 90": 179,
+      "score 39 below unchanged threshold 90": 271,
+      "score 40 below unchanged threshold 90": 310,
+      "score 41 below unchanged threshold 90": 208,
+      "score 42 below unchanged threshold 90": 152,
+      "score 43 below unchanged threshold 90": 301,
+      "score 44 below unchanged threshold 90": 317,
+      "score 45 below unchanged threshold 90": 147,
+      "score 46 below unchanged threshold 90": 199,
+      "score 47 below unchanged threshold 90": 254,
+      "score 48 below unchanged threshold 90": 202,
+      "score 49 below unchanged threshold 90": 177,
+      "score 50 below unchanged threshold 90": 148,
+      "score 51 below unchanged threshold 90": 189,
+      "score 52 below unchanged threshold 90": 138,
+      "score 53 below unchanged threshold 90": 165,
+      "score 54 below unchanged threshold 90": 165,
+      "score 55 below unchanged threshold 90": 91,
+      "score 56 below unchanged threshold 90": 119,
+      "score 57 below unchanged threshold 90": 138,
+      "score 58 below unchanged threshold 90": 87,
+      "score 59 below unchanged threshold 90": 72,
+      "score 60 below unchanged threshold 90": 91,
+      "score 61 below unchanged threshold 90": 80,
+      "score 62 below unchanged threshold 90": 49,
+      "score 63 below unchanged threshold 90": 67,
+      "score 64 below unchanged threshold 90": 47,
+      "score 65 below unchanged threshold 90": 65,
+      "score 66 below unchanged threshold 90": 58,
+      "score 67 below unchanged threshold 90": 31,
+      "score 68 below unchanged threshold 90": 46,
+      "score 69 below unchanged threshold 90": 41,
+      "score 70 below unchanged threshold 90": 28,
+      "score 71 below unchanged threshold 90": 15,
+      "score 72 below unchanged threshold 90": 20,
+      "score 73 below unchanged threshold 90": 46,
+      "score 74 below unchanged threshold 90": 24,
+      "score 75 below unchanged threshold 90": 17,
+      "score 76 below unchanged threshold 90": 13,
+      "score 77 below unchanged threshold 90": 20,
+      "score 78 below unchanged threshold 90": 17,
+      "score 79 below unchanged threshold 90": 18,
+      "score 80 below unchanged threshold 90": 11,
+      "score 81 below unchanged threshold 90": 8,
+      "score 82 below unchanged threshold 90": 23,
+      "score 83 below unchanged threshold 90": 5,
+      "score 84 below unchanged threshold 90": 5,
+      "score 85 below unchanged threshold 90": 21,
+      "score 86 below unchanged threshold 90": 7,
+      "score 87 below unchanged threshold 90": 6,
+      "score 89 below unchanged threshold 90": 15
+    },
+    "STRUCTURE DETECTED": {},
+    "TRADE PLAN VALID": {}
+  }
+}

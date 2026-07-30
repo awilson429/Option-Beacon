@@ -1,0 +1,65 @@
+[
+  {
+    "after_hours_availability": "not requested by current download path",
+    "credentials_configured": true,
+    "duplicate_bar_behavior": "possible; exact duplicates removed deterministically",
+    "five_minute_research_eligible": true,
+    "historical_retrieval_deterministic": false,
+    "interval_support": [
+      "1m",
+      "2m",
+      "5m",
+      "15m",
+      "30m",
+      "60m",
+      "1d"
+    ],
+    "maximum_historical_lookback": "approximately 60 days for 5m; longer windows require coarser bars",
+    "missing_bar_behavior": "possible; detected by normalization pipeline",
+    "premarket_availability": "not requested by current download path",
+    "provider": "Yahoo Finance via yfinance",
+    "rate_limits": "undocumented/provider managed",
+    "repository_usage": "scanner candles and research history",
+    "split_adjustment_behavior": "auto_adjust=False in research fetcher",
+    "timezone_behavior": "provider timestamps normalized to America/New_York",
+    "volume_availability": true
+  },
+  {
+    "after_hours_availability": "provider dependent; not requested",
+    "credentials_configured": true,
+    "duplicate_bar_behavior": "not applicable",
+    "five_minute_research_eligible": false,
+    "historical_retrieval_deterministic": false,
+    "interval_support": [
+      "current quote only through implemented abstraction"
+    ],
+    "maximum_historical_lookback": "no historical candle helper implemented",
+    "missing_bar_behavior": "not applicable",
+    "premarket_availability": "provider dependent; not requested",
+    "provider": "Finnhub",
+    "rate_limits": "account tier/provider managed",
+    "repository_usage": "current quotes and daily mover universe",
+    "split_adjustment_behavior": "not applicable to implemented quote path",
+    "timezone_behavior": "current quote payload; no candle timestamps normalized",
+    "volume_availability": false
+  },
+  {
+    "after_hours_availability": "provider dependent; not requested",
+    "credentials_configured": true,
+    "duplicate_bar_behavior": "not applicable",
+    "five_minute_research_eligible": false,
+    "historical_retrieval_deterministic": false,
+    "interval_support": [
+      "current quotes through implemented abstraction"
+    ],
+    "maximum_historical_lookback": "no historical equity candle helper implemented",
+    "missing_bar_behavior": "not applicable",
+    "premarket_availability": "provider dependent; not requested",
+    "provider": "Tradier",
+    "rate_limits": "account tier/provider managed",
+    "repository_usage": "current equity/option quotes, expirations, and chains",
+    "split_adjustment_behavior": "not applicable to implemented quote path",
+    "timezone_behavior": "provider quote timestamps; no history normalization",
+    "volume_availability": true
+  }
+]

@@ -1,0 +1,45 @@
+{
+  "conclusion": "Entry and exit quality are mixed; standardized paths quantify workable entries separately from fixed-plan outcomes.",
+  "forward_excursions_percent": {
+    "mae_15m": -0.11845977012664397,
+    "mae_30m": -0.16340191221444011,
+    "mae_60m": -0.22176587213512283,
+    "mae_session": -0.5988352984912312,
+    "mfe_15m": 0.11544734396774499,
+    "mfe_30m": 0.16318967035069365,
+    "mfe_60m": 0.22982211476629602,
+    "mfe_session": 0.591792695718383
+  },
+  "immediate_adverse_candidates": 1902,
+  "losing_fixed_exit_with_025_mfe_within_60m": 839,
+  "standardized_barriers": {
+    "1_5r_before_stop": {
+      "ADVERSE": 4144,
+      "FAVORABLE": 3222
+    },
+    "1r_before_stop": {
+      "ADVERSE": 3532,
+      "FAVORABLE": 3834
+    },
+    "2r_before_stop": {
+      "ADVERSE": 4708,
+      "FAVORABLE": 2658
+    },
+    "plus_015_minus_015": {
+      "ADVERSE": 3603,
+      "FAVORABLE": 3763
+    },
+    "plus_025_minus_025": {
+      "ADVERSE": 3532,
+      "FAVORABLE": 3834
+    },
+    "plus_035_minus_025": {
+      "ADVERSE": 4029,
+      "FAVORABLE": 3337
+    },
+    "plus_050_minus_025": {
+      "ADVERSE": 4708,
+      "FAVORABLE": 2658
+    }
+  }
+}
