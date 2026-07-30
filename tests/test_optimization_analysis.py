@@ -200,4 +200,3 @@ def test_report_generator_records_unavailable_periods_without_crashing(tmp_path)
     assert report["trade_count"] == 0
     assert all(item["status"] == "unavailable" for item in report["data_manifest"])
     assert paths["baseline"].exists()
-
