@@ -28,6 +28,9 @@ signal_outcomes.csv
 live_coach_alerts.csv
 finnhub_movers_cache.json
 optionbeacon_trades.db
+optionbeacon_state.db
+optionbeacon_state.db-shm
+optionbeacon_state.db-wal
 threshold_optimizer_results.csv
 threshold_recommendations.csv
 *_backtest_results.csv

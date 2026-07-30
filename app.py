@@ -76,6 +76,7 @@ from option_position_tracker import (
     open_position_rows,
     refresh_option_positions_safely,
 )
+from reliability_dashboard import reliability_status_model
 from open_trade_quotes import enrich_open_trade_prices
 from signal_history import load_trade_outcomes
 from signal_outcomes import load_signal_outcomes, summarize_outcomes
@@ -132,6 +133,7 @@ from trade_storage import (
     update_position_premium,
     update_position_stop,
 )
+from trade_state_service import authoritative_trade_state
 from ui_polish import (
     opportunity_summary,
     scanner_summary,
@@ -857,11 +859,39 @@ def cached_after_hours_briefing():
     return fetch_after_hours_briefing()
 
 
-def load_trade_evidence_history():
-    try:
-        return load_trade_outcomes()
-    except Exception:
-        return []
+def load_trade_evidence_history(trade_state=None):
+    """Load authoritative records without converting storage failures to empty data."""
+    state = trade_state or authoritative_trade_state(
+        branch=build_information()["branch"]
+    )
+    return list(state["records"])
+
+
+def render_reliability_status(trade_state, latest_results, records):
+    open_count = sum(
+        record.entry_time is not None and record.exit_time is None
+        for record in records
+    )
+    info = build_information()
+    model = reliability_status_model(
+        trade_state,
+        market_open=is_market_open_now(),
+        latest_results=latest_results,
+        open_trade_count=open_count,
+        commit=info["commit"],
+    )
+    details = (
+        f"Scanner: {model['scanner_state']} · Storage: {model['storage_state']} · "
+        f"Market data: {model['market_data_state']} · Build: {model['commit']}"
+    )
+    message = f"{model['summary']}  \n{details}"
+    renderer = {
+        "error": st.error,
+        "warning": st.warning,
+        "success": st.success,
+        "neutral": st.info,
+    }[model["severity"]]
+    renderer(message)
 
 
 def render_historical_edge(result, trade_history, evidence=None):
@@ -2904,12 +2934,19 @@ def render_outcome_trade_journal(
     latest_results=None,
     current_prices=None,
     quote_status=None,
+    reliability_state=None,
 ):
     render_section_header(
         "Trade Desk",
         TRADE_DESK_SUBTITLE,
     )
     records = list(records) if records is not None else load_trade_outcomes()
+    if reliability_state is not None:
+        render_reliability_status(
+            reliability_state,
+            latest_results or {},
+            records,
+        )
     render_live_session_opportunity(latest_results or {}, records)
     build_branch = build_information()["branch"]
     modern_scorecard = modern_style_active(st.query_params, build_branch)
@@ -3529,7 +3566,10 @@ def main():
     configure_page()
     render_header()
     latest_results, high_score_history, snapshot_time, symbol_groups = scan_symbols()
-    trade_evidence_history = load_trade_evidence_history()
+    trade_state = authoritative_trade_state(
+        branch=build_information()["branch"]
+    )
+    trade_evidence_history = load_trade_evidence_history(trade_state)
     capture_qualified_signals(
         latest_results.values(),
         history=trade_evidence_history,
@@ -3569,6 +3609,7 @@ def main():
             latest_results,
             open_trade_prices,
             open_trade_quote_status,
+            trade_state,
         )
 
     elif active_page == "History":
