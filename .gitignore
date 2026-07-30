@@ -9,6 +9,7 @@ venv/
 env/
 .pytest_cache/
 .test-temp-*/
+.tmp-*/
 *.tmp
 *.log
 
