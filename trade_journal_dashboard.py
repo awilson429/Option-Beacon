@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from statistics import mean
 from typing import Iterable
 
@@ -14,7 +14,7 @@ from signal_history import (
     entry_confidence_eligible,
 )
 from trade_analytics import confidence_bucket
-from trade_desk_view_models import position_health
+from trade_desk_view_models import eastern_trade_date, position_health
 
 
 UNAVAILABLE = "—"
@@ -25,6 +25,56 @@ STATUS_OPTIONS = (
     "Closed",
     "Never Triggered",
 )
+
+
+def opened_alert_dates(records: Iterable[TradeOutcome]) -> list[date]:
+    """Return only dates containing entered alerts, newest first."""
+    return sorted(
+        {
+            trade_date
+            for record in records
+            if (trade_date := eastern_trade_date(record.entry_time)) is not None
+        },
+        reverse=True,
+    )
+
+
+def default_opened_alert_date(
+    records: Iterable[TradeOutcome],
+    current_timestamp: datetime,
+    *,
+    market_open: bool,
+    requested_date: date | None = None,
+) -> date | None:
+    """Choose today's entered-alert date in-session, otherwise latest available."""
+    dates = opened_alert_dates(records)
+    if not dates:
+        return None
+    if requested_date in dates:
+        return requested_date
+    today = eastern_trade_date(current_timestamp)
+    if market_open and today in dates:
+        return today
+    return dates[0]
+
+
+def opened_alerts_for_date(
+    records: Iterable[TradeOutcome],
+    selected_date: date | None,
+) -> list[TradeOutcome]:
+    """Return all entered alerts for one Eastern date, newest first."""
+    if selected_date is None:
+        return []
+    selected = [
+        record
+        for record in records
+        if eastern_trade_date(record.entry_time) == selected_date
+    ]
+    selected.sort(
+        key=lambda record: _timestamp_value(record.entry_time),
+        reverse=True,
+    )
+    return selected
 
 
 def trade_outcome_status(record: TradeOutcome) -> str:

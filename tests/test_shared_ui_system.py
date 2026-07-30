@@ -51,19 +51,21 @@ def test_shared_components_emit_common_card_badge_and_empty_classes():
     assert "SPY" in table
 
 
-def test_journal_filters_and_diagnostics_use_stable_controls():
+def test_daily_alert_and_diagnostics_controls_use_stable_keys():
     source = Path("app.py").read_text(encoding="utf-8")
     journal = source.split("def render_outcome_trade_journal", 1)[1].split("\ndef ", 1)[0]
     developer = source.split("def render_developer_tools", 1)[1].split("\ndef ", 1)[0]
-    for key in (
+    removed_keys = (
         "outcome_journal_symbol",
         "outcome_journal_setup",
         "outcome_journal_direction",
         "outcome_journal_exit_reason",
         "outcome_journal_confidence",
         "outcome_journal_status",
-    ):
-        assert f'key="{key}"' in journal
+    )
+    assert all(f'key="{key}"' not in journal for key in removed_keys)
+    assert 'key="opened_alert_date"' in journal
+    assert 'key="entered_alert_detail"' in journal
     for key in (
         "developer_verify_tradier",
         "developer_verify_finnhub",

@@ -3,7 +3,7 @@ from pathlib import Path
 
 def _scorecard_source():
     source = Path("app.py").read_text(encoding="utf-8")
-    start = source.index("    scorecard = daily_scorecard(filtered_records, now.date())")
+    start = source.index("    scorecard = daily_scorecard(records, now.date())")
     end = source.index('    st.markdown("### Opened Alerts")', start)
     return source[start:end]
 
@@ -11,7 +11,7 @@ def _scorecard_source():
 def test_scorecard_calculation_and_fields_are_unchanged():
     block = _scorecard_source()
 
-    assert block.count("daily_scorecard(filtered_records, now.date())") == 1
+    assert block.count("daily_scorecard(records, now.date())") == 1
     for label in (
         "Opened Alerts",
         "Closed Trades",
@@ -51,7 +51,7 @@ def test_opened_alerts_rendering_is_outside_scorecard_change():
 def test_empty_history_checks_develop_style_before_returning():
     source = Path("app.py").read_text(encoding="utf-8")
     start = source.index("def render_outcome_trade_journal(")
-    end = source.index("    symbols =", start)
+    end = source.index("    summary = journal_summary_metrics(records)", start)
     empty_branch = source[start:end]
 
     assert "modern_style_active(st.query_params, build_branch)" in empty_branch

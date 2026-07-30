@@ -135,7 +135,7 @@ def test_workspace_routing_isolated_by_selected_page():
         assert renderer in source
 
 
-def test_journal_filters_have_stable_session_keys():
+def test_daily_alert_controls_have_stable_session_keys():
     source = Path("app.py").read_text(encoding="utf-8")
 
     for key in (
@@ -146,7 +146,9 @@ def test_journal_filters_have_stable_session_keys():
         "outcome_journal_confidence",
         "outcome_journal_status",
     ):
-        assert f'key="{key}"' in source
+        assert f'key="{key}"' not in source
+    assert 'key="opened_alert_date"' in source
+    assert 'key="entered_alert_detail"' in source
 
 
 def test_navigation_does_not_create_trade_or_journal_records():
