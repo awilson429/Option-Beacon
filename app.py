@@ -13,7 +13,6 @@ from ui.theme import configure_page
 from after_hours import after_hours_focus_rows, fetch_after_hours_briefing
 from build_information import build_information, render_build_footer
 from developer_tools import (
-    hosted_configuration_status,
     latest_production_ledger_entry,
     load_latest_diagnostic,
     option_engine_diagnostic,
@@ -3529,15 +3528,6 @@ def render_developer_tools():
 def main():
     configure_page()
     render_header()
-    hosted_status = hosted_configuration_status()
-    if hosted_status["ready"]:
-        st.caption("Hosted configuration: Ready")
-    else:
-        st.warning(
-            "Hosted configuration incomplete. Missing: "
-            + ", ".join(hosted_status["missing"])
-        )
-
     latest_results, high_score_history, snapshot_time, symbol_groups = scan_symbols()
     trade_evidence_history = load_trade_evidence_history()
     capture_qualified_signals(
