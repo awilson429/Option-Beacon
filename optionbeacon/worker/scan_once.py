@@ -12,9 +12,8 @@ from build_information import build_information
 from finnhub_universe import active_symbol_groups, flatten_symbol_groups
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import save_latest_results
-from signal_history import load_trade_outcomes
 from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable
-from trade_state_service import repository_for_runtime, sync_trade_outcomes
+from trade_state_service import process_scanner_result, repository_for_runtime
 
 
 LOGGER = logging.getLogger(__name__)
@@ -61,12 +60,12 @@ def run_scan_once(
                 continue
             if result is not None:
                 results[symbol] = result
+                process_scanner_result(
+                    repository,
+                    result,
+                    source_version=build["commit"],
+                )
         snapshot_writer(results)
-        sync_trade_outcomes(
-            repository,
-            load_trade_outcomes(),
-            source_version=build["commit"],
-        )
         completed = datetime.now(timezone.utc)
         repository.record_scan_heartbeat(
             completed_at=completed,

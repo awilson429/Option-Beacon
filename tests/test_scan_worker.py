@@ -6,10 +6,6 @@ from trade_repository import TradeRepository
 
 def test_scan_worker_records_success_and_releases_lock(tmp_path, monkeypatch):
     repo = TradeRepository(tmp_path / "state.db", database_url="")
-    monkeypatch.setattr(
-        "optionbeacon.worker.scan_once.load_trade_outcomes",
-        lambda: [],
-    )
     saved = []
     result = run_scan_once(
         repository=repo,

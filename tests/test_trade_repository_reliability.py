@@ -16,6 +16,7 @@ from trade_repository import (
 from trade_state_service import (
     authoritative_trade_state,
     list_trade_outcomes,
+    process_scanner_result,
     scanner_health_state,
     sync_trade_outcome,
 )
@@ -61,6 +62,32 @@ def test_open_trade_survives_repository_reinitialization(tmp_path):
 
     assert [row["id"] for row in second.list_open_trades()] == ["trade-1"]
     assert list_trade_outcomes(second)[0].symbol == "SPY"
+
+
+def test_reinitialized_open_trade_continues_lifecycle_without_legacy_file(tmp_path):
+    first = repository(tmp_path)
+    candidate = outcome(
+        entry_time=None,
+        max_favorable_excursion=None,
+        max_adverse_excursion=None,
+        hold_minutes=None,
+    )
+    sync_trade_outcome(first, candidate)
+    second = repository(tmp_path)
+
+    process_scanner_result(
+        second,
+        {
+            "symbol": "SPY",
+            "price": 500,
+            "timestamp": NOW.isoformat(),
+            "signal": "WAIT",
+        },
+    )
+
+    records = list_trade_outcomes(second)
+    assert records[0].entry_time == NOW
+    assert len(second.list_open_trades()) == 1
 
 
 def test_session_state_reset_does_not_remove_stored_trade(tmp_path):

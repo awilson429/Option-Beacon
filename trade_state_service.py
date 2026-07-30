@@ -8,9 +8,15 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 
 from signal_history import (
+    DEFAULT_MAX_CANDIDATE_AGE_MINUTES,
+    DEFAULT_MAX_ENTERED_AGE_MINUTES,
+    DEFAULT_MIN_ENTRY_CONFIDENCE,
     TradeOutcome,
     deserialize_trade_outcome,
+    expire_trade_outcome,
+    scanner_result_to_trade_outcome,
     serialize_trade_outcome,
+    update_trade_outcome,
 )
 from trade_repository import (
     DEFAULT_REPOSITORY_FILE,
@@ -120,6 +126,63 @@ def sync_trade_outcomes(repository, records, *, source_version="stable-v1") -> i
         except Exception:
             LOGGER.exception("Could not synchronize trade outcome %s", record.trade_id)
     return synced
+
+
+def process_scanner_result(
+    repository,
+    result,
+    *,
+    source_version="stable-v1",
+    max_candidate_age_minutes=DEFAULT_MAX_CANDIDATE_AGE_MINUTES,
+    max_entered_age_minutes=DEFAULT_MAX_ENTERED_AGE_MINUTES,
+    minimum_entry_confidence=DEFAULT_MIN_ENTRY_CONFIDENCE,
+) -> int:
+    """Advance authoritative outcomes directly from one stable scanner result."""
+    symbol = str((result or {}).get("symbol") or "").upper()
+    try:
+        price = float((result or {}).get("price"))
+    except (TypeError, ValueError):
+        price = None
+    timestamp = _result_timestamp(result)
+    changed = 0
+    for record in list_trade_outcomes(repository):
+        if record.symbol.upper() != symbol or record.exit_time is not None:
+            continue
+        before = serialize_trade_outcome(record)
+        if price is not None and price > 0:
+            expire_trade_outcome(
+                record,
+                price,
+                timestamp,
+                max_candidate_age_minutes=max_candidate_age_minutes,
+                max_entered_age_minutes=max_entered_age_minutes,
+            )
+            if record.exit_time is None:
+                update_trade_outcome(
+                    record,
+                    price,
+                    timestamp,
+                    minimum_entry_confidence=minimum_entry_confidence,
+                )
+        if serialize_trade_outcome(record) != before:
+            sync_trade_outcome(
+                repository,
+                record,
+                source_version=source_version,
+            )
+            changed += 1
+    candidate = scanner_result_to_trade_outcome(result)
+    if (
+        candidate is not None
+        and repository.get_opportunity(opportunity_id=candidate.trade_id) is None
+    ):
+        sync_trade_outcome(
+            repository,
+            candidate,
+            source_version=source_version,
+        )
+        changed += 1
+    return changed
 
 
 def list_trade_outcomes(repository: TradeRepository, *, limit=5000) -> list[TradeOutcome]:
@@ -251,3 +314,17 @@ def _outcome_exit_price(record):
         "TARGET_3": record.target_3,
     }
     return targets.get(record.exit_reason)
+
+
+def _result_timestamp(result):
+    value = (result or {}).get("last_candle_at") or (result or {}).get("timestamp")
+    if value is None:
+        return utc_now()
+    parsed = (
+        value
+        if isinstance(value, datetime)
+        else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    )
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
