@@ -119,12 +119,12 @@ def test_featured_css_has_no_ellipsis_or_clipped_core_values():
     assert "overflow-wrap:anywhere" in compact
 
 
-def test_default_trade_desk_does_not_render_metric_or_filter_grid():
+def test_default_trade_desk_delegates_to_approved_journal_renderer():
     source = Path("app.py").read_text(encoding="utf-8")
-    start = source.index("def render_trade_desk_workspace(")
-    end = source.index("def render_positions_workspace(")
+    start = source.index('elif active_page == "Trade Desk":')
+    end = source.index('elif active_page == "History":')
     body = source[start:end]
 
-    assert ".metric(" not in body
-    assert ".selectbox(" not in body
-    assert "render_outcome_trade_journal(" not in body
+    assert "render_outcome_trade_journal(" in body
+    assert "st.metric(" not in body
+    assert "st.selectbox(" not in body

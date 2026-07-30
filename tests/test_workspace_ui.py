@@ -124,9 +124,11 @@ def test_workspace_routing_isolated_by_selected_page():
     source = Path("app.py").read_text(encoding="utf-8")
 
     for page, renderer in (
-        ("Trade Desk", "render_trade_desk_workspace("),
-        ("Positions", "render_positions_workspace("),
-        ("Journal", "render_journal_workspace("),
+        ("Trade Desk", "render_outcome_trade_journal("),
+        ("Opportunities", "render_top_opportunities("),
+        ("After Hours", "render_after_hours("),
+        ("History", "render_coach_timeline()"),
+        ("Tools", "render_scanner_health("),
         ("Developer Tools", "render_developer_tools()"),
     ):
         assert f'active_page == "{page}"' in source
@@ -137,13 +139,12 @@ def test_journal_filters_have_stable_session_keys():
     source = Path("app.py").read_text(encoding="utf-8")
 
     for key in (
-        "journal_symbol",
-        "journal_setup",
-        "journal_direction",
-        "journal_exit_reason",
-        "journal_confidence",
-        "journal_status",
-        "journal_search",
+        "outcome_journal_symbol",
+        "outcome_journal_setup",
+        "outcome_journal_direction",
+        "outcome_journal_exit_reason",
+        "outcome_journal_confidence",
+        "outcome_journal_status",
     ):
         assert f'key="{key}"' in source
 

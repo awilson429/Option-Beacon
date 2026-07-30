@@ -33,16 +33,11 @@ def test_design_tokens_cover_shared_visual_language():
     assert required <= TOKENS.keys()
 
 
-def test_primary_pages_use_shared_page_shell_and_container():
+def test_default_app_preserves_approved_legacy_card_shell():
     source = Path("app.py").read_text(encoding="utf-8")
-    for renderer in (
-        "render_positions_workspace",
-        "render_journal_workspace",
-        "render_developer_tools",
-    ):
-        block = source.split(f"def {renderer}", 1)[1].split("\ndef ", 1)[0]
-        assert "SHARED_UI_CSS" in block
-        assert "page_header_markup(" in block
+    assert "active_page = render_card_navigation()" in source
+    assert "active_page = render_sidebar_navigation(" not in source
+    assert "render_header()" in source
     assert "max-width:1024px" in SHARED_UI_CSS
 
 
@@ -56,20 +51,26 @@ def test_shared_components_emit_common_card_badge_and_empty_classes():
     assert "SPY" in table
 
 
-def test_journal_filters_and_diagnostics_are_collapsed_by_default():
+def test_journal_filters_and_diagnostics_use_stable_controls():
     source = Path("app.py").read_text(encoding="utf-8")
-    journal = source.split("def render_journal_workspace", 1)[1].split("\ndef ", 1)[0]
+    journal = source.split("def render_outcome_trade_journal", 1)[1].split("\ndef ", 1)[0]
     developer = source.split("def render_developer_tools", 1)[1].split("\ndef ", 1)[0]
-    assert 'st.expander("Filters", expanded=False)' in journal
-    for label in (
-        "Tradier connection",
-        "Finnhub connection",
-        "Option Engine verification",
-        "Position tracking verification",
-        "Trade Plan Engine verification",
-        "Latest production option ledger entry",
+    for key in (
+        "outcome_journal_symbol",
+        "outcome_journal_setup",
+        "outcome_journal_direction",
+        "outcome_journal_exit_reason",
+        "outcome_journal_confidence",
+        "outcome_journal_status",
     ):
-        assert f'st.expander("{label}")' in developer
+        assert f'key="{key}"' in journal
+    for key in (
+        "developer_verify_tradier",
+        "developer_verify_finnhub",
+        "developer_verify_option_engine",
+        "developer_verify_position_tracking",
+    ):
+        assert f'"{key}"' in developer
 
 
 def test_page_tabs_and_headers_preserve_complete_values():
@@ -84,19 +85,19 @@ def test_page_tabs_and_headers_preserve_complete_values():
     assert "ellipsis" not in SHARED_UI_CSS
 
 
-def test_primary_workspaces_do_not_use_oversized_metrics_or_legacy_header():
+def test_approved_default_uses_legacy_header_and_compact_scorecard_metrics():
     source = Path("app.py").read_text(encoding="utf-8")
-    primary = source.split("def render_developer_tools", 1)[1].split("\ndef main", 1)[0]
-    assert "st.metric(" not in primary
+    journal = source.split("def render_outcome_trade_journal", 1)[1].split("\ndef ", 1)[0]
     main = source.split("def main", 1)[1]
-    assert "render_header()" not in main
+    assert main.count("render_header()") == 1
+    assert "render_journal_metric(" in journal
+    assert "st.metric(" not in journal
 
 
-def test_workspace_content_isolation_remains_explicit():
+def test_primary_content_isolation_remains_explicit():
     source = Path("app.py").read_text(encoding="utf-8")
-    positions = source.split("def render_positions_workspace", 1)[1].split("\ndef ", 1)[0]
-    journal = source.split("def render_journal_workspace", 1)[1].split("\ndef ", 1)[0]
+    journal = source.split("def render_outcome_trade_journal", 1)[1].split("\ndef ", 1)[0]
     developer = source.split("def render_developer_tools", 1)[1].split("\ndef ", 1)[0]
-    assert "render_live_session_opportunity" not in positions
-    assert "render_live_session_opportunity" not in journal
     assert "scan_symbols(" not in developer
+    assert "verify_tradier_connection" not in journal
+    assert "save_diagnostic_result" not in journal
