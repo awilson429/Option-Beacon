@@ -140,6 +140,16 @@ def generate_signal(symbol):
             symbol,
             exc,
         )
+    try:
+        from regime_selection_experiment import record_live_shadow
+
+        record_live_shadow(result, df, i)
+    except Exception as exc:
+        LOGGER.warning(
+            "Experiment 002 shadow evaluation failed for %s: %s",
+            symbol,
+            exc,
+        )
     return result
 
 

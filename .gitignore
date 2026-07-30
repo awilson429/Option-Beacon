@@ -38,3 +38,4 @@ live_preview.py
 Thumbs.db
 .analysis-cache/
 experiment_001_shadow.jsonl
+experiment_002_shadow.jsonl
