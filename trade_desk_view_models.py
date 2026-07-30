@@ -6,8 +6,22 @@ import math
 from datetime import date, datetime, timezone
 from statistics import mean
 from typing import Iterable
+from zoneinfo import ZoneInfo
 
 from signal_history import TradeOutcome
+
+
+EASTERN = ZoneInfo("America/New_York")
+
+
+def eastern_trade_date(value: datetime | None) -> date | None:
+    """Return the New York trading date for a persisted timestamp."""
+    if value is None:
+        return None
+    timestamp = value
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    return timestamp.astimezone(EASTERN).date()
 
 
 UNAVAILABLE = "—"
@@ -167,7 +181,7 @@ def daily_scorecard(
         record
         for record in records
         if record.entry_time is not None
-        and record.entry_time.date() == trading_date
+        and eastern_trade_date(record.entry_time) == trading_date
     ]
     closed = [record for record in entered if record.exit_time is not None]
     returns = [

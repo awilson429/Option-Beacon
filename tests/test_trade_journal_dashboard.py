@@ -1,14 +1,19 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from signal_history import create_trade_record
 from trade_journal_dashboard import (
     UNAVAILABLE,
+    default_opened_alert_date,
     filter_trade_outcomes,
     format_metric,
+    opened_alert_dates,
+    opened_alerts_for_date,
     sort_trade_outcomes_newest,
     trade_history_rows,
     trade_outcome_status,
 )
+from trade_desk_view_models import daily_scorecard, eastern_trade_date
 
 
 START = datetime(2026, 7, 27, 14, 0, tzinfo=timezone.utc)
@@ -126,3 +131,150 @@ def test_unavailable_metric_formatting():
     assert format_metric(-float("inf")) == UNAVAILABLE
     assert format_metric("not a number") == UNAVAILABLE
     assert format_metric(2.5, percentage=True) == "2.50%"
+
+
+def test_current_eastern_date_is_selected_during_market_hours():
+    yesterday = record(
+        symbol="QQQ",
+        timestamp=datetime(2026, 7, 29, 15, 0, tzinfo=timezone.utc),
+        status="OPEN",
+    )
+    today = record(
+        symbol="SPY",
+        timestamp=datetime(2026, 7, 30, 14, 0, tzinfo=timezone.utc),
+        status="OPEN",
+    )
+    now = datetime(
+        2026,
+        7,
+        30,
+        11,
+        0,
+        tzinfo=ZoneInfo("America/New_York"),
+    )
+
+    assert default_opened_alert_date(
+        [yesterday, today],
+        now,
+        market_open=True,
+    ) == date(2026, 7, 30)
+
+
+def test_most_recent_available_date_is_selected_outside_market_hours():
+    older = record(
+        symbol="QQQ",
+        timestamp=datetime(2026, 7, 28, 14, 0, tzinfo=timezone.utc),
+        status="OPEN",
+    )
+    latest = record(
+        symbol="SPY",
+        timestamp=datetime(2026, 7, 30, 14, 0, tzinfo=timezone.utc),
+        status="OPEN",
+    )
+    weekend = datetime(
+        2026,
+        8,
+        1,
+        12,
+        0,
+        tzinfo=ZoneInfo("America/New_York"),
+    )
+
+    assert default_opened_alert_date(
+        [older, latest],
+        weekend,
+        market_open=False,
+    ) == date(2026, 7, 30)
+
+
+def test_historical_date_selection_filters_by_eastern_entry_date():
+    first = record(
+        symbol="SPY",
+        timestamp=datetime(2026, 7, 29, 15, 0, tzinfo=timezone.utc),
+        status="OPEN",
+    )
+    second = record(
+        symbol="QQQ",
+        timestamp=datetime(2026, 7, 30, 15, 0, tzinfo=timezone.utc),
+        status="OPEN",
+    )
+
+    assert opened_alerts_for_date(
+        [first, second],
+        date(2026, 7, 29),
+    ) == [first]
+
+
+def test_utc_timestamp_near_midnight_uses_eastern_trading_date():
+    near_midnight_utc = datetime(2026, 7, 30, 1, 0, tzinfo=timezone.utc)
+    alert = record(timestamp=near_midnight_utc, status="CLOSED")
+
+    assert eastern_trade_date(near_midnight_utc) == date(2026, 7, 29)
+    assert opened_alert_dates([alert]) == [date(2026, 7, 29)]
+    assert daily_scorecard([alert], date(2026, 7, 29))["opened_alerts"] == 1
+
+
+def test_closed_alerts_remain_in_selected_daily_blotter():
+    opened = record(symbol="SPY", status="OPEN")
+    closed = record(symbol="QQQ", status="CLOSED")
+
+    selected = opened_alerts_for_date(
+        [opened, closed],
+        eastern_trade_date(START),
+    )
+
+    assert {item.symbol for item in selected} == {"SPY", "QQQ"}
+
+
+def test_date_options_only_include_dates_with_entered_alerts():
+    candidate = record(
+        timestamp=datetime(2026, 7, 31, 14, 0, tzinfo=timezone.utc),
+        status="CANDIDATE",
+    )
+    first = record(
+        timestamp=datetime(2026, 7, 29, 14, 0, tzinfo=timezone.utc),
+        status="OPEN",
+    )
+    second = record(
+        timestamp=datetime(2026, 7, 30, 14, 0, tzinfo=timezone.utc),
+        status="CLOSED",
+    )
+
+    assert opened_alert_dates([candidate, first, second]) == [
+        date(2026, 7, 30),
+        date(2026, 7, 29),
+    ]
+
+
+def test_empty_daily_alert_selection_is_safe():
+    now = datetime(
+        2026,
+        7,
+        30,
+        12,
+        0,
+        tzinfo=ZoneInfo("America/New_York"),
+    )
+    assert opened_alert_dates([]) == []
+    assert default_opened_alert_date([], now, market_open=True) is None
+    assert opened_alerts_for_date([], None) == []
+
+
+def test_trade_desk_removes_old_six_dropdown_filters_and_keeps_empty_states():
+    source = open("app.py", encoding="utf-8").read()
+    start = source.index("def render_outcome_trade_journal(")
+    end = source.index("def render_live_session_opportunity(", start)
+    journal = source[start:end]
+
+    for key in (
+        "outcome_journal_symbol",
+        "outcome_journal_setup",
+        "outcome_journal_direction",
+        "outcome_journal_exit_reason",
+        "outcome_journal_confidence",
+        "outcome_journal_status",
+    ):
+        assert key not in journal
+    assert '"Date"' in journal
+    assert "No opened alerts are available for the selected date." in journal
+    assert "No trade currently meets the entry requirements." in source

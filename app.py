@@ -12,6 +12,7 @@ from ui.theme import configure_page
 
 from after_hours import after_hours_focus_rows, fetch_after_hours_briefing
 from build_information import build_information, render_build_footer
+from dashboard_storage_config import dashboard_database_url
 from developer_tools import (
     latest_production_ledger_entry,
     load_latest_diagnostic,
@@ -76,15 +77,12 @@ from option_position_tracker import (
     open_position_rows,
     refresh_option_positions_safely,
 )
+from reliability_dashboard import reliability_status_model
 from open_trade_quotes import enrich_open_trade_prices
 from signal_history import load_trade_outcomes
 from signal_outcomes import load_signal_outcomes, summarize_outcomes
 from tradier_options import tradier_configured
-from trade_analytics import (
-    CONFIDENCE_BUCKETS,
-    analyze_trade_outcomes,
-    confidence_bucket,
-)
+from trade_analytics import analyze_trade_outcomes
 from trade_evidence import (
     UNAVAILABLE as EVIDENCE_UNAVAILABLE,
     actionable_trade_plan,
@@ -93,13 +91,14 @@ from trade_evidence import (
     scanner_entry_eligibility,
 )
 from trade_journal_dashboard import (
-    STATUS_OPTIONS,
     active_edge_analytics,
-    filter_trade_outcomes,
+    default_opened_alert_date,
     format_metric,
     format_signed_return,
     grouped_performance_rows,
     journal_summary_metrics,
+    opened_alert_dates,
+    opened_alerts_for_date,
     opened_alerts_analytics,
     performance_caption,
     trade_history_rows,
@@ -132,6 +131,7 @@ from trade_storage import (
     update_position_premium,
     update_position_stop,
 )
+from trade_state_service import authoritative_trade_state
 from ui_polish import (
     opportunity_summary,
     scanner_summary,
@@ -857,11 +857,40 @@ def cached_after_hours_briefing():
     return fetch_after_hours_briefing()
 
 
-def load_trade_evidence_history():
-    try:
-        return load_trade_outcomes()
-    except Exception:
-        return []
+def load_trade_evidence_history(trade_state=None):
+    """Load authoritative records without converting storage failures to empty data."""
+    state = trade_state or authoritative_trade_state(
+        branch=build_information()["branch"],
+        database_url=dashboard_database_url(),
+    )
+    return list(state["records"])
+
+
+def render_reliability_status(trade_state, latest_results, records):
+    open_count = sum(
+        record.entry_time is not None and record.exit_time is None
+        for record in records
+    )
+    info = build_information()
+    model = reliability_status_model(
+        trade_state,
+        market_open=is_market_open_now(),
+        latest_results=latest_results,
+        open_trade_count=open_count,
+        commit=info["commit"],
+    )
+    details = (
+        f"Scanner: {model['scanner_state']} · Storage: {model['storage_state']} · "
+        f"Market data: {model['market_data_state']} · Build: {model['commit']}"
+    )
+    message = f"{model['summary']}  \n{details}"
+    renderer = {
+        "error": st.error,
+        "warning": st.warning,
+        "success": st.success,
+        "neutral": st.info,
+    }[model["severity"]]
+    renderer(message)
 
 
 def render_historical_edge(result, trade_history, evidence=None):
@@ -2904,12 +2933,19 @@ def render_outcome_trade_journal(
     latest_results=None,
     current_prices=None,
     quote_status=None,
+    reliability_state=None,
 ):
     render_section_header(
         "Trade Desk",
         TRADE_DESK_SUBTITLE,
     )
     records = list(records) if records is not None else load_trade_outcomes()
+    if reliability_state is not None:
+        render_reliability_status(
+            reliability_state,
+            latest_results or {},
+            records,
+        )
     render_live_session_opportunity(latest_results or {}, records)
     build_branch = build_information()["branch"]
     modern_scorecard = modern_style_active(st.query_params, build_branch)
@@ -2945,94 +2981,29 @@ def render_outcome_trade_journal(
             render_empty_state("No trade history has been recorded yet.")
         return
 
-    symbols = ["All", *sorted({record.symbol for record in records if record.symbol})]
-    setups = ["All", *sorted({record.setup for record in records if record.setup})]
-    directions = [
-        "All",
-        *sorted({record.direction for record in records if record.direction}),
-    ]
-    exit_reasons = [
-        "All",
-        *sorted({record.exit_reason for record in records if record.exit_reason}),
-    ]
-    present_confidence_buckets = {
-        confidence_bucket(record.confidence) for record in records
-    }
-    confidence_buckets = [
-        "All",
-        *[
-            label
-            for label, _lower, _upper in CONFIDENCE_BUCKETS
-            if label in present_confidence_buckets
-        ],
-    ]
-
-    filter_1, filter_2, filter_3 = st.columns(3)
-    selected_symbol = filter_1.selectbox(
-        "Symbol",
-        symbols,
-        key="outcome_journal_symbol",
-    )
-    selected_setup = filter_2.selectbox(
-        "Setup",
-        setups,
-        key="outcome_journal_setup",
-    )
-    selected_direction = filter_3.selectbox(
-        "Direction",
-        directions,
-        key="outcome_journal_direction",
-    )
-    filter_4, filter_5, filter_6 = st.columns(3)
-    selected_exit_reason = filter_4.selectbox(
-        "Exit reason",
-        exit_reasons,
-        key="outcome_journal_exit_reason",
-    )
-    selected_confidence = filter_5.selectbox(
-        "Confidence bucket",
-        confidence_buckets,
-        key="outcome_journal_confidence",
-    )
-    selected_status = filter_6.selectbox(
-        "Status",
-        STATUS_OPTIONS,
-        key="outcome_journal_status",
-    )
-
-    filtered_records = filter_trade_outcomes(
-        records,
-        symbol=selected_symbol,
-        setup=selected_setup,
-        direction=selected_direction,
-        exit_reason=selected_exit_reason,
-        confidence=selected_confidence,
-        status=selected_status,
-    )
-    st.caption(f"Showing {len(filtered_records)} of {len(records)} recorded signals")
-
-    summary = journal_summary_metrics(filtered_records)
-    analytics = analyze_trade_outcomes(filtered_records)
+    summary = journal_summary_metrics(records)
+    analytics = analyze_trade_outcomes(records)
     now = eastern_now()
+    market_open = is_market_open_now()
     current_prices = current_prices or {
         record.symbol: latest_symbol_price(latest_results or {}, record.symbol)
-        for record in filtered_records
+        for record in records
         if record.entry_time is not None and record.exit_time is None
     }
-    opened_alerts = opened_alerts_analytics(
-        filtered_records,
+    all_opened_alerts = opened_alerts_analytics(
+        records,
         current_prices,
         now,
         quote_status,
     )
     active_edge = active_edge_analytics(
-        filtered_records,
+        records,
         current_prices,
         now,
         quote_status,
     )
     st.markdown("### Open Positions Needing Attention")
-    attention = attention_positions(opened_alerts["rows"])
+    attention = attention_positions(all_opened_alerts["rows"])
     if attention:
         attention_columns = [
             "Symbol", "Direction", "Position Health", "Open Return",
@@ -3046,7 +3017,7 @@ def render_outcome_trade_journal(
     else:
         render_empty_state("No open positions currently require attention.")
 
-    scorecard = daily_scorecard(filtered_records, now.date())
+    scorecard = daily_scorecard(records, now.date())
     score_fields = (
         ("Opened Alerts", scorecard["opened_alerts"], "neutral"),
         ("Closed Trades", scorecard["closed_trades"], "neutral"),
@@ -3087,6 +3058,27 @@ def render_outcome_trade_journal(
 
     st.divider()
     st.markdown("### Opened Alerts")
+    alert_dates = opened_alert_dates(records)
+    selected_alert_date = default_opened_alert_date(
+        records,
+        now,
+        market_open=market_open,
+    )
+    if not market_open and alert_dates:
+        selected_alert_date = st.selectbox(
+            "Date",
+            alert_dates,
+            index=alert_dates.index(selected_alert_date),
+            format_func=lambda value: value.strftime("%B %d, %Y"),
+            key="opened_alert_date",
+        )
+    daily_alert_records = opened_alerts_for_date(records, selected_alert_date)
+    opened_alerts = opened_alerts_analytics(
+        daily_alert_records,
+        current_prices,
+        now,
+        quote_status,
+    )
     if opened_alerts["rows"]:
         primary_columns = [
             "Entry Time", "Symbol", "Direction", "Setup", "Position Health",
@@ -3099,7 +3091,7 @@ def render_outcome_trade_journal(
             hide_index=True,
         )
         entered_records = [
-            record for record in filtered_records if record.entry_time is not None
+            record for record in daily_alert_records if record.entry_time is not None
         ]
         selected_label = st.selectbox(
             "Entered alert details",
@@ -3141,7 +3133,7 @@ def render_outcome_trade_journal(
             f"{historical_edge_summary(record_evidence)}"
         )
     else:
-        render_empty_state("No entered alerts match the current filters.")
+        render_empty_state("No opened alerts are available for the selected date.")
 
     st.markdown("### Active Edge")
     st.caption(
@@ -3257,11 +3249,11 @@ def render_outcome_trade_journal(
                     render_empty_state("No closed trade performance is available.")
 
     with st.expander("Complete Trade History"):
-        history_rows = trade_history_rows(filtered_records)
+        history_rows = trade_history_rows(records)
         if history_rows:
             st.dataframe(pd.DataFrame(history_rows), use_container_width=True, hide_index=True)
         else:
-            render_empty_state("No trade history matches the selected filters.")
+            render_empty_state("No trade history has been recorded yet.")
 
 
 def render_live_session_opportunity(latest_results, trade_history):
@@ -3529,7 +3521,11 @@ def main():
     configure_page()
     render_header()
     latest_results, high_score_history, snapshot_time, symbol_groups = scan_symbols()
-    trade_evidence_history = load_trade_evidence_history()
+    trade_state = authoritative_trade_state(
+        branch=build_information()["branch"],
+        database_url=dashboard_database_url(),
+    )
+    trade_evidence_history = load_trade_evidence_history(trade_state)
     capture_qualified_signals(
         latest_results.values(),
         history=trade_evidence_history,
@@ -3569,6 +3565,7 @@ def main():
             latest_results,
             open_trade_prices,
             open_trade_quote_status,
+            trade_state,
         )
 
     elif active_page == "History":
