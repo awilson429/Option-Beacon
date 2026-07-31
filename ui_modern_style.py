@@ -10,7 +10,7 @@ DEMO_SCORE_FIELDS = (
     ("Winners", 9, "positive"),
     ("Losers", 1, "negative"),
     ("Win Rate", "90.00%", "neutral"),
-    ("Average Realized Return", "+0.20%", "positive"),
+    ("AVG. RETURN", "+0.20%", "positive"),
 )
 DEMO_SCORE_SUMMARY = (
     "Best trade +0.58% · Worst trade -0.73% · Average hold 27.50 minutes"
@@ -92,22 +92,30 @@ SCORECARD_CSS = """
     background: var(--ob-panel-background);
     border: 1px solid var(--ob-primary-border);
     border-radius: var(--ob-border-radius);
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-height: 7rem;
     min-width: 0;
     padding: var(--ob-panel-padding);
 }
 .ob-modern-shell .ob-scorecard-label {
+    align-items: flex-start;
     color: var(--ob-muted-text);
+    display: flex;
     font-size: var(--ob-label-size);
     font-weight: 650;
     letter-spacing: 0.025em;
-    line-height: 1.3;
+    line-height: 1.25;
     margin-bottom: var(--ob-compact-gap);
+    min-height: 2rem;
 }
 .ob-modern-shell .ob-scorecard-value {
     color: var(--ob-primary-text);
     font-size: 1.35rem;
     font-weight: 750;
     line-height: 1.15;
+    margin-top: auto;
 }
 .ob-modern-shell .ob-scorecard-card.ob-positive .ob-scorecard-value {
     color: var(--ob-green-accent);
@@ -118,6 +126,7 @@ SCORECARD_CSS = """
 .ob-modern-shell .ob-scorecard-summary {
     color: var(--ob-secondary-text);
     font-size: var(--ob-body-size);
+    line-height: 1.4;
     margin-top: var(--ob-standard-gap);
 }
 @media (max-width: 900px) {

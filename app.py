@@ -678,9 +678,10 @@ def render_journal_metric(column, label, value, treatment="neutral"):
         "neutral": "neutral",
     }.get(treatment, "neutral")
     column.markdown(
-        '<div class="health-card">'
-        f'<div class="health-label">{escape(label)}</div>'
-        f'<div class="health-state health-{level}">{escape(str(value))}</div>'
+        '<div class="health-card journal-summary-card">'
+        f'<div class="health-label journal-summary-label">{escape(label)}</div>'
+        f'<div class="health-state journal-summary-value health-{level}">'
+        f'{escape(str(value))}</div>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -879,18 +880,13 @@ def render_reliability_status(trade_state, latest_results, records):
         open_trade_count=open_count,
         commit=info["commit"],
     )
-    details = (
-        f"Scanner: {model['scanner_state']} · Storage: {model['storage_state']} · "
-        f"Market data: {model['market_data_state']} · Build: {model['commit']}"
-    )
-    message = f"{model['summary']}  \n{details}"
     renderer = {
         "error": st.error,
         "warning": st.warning,
         "success": st.success,
         "neutral": st.info,
     }[model["severity"]]
-    renderer(message)
+    renderer(model["summary"])
 
 
 def render_historical_edge(result, trade_history, evidence=None):
@@ -2963,7 +2959,7 @@ def render_outcome_trade_journal(
                     ("Winners", 0, "positive"),
                     ("Losers", 0, "negative"),
                     ("Win Rate", "—", "neutral"),
-                    ("Average Realized Return", "—", "neutral"),
+                    ("AVG. RETURN", "—", "neutral"),
                 )
                 scorecard_summary = None
             render_modern_scorecard(
@@ -3025,7 +3021,7 @@ def render_outcome_trade_journal(
         ("Losers", scorecard["losers"], "negative"),
         ("Win Rate", format_metric(scorecard["win_rate"], percentage=True), "neutral"),
         (
-            "Average Realized Return",
+            "AVG. RETURN",
             format_signed_return(scorecard["average_realized_return"]),
             "positive" if (scorecard["average_realized_return"] or 0) > 0 else "negative"
             if (scorecard["average_realized_return"] or 0) < 0 else "neutral",
@@ -3054,7 +3050,11 @@ def render_outcome_trade_journal(
         for column, (label, value, treatment) in zip(score_columns, score_fields):
             render_journal_metric(column, label, value, treatment)
         if scorecard_summary:
-            st.caption(scorecard_summary)
+            st.markdown(
+                f'<div class="journal-scorecard-summary">'
+                f'{escape(scorecard_summary)}</div>',
+                unsafe_allow_html=True,
+            )
 
     st.divider()
     st.markdown("### Opened Alerts")

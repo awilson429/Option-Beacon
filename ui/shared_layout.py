@@ -76,9 +76,11 @@ SHARED_UI_CSS = f"""
 .ob-tone-negative .ob-metric-value {{color:var(--ob-red)}}
 .ob-tone-caution .ob-metric-value {{color:var(--ob-amber)}}
 .ob-badge {{
-  background:rgba(255,255,255,.025);border:1px solid var(--ob-border);
-  border-radius:6px;color:var(--ob-text-secondary);display:inline-block;font-size:11px;
-  font-weight:850;letter-spacing:.045em;padding:4px 8px;text-transform:uppercase;
+  align-items:center;background:rgba(255,255,255,.025);border:1px solid var(--ob-border);
+  border-radius:999px;box-sizing:border-box;color:var(--ob-text-secondary);
+  display:inline-flex;font-size:11px;font-weight:850;justify-content:center;
+  letter-spacing:.045em;line-height:1;min-height:1.8rem;padding:.32rem .65rem;
+  text-transform:uppercase;vertical-align:middle;
 }}
 .ob-badge-pass,.ob-badge-active,.ob-badge-ready {{border-color:#318f51;color:var(--ob-green)}}
 .ob-badge-warning,.ob-badge-watch,.ob-badge-wait {{border-color:#aa8420;color:var(--ob-amber)}}
