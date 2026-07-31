@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Iterable
 
 from live_trade_coach import coach_trade_outcome
+from intraday_session import eod_coach_warning_due, intraday_trade_exit_due
 from signal_history import TradeOutcome, scanner_result_to_trade_outcome
 from trade_evidence import actionable_trade_plan
 
@@ -133,12 +134,27 @@ def open_trade_coach_output(
     """Evaluate only eligible open records through the canonical coach."""
     if not open_trade_coach_eligible(record):
         return None
-    return coach_trade_outcome(
+    coach = coach_trade_outcome(
         record,
         current_price,
         current_timestamp,
         historical_intelligence=historical_intelligence,
     )
+    if eod_coach_warning_due(current_timestamp) or intraday_trade_exit_due(
+        record.entry_time, current_timestamp
+    ):
+        return {
+            **coach,
+            "status": "EXIT BEFORE CLOSE",
+            "action": "Exit the intraday position before the regular session closes.",
+            "urgency": "HIGH",
+            "summary": "The authoritative end-of-day cutoff is approaching or has arrived.",
+            "reasons": [
+                *(coach.get("reasons") or []),
+                "Intraday positions are not carried beyond the regular session.",
+            ],
+        }
+    return coach
 
 
 def coach_display_model(coach: dict) -> dict:
@@ -149,6 +165,7 @@ def coach_display_model(coach: dict) -> dict:
         "PROTECT PROFIT": "caution",
         "TAKE PARTIAL": "caution",
         "EXIT": "urgent",
+        "EXIT BEFORE CLOSE": "urgent",
         "CLOSED": "neutral",
         "UNAVAILABLE": "muted",
     }
