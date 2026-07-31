@@ -34,6 +34,7 @@ def repository_for_runtime(
     db_file=DEFAULT_REPOSITORY_FILE,
     branch=None,
     database_url=None,
+    diagnostic_callback=None,
 ) -> TradeRepository:
     explicitly_required = os.getenv(
         "OPTIONBEACON_REQUIRE_DURABLE_STORAGE", ""
@@ -50,11 +51,13 @@ def repository_for_runtime(
         if database_url is None
         else database_url
     )
-    return TradeRepository(
-        db_file,
-        database_url=resolved_database_url,
-        require_durable=require_durable,
-    )
+    kwargs = {
+        "database_url": resolved_database_url,
+        "require_durable": require_durable,
+    }
+    if diagnostic_callback is not None:
+        kwargs["diagnostic_callback"] = diagnostic_callback
+    return TradeRepository(db_file, **kwargs)
 
 
 def sync_trade_outcome(

@@ -322,7 +322,7 @@ def test_worker_configuration_error_logs_root_cause_and_traceback(
     monkeypatch.setattr(
         worker,
         "repository_for_runtime",
-        lambda: (_ for _ in ()).throw(
+        lambda **_kwargs: (_ for _ in ()).throw(
             RepositoryUnavailable(
                 "Durable trade storage is required but DATABASE_URL is not configured."
             )
