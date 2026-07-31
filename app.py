@@ -3373,7 +3373,7 @@ def render_live_session_opportunity(latest_results, trade_history):
             st.write(f"Coach rationale: {coach.get('summary') or '—'}")
 
 
-def render_developer_tools():
+def render_developer_tools(trade_state=None):
     """Render read-only internal diagnostics without exposing provider secrets."""
     render_section_header(
         "Developer Tools",
@@ -3385,7 +3385,26 @@ def render_developer_tools():
     )
 
     st.markdown("### System Status")
-    st.dataframe(pd.DataFrame(system_status()), use_container_width=True, hide_index=True)
+    status_rows = system_status()
+    if trade_state:
+        last_success = trade_state.get("last_success_at")
+        status_rows.extend(
+            [
+                {
+                    "name": "Authoritative scanner ID",
+                    "status": trade_state.get("scanner_id") or "Unavailable",
+                },
+                {
+                    "name": "Last successful authoritative scan",
+                    "status": (
+                        last_success.isoformat()
+                        if hasattr(last_success, "isoformat")
+                        else str(last_success or "Unavailable")
+                    ),
+                },
+            ]
+        )
+    st.dataframe(pd.DataFrame(status_rows), use_container_width=True, hide_index=True)
 
     def run_diagnostic(button_label, key, diagnostic):
         running_key = f"{key}_running"
@@ -3581,7 +3600,7 @@ def main():
         render_scanner_health(latest_results, snapshot_time, symbol_groups)
 
     elif active_page == "Developer Tools":
-        render_developer_tools()
+        render_developer_tools(trade_state)
 
     st.markdown(
         '<div class="notice notice-warning">Decision-support dashboard only. Not financial advice.</div>',

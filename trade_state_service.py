@@ -278,6 +278,7 @@ def authoritative_trade_state(
             else "LOCAL DEVELOPMENT",
             "scanner_state": state["state"],
             "market_data_state": state["market_data_state"],
+            "scanner_id": health.get("scanner_id") if health else None,
             "last_success_at": state["last_success_at"],
             "age_minutes": state["age_minutes"],
             "message": state["message"],
@@ -291,6 +292,7 @@ def authoritative_trade_state(
             "storage_state": "UNAVAILABLE",
             "scanner_state": "UNKNOWN",
             "market_data_state": "UNKNOWN",
+            "scanner_id": None,
             "last_success_at": None,
             "age_minutes": None,
             "message": (

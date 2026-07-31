@@ -20,6 +20,15 @@ MAX_DB_CONNECT_TIMEOUT_SECONDS = 60
 UTC = timezone.utc
 
 
+def verbose_storage_diagnostics_enabled(value=None) -> bool:
+    raw = (
+        os.getenv("OPTIONBEACON_VERBOSE_STORAGE_DIAGNOSTICS", "false")
+        if value is None
+        else value
+    )
+    return str(raw or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 class RepositoryUnavailable(RuntimeError):
     """Raised when authoritative storage cannot be reached."""
 
@@ -104,6 +113,7 @@ class TradeRepository:
         require_durable: bool = False,
         connect_timeout_seconds: int | None = None,
         diagnostic_callback=None,
+        verbose_storage_diagnostics=None,
     ):
         self.db_file = str(db_file)
         self.database_url = (
@@ -115,6 +125,10 @@ class TradeRepository:
         self.durable = self.backend == "postgresql"
         self.require_durable = require_durable
         self.diagnostic_callback = diagnostic_callback
+        self.verbose_storage_diagnostics = verbose_storage_diagnostics_enabled(
+            verbose_storage_diagnostics
+        )
+        self._connection_ready_logged = False
         if require_durable and not self.durable:
             raise RepositoryUnavailable(
                 "Durable trade storage is required but DATABASE_URL is not configured."
@@ -128,6 +142,13 @@ class TradeRepository:
         self.initialize()
 
     def _diagnostic(self, event: str, **fields):
+        if event == "repository_connection_ready":
+            if (
+                self._connection_ready_logged
+                and not self.verbose_storage_diagnostics
+            ):
+                return
+            self._connection_ready_logged = True
         if self.diagnostic_callback is not None:
             self.diagnostic_callback({"event": event, **fields})
 
@@ -510,6 +531,11 @@ class TradeRepository:
                 if existing:
                     return existing
                 raise
+        self._diagnostic(
+            "trade_opened",
+            trade_id=identifier,
+            opportunity_id=opportunity_id,
+        )
         return self.get_trade(trade_id=identifier)
 
     def get_trade(self, trade_id=None, *, opportunity_id=None) -> dict | None:
@@ -551,6 +577,7 @@ class TradeRepository:
                 + " WHERE id=?",
                 (*values.values(), trade_id),
             ).close()
+        self._diagnostic("trade_updated", trade_id=trade_id)
         return self.get_trade(trade_id=trade_id)
 
     def close_trade(
@@ -591,6 +618,11 @@ class TradeRepository:
                 "UPDATE opportunities SET state='CLOSED',updated_at=? WHERE id=?",
                 (now, trade["opportunity_id"]),
             ).close()
+        self._diagnostic(
+            "trade_closed",
+            trade_id=trade_id,
+            exit_reason=exit_reason,
+        )
         return self.get_trade(trade_id=trade_id)
 
     def list_open_trades(self) -> list[dict]:

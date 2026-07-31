@@ -22,6 +22,7 @@ from optionbeacon.worker.database_diagnostics import (
     probe_postgresql,
 )
 from optionbeacon.worker.scan_once import run_scan_once
+from optionbeacon.worker.logging_config import configure_worker_logging
 from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable
 from trade_state_service import repository_for_runtime
 
@@ -154,10 +155,7 @@ def main(argv=None):
     parser.add_argument("--interval-seconds")
     parser.add_argument("--max-runs", type=int)
     args = parser.parse_args(argv)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    configure_worker_logging()
     startup_stage = "worker_configuration"
     repository_state = {"event": None}
 

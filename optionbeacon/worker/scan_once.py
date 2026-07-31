@@ -12,8 +12,13 @@ from datetime import datetime, timezone
 from build_information import build_information
 from finnhub_universe import active_symbol_groups, flatten_symbol_groups
 from intraday_session import configured_eod_exit_time, intraday_trade_exit_due
-from optionbeacon_live import generate_signal
+from optionbeacon_live import (
+    begin_market_data_scan_cycle,
+    end_market_data_scan_cycle,
+    generate_signal,
+)
 from optionbeacon_snapshot import save_latest_results
+from optionbeacon.worker.logging_config import configure_worker_logging
 from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable
 from trade_state_service import (
     list_trade_outcomes,
@@ -62,6 +67,15 @@ def run_scan_once(
     )
     results = {}
     failures = 0
+    failed_symbols = []
+    provider_summary = None
+    begin_market_data_scan_cycle()
+    LOGGER.info(
+        json.dumps(
+            {"event": "scan_started", "scanner_id": scanner_id},
+            sort_keys=True,
+        )
+    )
     try:
         groups, source, universe_error = symbol_groups_loader()
         open_records = [
@@ -121,17 +135,20 @@ def run_scan_once(
                     sleep(delay)
             if failure is not None:
                 failures += 1
-                LOGGER.error(
-                    "Signal quote unavailable: %s",
-                    json.dumps(
-                        {
-                            "symbol": symbol,
-                            "error": type(failure).__name__,
-                            "eod_exit_pending": symbol in eod_due_symbols,
-                        },
-                        sort_keys=True,
-                    ),
-                )
+                failed_symbols.append(symbol)
+                if symbol in eod_due_symbols:
+                    LOGGER.error(
+                        "EOD exit quote unavailable: %s",
+                        json.dumps(
+                            {
+                                "event": "eod_exit_quote_unavailable",
+                                "symbol": symbol,
+                                "error": type(failure).__name__,
+                                "eod_exit_pending": True,
+                            },
+                            sort_keys=True,
+                        ),
+                    )
                 if result is None:
                     continue
             if result is None:
@@ -143,6 +160,23 @@ def run_scan_once(
                 source_version=build["commit"],
                 current_timestamp=clock(),
                 eod_exit_time=eod_exit_time,
+            )
+        provider_summary = end_market_data_scan_cycle()
+        if failed_symbols or provider_summary["rate_limited_symbols"]:
+            LOGGER.warning(
+                json.dumps(
+                    {
+                        "event": "provider_warning_summary",
+                        "provider": provider_summary["provider"],
+                        "failed_symbols": sorted(set(failed_symbols)),
+                        "rate_limited_symbols": provider_summary[
+                            "rate_limited_symbols"
+                        ],
+                        "request_count": provider_summary["requests"],
+                        "cache_hits": provider_summary["cache_hits"],
+                    },
+                    sort_keys=True,
+                )
             )
         snapshot_writer(results)
         completed = clock()
@@ -171,14 +205,13 @@ def run_scan_once(
         )
         return 1
     finally:
+        if provider_summary is None:
+            end_market_data_scan_cycle()
         repository.release_scan_lock(scanner_id, owner)
 
 
 def main() -> int:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    configure_worker_logging()
     try:
         return run_scan_once()
     except RepositoryUnavailable as exc:

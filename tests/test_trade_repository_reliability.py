@@ -251,6 +251,7 @@ def test_dashboard_uses_latest_configured_worker_health(tmp_path):
         "railway-production-worker"
     )
     assert state["scanner_state"] == "CURRENT"
+    assert state["scanner_id"] == "railway-production-worker"
     assert state["last_success_at"] == NOW
     assert state["message"].startswith("Scanner data is current.")
 
