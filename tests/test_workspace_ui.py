@@ -129,7 +129,7 @@ def test_workspace_routing_isolated_by_selected_page():
         ("After Hours", "render_after_hours("),
         ("History", "render_coach_timeline()"),
         ("Tools", "render_scanner_health("),
-        ("Developer Tools", "render_developer_tools()"),
+        ("Developer Tools", "render_developer_tools(trade_state)"),
     ):
         assert f'active_page == "{page}"' in source
         assert renderer in source

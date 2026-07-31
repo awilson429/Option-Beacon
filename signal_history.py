@@ -352,6 +352,41 @@ def update_trade_outcome(
     return record
 
 
+def close_trade_outcome_end_of_day(
+    record: TradeOutcome,
+    current_price: float,
+    current_timestamp: datetime | str,
+) -> TradeOutcome:
+    """Close one entered intraday outcome at the latest sampled underlying price."""
+    if record.entry_time is None or record.exit_time is not None:
+        return record
+    price = _valid_price(current_price)
+    entry = _valid_price(record.entry)
+    if price is None or entry is None:
+        return record
+    checked_at = _current_timestamp(current_timestamp)
+    entry_time = _current_timestamp(record.entry_time)
+    current_return = _directional_return(record.direction, entry, price)
+    record.max_favorable_excursion = max(
+        0.0,
+        record.max_favorable_excursion or 0.0,
+        current_return,
+    )
+    record.max_adverse_excursion = min(
+        0.0,
+        record.max_adverse_excursion or 0.0,
+        current_return,
+    )
+    record.hold_minutes = max(
+        0.0,
+        (checked_at - entry_time).total_seconds() / 60,
+    )
+    record.exit_time = checked_at
+    record.exit_reason = "END_OF_DAY"
+    record.realized_return = current_return
+    return record
+
+
 def update_trade_outcomes_from_result(
     result: dict,
     file_name: str | Path = DEFAULT_HISTORY_FILE,

@@ -2,6 +2,7 @@ import yfinance as yf
 import pandas as pd
 import time
 import logging
+import random
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -27,6 +28,46 @@ DATA_PERIODS = ["5d", "10d", "1mo"]
 
 SCAN_SECONDS = 300  # 5 minutes
 LOGGER = logging.getLogger(__name__)
+MARKET_DATA_MAX_ATTEMPTS = 3
+MARKET_DATA_BACKOFF_SECONDS = 0.5
+MARKET_DATA_MAX_JITTER_SECONDS = 0.25
+_MARKET_DATA_SCAN_CACHE = None
+_MARKET_DATA_SCAN_STATS = None
+
+
+def begin_market_data_scan_cycle():
+    """Start one serial scan cache and provider-warning accumulator."""
+    global _MARKET_DATA_SCAN_CACHE, _MARKET_DATA_SCAN_STATS
+    _MARKET_DATA_SCAN_CACHE = {}
+    _MARKET_DATA_SCAN_STATS = {
+        "provider": "Yahoo Finance via yfinance",
+        "requests": 0,
+        "cache_hits": 0,
+        "rate_limited_symbols": set(),
+    }
+
+
+def end_market_data_scan_cycle() -> dict:
+    """Return a JSON-safe scan summary and clear cycle-local state."""
+    global _MARKET_DATA_SCAN_CACHE, _MARKET_DATA_SCAN_STATS
+    stats = _MARKET_DATA_SCAN_STATS or {
+        "provider": "Yahoo Finance via yfinance",
+        "requests": 0,
+        "cache_hits": 0,
+        "rate_limited_symbols": set(),
+    }
+    result = {
+        **stats,
+        "rate_limited_symbols": sorted(stats["rate_limited_symbols"]),
+    }
+    _MARKET_DATA_SCAN_CACHE = None
+    _MARKET_DATA_SCAN_STATS = None
+    return result
+
+
+def _rate_limit_error(exc) -> bool:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return "429" in text or "rate limit" in text or "too many requests" in text
 
 
 def eastern_timestamp():
@@ -56,14 +97,46 @@ def download_data(symbol, period):
         return yf.download(symbol, period=period, interval=INTERVAL, progress=False)
 
 
+def _download_market_data(symbol, period, *, sleep=time.sleep, jitter=random.uniform):
+    key = (str(symbol).upper(), str(period), INTERVAL)
+    if _MARKET_DATA_SCAN_CACHE is not None and key in _MARKET_DATA_SCAN_CACHE:
+        _MARKET_DATA_SCAN_STATS["cache_hits"] += 1
+        return _MARKET_DATA_SCAN_CACHE[key].copy()
+
+    last_error = None
+    for attempt in range(MARKET_DATA_MAX_ATTEMPTS):
+        if _MARKET_DATA_SCAN_STATS is not None:
+            _MARKET_DATA_SCAN_STATS["requests"] += 1
+        try:
+            frame = download_data(symbol, period)
+            if _MARKET_DATA_SCAN_CACHE is not None:
+                _MARKET_DATA_SCAN_CACHE[key] = frame.copy()
+            return frame
+        except Exception as exc:
+            last_error = exc
+            if not _rate_limit_error(exc):
+                raise
+            if _MARKET_DATA_SCAN_STATS is not None:
+                _MARKET_DATA_SCAN_STATS["rate_limited_symbols"].add(
+                    str(symbol).upper()
+                )
+            if attempt < MARKET_DATA_MAX_ATTEMPTS - 1:
+                delay = MARKET_DATA_BACKOFF_SECONDS * (2**attempt)
+                delay += jitter(0, MARKET_DATA_MAX_JITTER_SECONDS)
+                sleep(delay)
+    raise RuntimeError("Yahoo Finance rate limit retries exhausted") from last_error
+
+
 def get_data(symbol):
     last_error = None
 
     for period in DATA_PERIODS:
         try:
-            df = download_data(symbol, period)
+            df = _download_market_data(symbol, period)
         except Exception as exc:
             last_error = exc
+            if _rate_limit_error(exc) or _rate_limit_error(exc.__cause__ or exc):
+                break
             continue
 
         if isinstance(df.columns, pd.MultiIndex):

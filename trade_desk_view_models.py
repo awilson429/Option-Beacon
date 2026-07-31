@@ -132,7 +132,7 @@ def position_health(
     status = str(coach_status or "UNAVAILABLE").upper()
     if price is None or current_return is None or risk_remaining is None:
         label, treatment = "Unavailable", "neutral"
-    elif status == "EXIT" or stop_threatened or risk_remaining <= 0:
+    elif status in {"EXIT", "EXIT BEFORE CLOSE"} or stop_threatened or risk_remaining <= 0:
         label, treatment = "Action Needed", "negative"
     elif (
         current_return < 0
@@ -238,6 +238,7 @@ def trade_timeline(record: TradeOutcome) -> list[dict]:
             "TARGET_3": "Target 3 reached",
             "STOP": "Stop reached",
             "TIME_EXIT": "Time exit",
+            "END_OF_DAY": "End-of-day exit",
         }
         event = reasons.get(record.exit_reason)
         if event:

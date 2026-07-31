@@ -51,6 +51,7 @@ def reliability_status_model(
         "scanner_state": scanner,
         "storage_state": storage,
         "market_data_state": market_data,
+        "scanner_id": trade_state.get("scanner_id"),
         "commit": commit,
     }
 

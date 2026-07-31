@@ -12,6 +12,7 @@ import threading
 
 from build_information import build_information
 from finnhub_universe import DEFAULT_SYMBOL_GROUPS, flatten_symbol_groups
+from intraday_session import EndOfDayConfigurationError, configured_eod_exit_time
 from optionbeacon.worker.database_diagnostics import (
     DatabaseProbeError,
     database_url_metadata,
@@ -21,6 +22,7 @@ from optionbeacon.worker.database_diagnostics import (
     probe_postgresql,
 )
 from optionbeacon.worker.scan_once import run_scan_once
+from optionbeacon.worker.logging_config import configure_worker_logging
 from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable
 from trade_state_service import repository_for_runtime
 
@@ -153,10 +155,7 @@ def main(argv=None):
     parser.add_argument("--interval-seconds")
     parser.add_argument("--max-runs", type=int)
     args = parser.parse_args(argv)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
+    configure_worker_logging()
     startup_stage = "worker_configuration"
     repository_state = {"event": None}
 
@@ -169,6 +168,7 @@ def main(argv=None):
     try:
         log_json(LOGGER, logging.INFO, {"event": "worker_startup_started"})
         interval = configured_scan_seconds(args.interval_seconds)
+        configured_eod_exit_time()
         scanner_id = os.getenv(
             "OPTIONBEACON_SCANNER_ID", DEFAULT_SCANNER_ID
         ).strip()
@@ -202,7 +202,12 @@ def main(argv=None):
                 "durable": repository.durable,
             },
         )
-    except (DatabaseProbeError, RepositoryUnavailable, WorkerConfigurationError) as exc:
+    except (
+        DatabaseProbeError,
+        EndOfDayConfigurationError,
+        RepositoryUnavailable,
+        WorkerConfigurationError,
+    ) as exc:
         record = configuration_error_record(exc)
         record["startup_stage"] = startup_stage
         if startup_stage == "repository_initialization":
