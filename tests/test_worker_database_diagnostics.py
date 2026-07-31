@@ -232,6 +232,10 @@ def test_sanitized_traceback_never_includes_original_exception_message(caplog):
             "SSL SYSCALL error: EOF detected",
         ),
         (
+            "server closed the connection unexpectedly",
+            "server closed the connection unexpectedly",
+        ),
+        (
             "channel binding required",
             "channel binding required, but server did not offer it",
         ),
@@ -240,11 +244,18 @@ def test_sanitized_traceback_never_includes_original_exception_message(caplog):
             'password authentication failed for user "railway-user"',
         ),
         ("does not exist", 'database "neondb" does not exist'),
+        ("project exceeded quota", "project exceeded quota"),
+        (
+            "no pg_hba.conf entry",
+            'no pg_hba.conf entry for host "ep-example-pooler.invalid", '
+            'user "railway-user", database "neondb", SSL on',
+        ),
         (
             "Network is unreachable",
             'connection to server at "ep-example-pooler.invalid" '
             "(2600:1f18::1), port 5432 failed: Network is unreachable",
         ),
+        ("TLS handshake failed", "TLS handshake failed"),
         ("other libpq connection error", 'other libpq connection error'),
     ],
 )
@@ -291,6 +302,9 @@ def test_original_postgres_error_category_is_preserved_and_secrets_redacted(
         for record in caplog.records
         if '"event": "database_probe_failed"' in record.message
     )
+    wrapped_payload = json.loads(wrapped.message)
+    assert category in wrapped_payload["message"]
+    assert category in str(wrapped.exc_info[1])
     assert wrapped.exc_info[0] is SanitizedDiagnosticError
 
 

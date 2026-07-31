@@ -83,18 +83,6 @@ def runtime_dependency_record(driver=None) -> dict:
     }
 
 
-def safe_probe_message(stage: str) -> str:
-    return {
-        "parse": "Database URL parsing failed.",
-        "driver_import": "PostgreSQL driver import failed.",
-        "connect": "PostgreSQL connection could not be opened.",
-        "cursor": "PostgreSQL cursor creation failed.",
-        "execute": "PostgreSQL SELECT 1 execution failed.",
-        "fetch": "PostgreSQL SELECT 1 result could not be read.",
-        "close": "PostgreSQL connection cleanup failed.",
-    }.get(stage, "PostgreSQL startup probe failed.")
-
-
 def safe_sqlstate(exc) -> str | None:
     value = getattr(exc, "pgcode", None)
     if not value:
@@ -194,13 +182,14 @@ def _fail(logger, stage, exc, started, *, database_url=None, driver=None):
         original_traceback = "".join(
             traceback.TracebackException.from_exception(exc).format()
         )
+    sanitized_original_message = sanitize_database_diagnostic_text(
+        str(exc), database_url
+    )
     original_record = {
         "event": "database_original_failure",
         "stage": stage,
         "original_exception_type": type(exc).__name__,
-        "sanitized_original_exception_message": sanitize_database_diagnostic_text(
-            str(exc), database_url
-        ),
+        "sanitized_original_exception_message": sanitized_original_message,
         "sanitized_original_traceback": sanitize_database_diagnostic_text(
             original_traceback, database_url
         ),
@@ -217,7 +206,7 @@ def _fail(logger, stage, exc, started, *, database_url=None, driver=None):
         "event": "database_probe_failed",
         "stage": stage,
         "exception_type": type(exc).__name__,
-        "message": safe_probe_message(stage),
+        "message": sanitized_original_message or type(exc).__name__,
         "sqlstate": safe_sqlstate(exc),
         "elapsed_milliseconds": round((time.monotonic() - started) * 1000, 1),
     }
