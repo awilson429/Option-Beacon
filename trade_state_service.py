@@ -12,11 +12,18 @@ from signal_history import (
     DEFAULT_MAX_ENTERED_AGE_MINUTES,
     DEFAULT_MIN_ENTRY_CONFIDENCE,
     TradeOutcome,
+    close_trade_outcome_end_of_day,
     deserialize_trade_outcome,
     expire_trade_outcome,
     scanner_result_to_trade_outcome,
     serialize_trade_outcome,
     update_trade_outcome,
+)
+from intraday_session import (
+    DEFAULT_EOD_EXIT_TIME_ET,
+    eastern_timestamp,
+    intraday_entry_allowed,
+    intraday_trade_exit_due,
 )
 from trade_repository import (
     DEFAULT_REPOSITORY_FILE,
@@ -142,6 +149,8 @@ def process_scanner_result(
     max_candidate_age_minutes=DEFAULT_MAX_CANDIDATE_AGE_MINUTES,
     max_entered_age_minutes=DEFAULT_MAX_ENTERED_AGE_MINUTES,
     minimum_entry_confidence=DEFAULT_MIN_ENTRY_CONFIDENCE,
+    current_timestamp=None,
+    eod_exit_time=DEFAULT_EOD_EXIT_TIME_ET,
 ) -> int:
     """Advance authoritative outcomes directly from one stable scanner result."""
     symbol = str((result or {}).get("symbol") or "").upper()
@@ -150,25 +159,57 @@ def process_scanner_result(
     except (TypeError, ValueError):
         price = None
     timestamp = _result_timestamp(result)
+    lifecycle_timestamp = current_timestamp or timestamp
     changed = 0
     for record in list_trade_outcomes(repository):
         if record.symbol.upper() != symbol or record.exit_time is not None:
             continue
         before = serialize_trade_outcome(record)
         if price is not None and price > 0:
-            expire_trade_outcome(
-                record,
-                price,
-                timestamp,
-                max_candidate_age_minutes=max_candidate_age_minutes,
-                max_entered_age_minutes=max_entered_age_minutes,
+            eod_due = (
+                record.entry_time is not None
+                and intraday_trade_exit_due(
+                    record.entry_time,
+                    lifecycle_timestamp,
+                    eod_exit_time,
+                )
             )
-            if record.exit_time is None:
-                update_trade_outcome(
+            if eod_due and (
+                eastern_timestamp(record.entry_time).date()
+                < eastern_timestamp(lifecycle_timestamp).date()
+            ):
+                close_trade_outcome_end_of_day(
                     record,
                     price,
-                    timestamp,
-                    minimum_entry_confidence=minimum_entry_confidence,
+                    lifecycle_timestamp,
+                )
+            if record.exit_time is None:
+                expire_trade_outcome(
+                    record,
+                    price,
+                    lifecycle_timestamp,
+                    max_candidate_age_minutes=max_candidate_age_minutes,
+                    max_entered_age_minutes=max_entered_age_minutes,
+                )
+            if record.exit_time is None:
+                if record.entry_time is not None or intraday_entry_allowed(
+                    lifecycle_timestamp, eod_exit_time
+                ):
+                    update_trade_outcome(
+                        record,
+                        price,
+                        lifecycle_timestamp,
+                        minimum_entry_confidence=minimum_entry_confidence,
+                    )
+            if (
+                record.entry_time is not None
+                and record.exit_time is None
+                and eod_due
+            ):
+                close_trade_outcome_end_of_day(
+                    record,
+                    price,
+                    lifecycle_timestamp,
                 )
         if serialize_trade_outcome(record) != before:
             sync_trade_outcome(
@@ -320,7 +361,19 @@ def _outcome_exit_price(record):
         "TARGET_2": record.target_2,
         "TARGET_3": record.target_3,
     }
-    return targets.get(record.exit_reason)
+    target = targets.get(record.exit_reason)
+    if target is not None:
+        return target
+    if (
+        record.exit_reason in {"TIME_EXIT", "END_OF_DAY"}
+        and record.entry
+        and record.realized_return is not None
+    ):
+        multiplier = 1 + record.realized_return / 100
+        if record.direction == "Bearish":
+            multiplier = 1 - record.realized_return / 100
+        return record.entry * multiplier
+    return None
 
 
 def _result_timestamp(result):

@@ -11,13 +11,20 @@ from datetime import datetime, timezone
 
 from build_information import build_information
 from finnhub_universe import active_symbol_groups, flatten_symbol_groups
+from intraday_session import configured_eod_exit_time, intraday_trade_exit_due
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import save_latest_results
 from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable
-from trade_state_service import process_scanner_result, repository_for_runtime
+from trade_state_service import (
+    list_trade_outcomes,
+    process_scanner_result,
+    repository_for_runtime,
+)
 
 
 LOGGER = logging.getLogger(__name__)
+EOD_QUOTE_ATTEMPTS = 3
+EOD_QUOTE_BACKOFF_SECONDS = (1, 2)
 
 
 def environment_symbol_groups():
@@ -32,16 +39,20 @@ def run_scan_once(
     symbol_groups_loader=environment_symbol_groups,
     snapshot_writer=save_latest_results,
     scanner_id=None,
+    eod_exit_time=None,
+    sleep=time.sleep,
+    clock=lambda: datetime.now(timezone.utc),
 ) -> int:
     repository = repository or repository_for_runtime()
     scanner_id = scanner_id or os.getenv(
         "OPTIONBEACON_SCANNER_ID", DEFAULT_SCANNER_ID
     )
+    eod_exit_time = configured_eod_exit_time(eod_exit_time)
     owner = repository.acquire_scan_lock(scanner_id)
     if owner is None:
         LOGGER.warning("Scanner invocation skipped because another scan owns the lock")
         return 2
-    started = datetime.now(timezone.utc)
+    started = clock()
     build = build_information(streamlit_version="not-applicable")
     repository.record_scan_heartbeat(
         scanner_id,
@@ -53,31 +64,88 @@ def run_scan_once(
     failures = 0
     try:
         groups, source, universe_error = symbol_groups_loader()
-        symbols = flatten_symbol_groups(groups)
+        open_records = [
+            record
+            for record in list_trade_outcomes(repository)
+            if record.entry_time is not None and record.exit_time is None
+        ]
+        open_symbols = {
+            record.symbol.upper()
+            for record in open_records
+        }
+        eod_due_symbols = {
+            record.symbol.upper()
+            for record in open_records
+            if intraday_trade_exit_due(
+                record.entry_time,
+                clock(),
+                eod_exit_time,
+            )
+        }
+        symbols = list(
+            dict.fromkeys([*flatten_symbol_groups(groups), *sorted(open_symbols)])
+        )
         if universe_error:
             LOGGER.warning("Scanner universe warning: %s", universe_error)
         for symbol in symbols:
-            try:
-                result = signal_generator(symbol)
-            except Exception as exc:
+            result = None
+            failure = None
+            attempts = (
+                EOD_QUOTE_ATTEMPTS
+                if symbol in eod_due_symbols
+                else 1
+            )
+            for attempt in range(attempts):
+                try:
+                    result = signal_generator(symbol)
+                    price = float((result or {}).get("price"))
+                    if price > 0:
+                        failure = None
+                        break
+                    failure = ValueError("latest quote was unavailable")
+                except Exception as exc:
+                    failure = exc
+                if attempt < attempts - 1:
+                    delay = EOD_QUOTE_BACKOFF_SECONDS[attempt]
+                    LOGGER.warning(
+                        "EOD quote unavailable; retrying: %s",
+                        json.dumps(
+                            {
+                                "symbol": symbol,
+                                "attempt": attempt + 1,
+                                "delay_seconds": delay,
+                            },
+                            sort_keys=True,
+                        ),
+                    )
+                    sleep(delay)
+            if failure is not None:
                 failures += 1
-                LOGGER.warning(
-                    "Signal generation failed: %s",
+                LOGGER.error(
+                    "Signal quote unavailable: %s",
                     json.dumps(
-                        {"symbol": symbol, "error": type(exc).__name__},
+                        {
+                            "symbol": symbol,
+                            "error": type(failure).__name__,
+                            "eod_exit_pending": symbol in eod_due_symbols,
+                        },
                         sort_keys=True,
                     ),
                 )
+                if result is None:
+                    continue
+            if result is None:
                 continue
-            if result is not None:
-                results[symbol] = result
-                process_scanner_result(
-                    repository,
-                    result,
-                    source_version=build["commit"],
-                )
+            results[symbol] = result
+            process_scanner_result(
+                repository,
+                result,
+                source_version=build["commit"],
+                current_timestamp=clock(),
+                eod_exit_time=eod_exit_time,
+            )
         snapshot_writer(results)
-        completed = datetime.now(timezone.utc)
+        completed = clock()
         repository.record_scan_heartbeat(
             scanner_id,
             completed_at=completed,

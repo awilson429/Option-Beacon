@@ -395,6 +395,7 @@ def opened_alert_status(record: TradeOutcome) -> str:
         "TARGET_3": "TARGET 3",
         "STOP": "STOPPED",
         "TIME_EXIT": "TIME EXIT",
+        "END_OF_DAY": "EOD EXIT",
     }
     return statuses.get(record.exit_reason, "CLOSED")
 
