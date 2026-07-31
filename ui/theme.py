@@ -178,19 +178,36 @@ def configure_page():
             white-space: nowrap;
         }
 
+        .pill,
+        .signal-pill,
+        .board-bias-tag,
+        .board-callout-chip,
+        .factor-pill {
+            align-items: center;
+            border-radius: 999px;
+            box-sizing: border-box;
+            display: inline-flex;
+            font-size: 0.72rem;
+            justify-content: center;
+            line-height: 1;
+            min-height: 1.8rem;
+            padding: 0.32rem 0.65rem;
+            vertical-align: middle;
+        }
+
         .pill-market {
-            font-size: 0.74rem;
+            font-size: 0.72rem;
         }
 
         .pill-secondary {
-            font-size: 0.74rem;
-            padding: 0.3rem 0.65rem;
+            font-size: 0.72rem;
+            padding: 0.32rem 0.65rem;
         }
 
         .status-strip .pill {
-            min-height: 2.25rem;
+            min-height: 1.8rem;
             min-width: 8.25rem;
-            padding: 0.3rem 0.65rem;
+            padding: 0.32rem 0.65rem;
         }
 
         .pill-stack {
@@ -220,8 +237,8 @@ def configure_page():
         .signal-pill {
             margin: 0.2rem 0 0.8rem;
             width: 100%;
-            min-height: 2.45rem;
-            font-size: 1rem;
+            min-height: 1.8rem;
+            font-size: 0.72rem;
         }
 
         .signal-call {
@@ -335,6 +352,35 @@ def configure_page():
             border-radius: 8px;
             min-height: 6.1rem;
             padding: 0.75rem;
+        }
+
+        .journal-summary-card {
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            min-height: 6.1rem;
+            padding: 0.75rem;
+        }
+
+        .journal-summary-label {
+            align-items: flex-start;
+            display: flex;
+            line-height: 1.2;
+            min-height: 1.8rem;
+        }
+
+        .journal-summary-value {
+            font-size: 1.05rem;
+            font-weight: 850;
+            line-height: 1.15;
+            margin-top: auto;
+        }
+
+        .journal-scorecard-summary {
+            color: var(--ob-muted);
+            font-size: 0.82rem;
+            line-height: 1.4;
+            margin-top: 0.7rem;
         }
 
         .health-label {
@@ -650,11 +696,11 @@ def configure_page():
 
         .factor-pill {
             border: 1px solid var(--ob-border);
-            border-radius: 8px;
+            border-radius: 999px;
             color: var(--ob-muted);
             background: rgba(255,255,255,0.025);
-            padding: 0.45rem 0.55rem;
-            font-size: 0.86rem;
+            padding: 0.32rem 0.65rem;
+            font-size: 0.72rem;
         }
 
         .factor-good {
@@ -854,11 +900,11 @@ def configure_page():
         .board-bias-tag {
             border: 1px solid currentColor;
             border-radius: 999px;
-            font-size: 0.62rem;
+            font-size: 0.72rem;
             font-weight: 900;
             letter-spacing: 0.08em;
             line-height: 1;
-            padding: 0.22rem 0.42rem;
+            padding: 0.32rem 0.65rem;
             text-transform: uppercase;
             white-space: nowrap;
         }
@@ -878,6 +924,8 @@ def configure_page():
         }
 
         .board-callout-chip {
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid currentColor;
             white-space: nowrap;
         }
 

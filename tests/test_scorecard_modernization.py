@@ -18,12 +18,14 @@ def test_scorecard_calculation_and_fields_are_unchanged():
         "Winners",
         "Losers",
         "Win Rate",
-        "Average Realized Return",
+        "AVG. RETURN",
         "Best trade",
         "Worst trade",
         "Average hold",
     ):
         assert label in block
+    assert "Average Realized Return" not in block
+    assert 'format_signed_return(scorecard["average_realized_return"])' in block
 
 
 def test_modern_scorecard_is_opt_in_and_legacy_path_remains():

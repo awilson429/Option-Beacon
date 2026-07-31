@@ -59,7 +59,7 @@ def test_demo_scorecard_fixture_has_requested_display_values():
         "Winners": 9,
         "Losers": 1,
         "Win Rate": "90.00%",
-        "Average Realized Return": "+0.20%",
+        "AVG. RETURN": "+0.20%",
     }
     assert "+0.58%" in summary
     assert "-0.73%" in summary
@@ -113,7 +113,7 @@ def test_scorecard_markup_preserves_labels_values_and_treatments():
         ("Winners", 1, "positive"),
         ("Losers", 1, "negative"),
         ("Win Rate", "50.00%", "neutral"),
-        ("Average Realized Return", "+0.50%", "positive"),
+        ("AVG. RETURN", "+0.50%", "positive"),
     )
 
     markup = scorecard_markup(
