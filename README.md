@@ -2,6 +2,17 @@
 
 Streamlit dashboard for ETF and single-stock option signal scanning.
 
+## Local Trade Desk UI preview
+
+Run the isolated sample-data preview without starting the production dashboard:
+
+```bash
+streamlit run trade_desk_preview.py
+```
+
+The preview is a local visual-development surface. It does not load scanner
+results, connect to production storage, or write alerts or trades.
+
 ## License and use
 
 Copyright (c) 2026 Option Beacon LLC. All rights reserved.
