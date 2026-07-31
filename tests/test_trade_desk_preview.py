@@ -1,19 +1,32 @@
 from datetime import datetime, timezone
 
 from ui.trade_desk_preview.components import (
+    after_hours_markup,
     confidence_factor_markup,
     format_entry_zone,
     format_price,
     icon_markup,
     logo_markup,
+    opening_checklist_markup,
+    premarket_setup_markup,
+    premarket_watchlist_row_markup,
+    readiness_badge_markup,
+    readiness_class,
+    render_session_selector,
     signal_row_markup,
     status_class,
     trade_desk_markup,
 )
 from ui.trade_desk_preview.sample_data import (
     ConfidenceFactor,
+    OpeningChecklistItem,
+    SessionMode,
+    classify_session,
     eastern_time_label,
+    format_gap,
+    format_relative_activity,
     preview_data,
+    resolve_session_mode,
 )
 from ui.trade_desk_preview.theme import PREVIEW_CSS
 
@@ -33,6 +46,7 @@ def test_sample_preview_contains_requested_trade_content():
     assert data.signal_count == 85
     assert len(data.setup.confidence_factors) == 6
     assert sum(item.positive for item in data.setup.confidence_factors) == 3
+    assert data.session_mode is SessionMode.MARKET_OPEN
 
 
 def test_preview_formatters_are_deterministic():
@@ -89,8 +103,73 @@ def test_unknown_preview_icon_fails_clearly():
         raise AssertionError("Unknown preview icon should fail")
 
 
+def test_eastern_session_classification_boundaries():
+    assert classify_session(datetime(2026, 7, 30, 13, 29, tzinfo=timezone.utc)) is SessionMode.PREMARKET
+    assert classify_session(datetime(2026, 7, 30, 13, 30, tzinfo=timezone.utc)) is SessionMode.MARKET_OPEN
+    assert classify_session(datetime(2026, 7, 30, 20, 0, tzinfo=timezone.utc)) is SessionMode.AFTER_HOURS
+
+
+def test_manual_session_override_wins_for_browser_session():
+    during_market = datetime(2026, 7, 30, 15, 0, tzinfo=timezone.utc)
+    assert resolve_session_mode(during_market, "Premarket") is SessionMode.PREMARKET
+    assert resolve_session_mode(during_market, SessionMode.AFTER_HOURS) is SessionMode.AFTER_HOURS
+
+
+def test_session_selector_uses_manual_selection():
+    class FakeStreamlit:
+        def segmented_control(self, label, **kwargs):
+            assert label == "Local preview session"
+            assert kwargs["key"] == "trade_desk_preview_session"
+            return "After Hours"
+
+    selected = render_session_selector(
+        FakeStreamlit(), datetime(2026, 7, 30, 12, 0, tzinfo=timezone.utc)
+    )
+    assert selected is SessionMode.AFTER_HOURS
+
+
+def test_premarket_formatters_and_readiness_statuses():
+    assert format_gap(1.8) == "+1.8%"
+    assert format_gap(-.9) == "-0.9%"
+    assert format_gap(0) == "0.0%"
+    assert format_relative_activity(2.34) == "2.3x"
+    assert readiness_class("NEAR CONFIRMATION") == "preview-readiness-near"
+    assert readiness_class("INVALIDATED") == "preview-readiness-invalid"
+    assert "Most conditions align" in readiness_badge_markup("NEAR CONFIRMATION")
+
+
+def test_premarket_sample_and_rendering_are_complete():
+    data = preview_data(
+        datetime(2026, 7, 30, 12, 42, tzinfo=timezone.utc), SessionMode.PREMARKET
+    )
+    setup = data.premarket_setup
+    markup = premarket_setup_markup(setup)
+    row = premarket_watchlist_row_markup(data.premarket_watchlist[0])
+
+    assert data.market_status == "PREMARKET"
+    assert setup.symbol == "NVDA"
+    assert setup.status == "NEAR CONFIRMATION"
+    assert len(setup.readiness_factors) == 10
+    assert len(setup.opening_checklist) == 6
+    assert "BEST PREMARKET SETUP" in markup
+    assert "PREMARKET READINESS" in markup
+    assert "WHAT TO WATCH AT THE OPEN" in markup
+    assert "NVDA" in row and "+1.8%" in row
+
+
+def test_opening_checklist_and_after_hours_helpers():
+    checklist = opening_checklist_markup(OpeningChecklistItem("Opening volume expands"))
+    data = preview_data(mode=SessionMode.AFTER_HOURS)
+    review = after_hours_markup(data)
+
+    assert "Opening volume expands" in checklist
+    assert "AFTER-HOURS REVIEW" in review
+    assert "+0.58%" in review
+    assert "NEXT-SESSION WATCH" in review
+
+
 def test_full_preview_markup_contains_reference_sections_and_notice():
-    markup = trade_desk_markup(preview_data())
+    markup = trade_desk_markup(preview_data(mode=SessionMode.MARKET_OPEN))
 
     for text in (
         "LOCAL UI PREVIEW",
@@ -118,6 +197,26 @@ def test_preview_navigation_uses_requested_order_and_active_trade_desk():
     assert offsets == sorted(offsets)
     assert '<span class="preview-tab preview-tab-active">Trade Desk</span>' in markup
     assert ">Overview</span>" not in markup
+
+
+def test_each_session_renders_only_its_preview_surface():
+    premarket = trade_desk_markup(preview_data(mode=SessionMode.PREMARKET))
+    market = trade_desk_markup(preview_data(mode=SessionMode.MARKET_OPEN))
+    after = trade_desk_markup(preview_data(mode=SessionMode.AFTER_HOURS))
+
+    assert "BEST PREMARKET SETUP" in premarket
+    assert "PREMARKET WATCHLIST" in premarket
+    assert "BEST DEVELOPING SETUP" not in premarket
+    assert "BEST DEVELOPING SETUP" in market
+    assert "RECENT SIGNALS" in market
+    assert "AFTER-HOURS REVIEW" in after
+    assert "BEST PREMARKET SETUP" not in after
+
+
+def test_preview_entrypoint_remains_isolated_from_production():
+    source = open("trade_desk_preview.py", encoding="utf-8").read()
+    for forbidden in ("app", "optionbeacon_live", "trade_repository", "psycopg", "scanner"):
+        assert forbidden not in source
 
 
 def test_preview_css_is_scoped_and_responsive():

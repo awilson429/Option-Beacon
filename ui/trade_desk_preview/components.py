@@ -2,10 +2,26 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from html import escape
 from textwrap import dedent
 
-from .sample_data import ConfidenceFactor, DevelopingSetup, RecentSignal, TradeDeskPreview
+from .sample_data import (
+    ConfidenceFactor,
+    DevelopingSetup,
+    EASTERN,
+    OpeningChecklistItem,
+    PremarketSetup,
+    PremarketWatchlistItem,
+    RecentSignal,
+    SessionMode,
+    TradeDeskPreview,
+    format_gap,
+    format_relative_activity,
+    preview_data,
+    readiness_explanation,
+    resolve_session_mode,
+)
 
 
 _ICONS = {
@@ -77,6 +93,27 @@ def status_class(status: str) -> str:
     return "preview-neutral"
 
 
+def readiness_class(status: str) -> str:
+    """Map a premarket readiness label to its semantic presentation class."""
+    normalized = str(status or "").strip().upper()
+    return {
+        "EARLY": "preview-readiness-early",
+        "DEVELOPING": "preview-readiness-developing",
+        "NEAR CONFIRMATION": "preview-readiness-near",
+        "READY FOR OPEN": "preview-readiness-ready",
+        "INVALIDATED": "preview-readiness-invalid",
+    }.get(normalized, "preview-neutral")
+
+
+def readiness_badge_markup(status: str) -> str:
+    """Render a reusable readiness badge with a concise explanation."""
+    normalized = str(status).strip().upper()
+    return (
+        f'<span class="preview-readiness-badge {readiness_class(normalized)}" '
+        f'title="{escape(readiness_explanation(normalized))}">{escape(normalized)}</span>'
+    )
+
+
 def confidence_factor_markup(factor: ConfidenceFactor) -> str:
     """Render one sample confidence factor without implying production scoring."""
     state = "positive" if factor.positive else "missing"
@@ -84,6 +121,14 @@ def confidence_factor_markup(factor: ConfidenceFactor) -> str:
     return (
         f'<div class="preview-factor preview-factor-{state}">'
         f'<span aria-hidden="true">{symbol}</span><span>{escape(factor.label)}</span></div>'
+    )
+
+
+def opening_checklist_markup(item: OpeningChecklistItem) -> str:
+    """Render one preview-only opening checklist item."""
+    return (
+        '<div class="preview-opening-item"><span aria-hidden="true">✓</span>'
+        f'<span>{escape(item.label)}</span></div>'
     )
 
 
@@ -149,30 +194,126 @@ def setup_card_markup(setup: DevelopingSetup) -> str:
             <div class="preview-plan-area">
               <div class="preview-plan-grid">{metrics}</div>
               <div class="preview-confidence-block">
+                <div class="preview-confidence-heading"><span>CONFIDENCE BREAKDOWN</span><span>Preview factors</span></div>
+                <div class="preview-factor-grid">{factors}</div>
+              </div>
+              <button class="preview-plan-link" type="button">View full trade plan {icon_markup("down", size=17)}</button>
+            </div>
+            <aside class="preview-reasoning">
+              <div class="preview-reason-section"><div class="preview-reason-label">WHY THIS SETUP</div><p>{escape(setup.reason)}</p></div>
+              <div class="preview-reason-section"><div class="preview-reason-label">WHAT&rsquo;S MISSING</div><p>{escape(setup.missing_confirmation)}</p></div>
+              <div class="preview-reason-section"><div class="preview-reason-label">INVALIDATION</div><p>{escape(setup.invalidation)}</p></div>
+            </aside>
+          </div>
+        </div>
+        """
+    )
+
+
+def premarket_setup_markup(setup: PremarketSetup) -> str:
+    """Render the dedicated local-only premarket planning hero."""
+    overview = "".join(
+        (
+            metric_markup("Premarket Price", format_price(setup.premarket_price)),
+            metric_markup("Prior Close", format_price(setup.prior_close)),
+            metric_markup("Gap", format_gap(setup.gap_percent), "positive" if setup.gap_percent > 0 else "negative"),
+            metric_markup("Premarket High", format_price(setup.premarket_high)),
+            metric_markup("Premarket Low", format_price(setup.premarket_low)),
+            metric_markup("Premarket Range", format_price(setup.premarket_high - setup.premarket_low)),
+            metric_markup("Premarket Volume", f"{setup.premarket_volume / 1_000_000:.2f}M"),
+            metric_markup("Relative Activity", format_relative_activity(setup.relative_activity), "info"),
+            metric_markup("Readiness", f"{setup.readiness_score}%", "watch"),
+        )
+    )
+    plan = "".join(
+        (
+            metric_markup("Key Support", format_price(setup.key_support)),
+            metric_markup("Key Resistance", format_price(setup.key_resistance)),
+            metric_markup("Opening Trigger", setup.opening_trigger),
+            metric_markup("Confirmation", setup.confirmation),
+            metric_markup("Maximum Chase", format_price(setup.maximum_chase), "watch"),
+            metric_markup("Invalidation", format_price(setup.invalidation), "negative"),
+            metric_markup("Target 1", format_price(setup.target_1), "positive"),
+            metric_markup("Target 2", format_price(setup.target_2), "positive"),
+            metric_markup("Risk / Reward", setup.risk_reward),
+        )
+    )
+    factors = "".join(confidence_factor_markup(item) for item in setup.readiness_factors)
+    checklist = "".join(opening_checklist_markup(item) for item in setup.opening_checklist)
+    return dedent(
+        f"""
+        <div class="preview-card preview-premarket-card">
+          <div class="preview-eyebrow-row">
+            <div class="preview-eyebrow">BEST PREMARKET SETUP</div>
+            <div class="preview-sample-chip">SYNTHETIC PREVIEW</div>
+          </div>
+          <div class="preview-premarket-top">
+            <div class="preview-premarket-identity">
+              <div class="preview-symbol">{escape(setup.symbol)}</div>
+              <div class="preview-direction preview-bullish">{escape(setup.direction)} {escape(setup.option_type)}</div>
+              <div class="preview-setup-name">{escape(setup.setup)}</div>
+              <div class="preview-status-stack">
+                {readiness_badge_markup(setup.status)}
+                <span>{escape(readiness_explanation(setup.status))}</span>
+              </div>
+            </div>
+            <div class="preview-premarket-overview">
+              <div class="preview-plan-grid">{overview}</div>
+              <div class="preview-expected-open">
+                <span>EXPECTED OPENING BEHAVIOR</span><p>{escape(setup.expected_open)}</p>
+              </div>
+            </div>
+          </div>
+          <div class="preview-premarket-details">
+            <div class="preview-premarket-plan">
+              <div class="preview-subheading">OPENING TRADE PLAN</div>
+              <div class="preview-plan-grid">{plan}</div>
+              <div class="preview-confidence-block preview-readiness-block">
                 <div class="preview-confidence-heading">
-                  <span>CONFIDENCE BREAKDOWN</span>
-                  <span>Preview factors</span>
+                  <span>PREMARKET READINESS</span><span>Preview factors · {setup.readiness_score}%</span>
                 </div>
                 <div class="preview-factor-grid">{factors}</div>
               </div>
-              <button class="preview-plan-link" type="button">
-                View full trade plan {icon_markup("down", size=17)}
-              </button>
             </div>
-            <aside class="preview-reasoning">
-              <div class="preview-reason-section">
-                <div class="preview-reason-label">WHY THIS SETUP</div>
-                <p>{escape(setup.reason)}</p>
-              </div>
-              <div class="preview-reason-section">
-                <div class="preview-reason-label">WHAT&rsquo;S MISSING</div>
-                <p>{escape(setup.missing_confirmation)}</p>
-              </div>
-              <div class="preview-reason-section">
-                <div class="preview-reason-label">INVALIDATION</div>
-                <p>{escape(setup.invalidation)}</p>
-              </div>
+            <aside class="preview-opening-panel">
+              <div class="preview-subheading">WHAT TO WATCH AT THE OPEN</div>
+              <div class="preview-opening-list">{checklist}</div>
+              <div class="preview-opening-note">Plan only. Wait for regular-session confirmation before considering entry.</div>
             </aside>
+          </div>
+        </div>
+        """
+    )
+
+
+def premarket_watchlist_row_markup(item: PremarketWatchlistItem) -> str:
+    """Render one aligned synthetic premarket watchlist row."""
+    return (
+        '<div class="preview-premarket-row">'
+        f'<strong>{escape(item.symbol)}</strong>'
+        f'<span>{escape(item.direction)} {escape(item.option_type)}</span>'
+        f'<span class="preview-gap {"preview-positive" if item.gap_percent > 0 else "preview-negative"}">{format_gap(item.gap_percent)}</span>'
+        f'<span>{escape(item.volume_label)}</span>'
+        f'{readiness_badge_markup(item.readiness)}'
+        f'<span>{escape(item.trigger)}</span>'
+        f'<span class="preview-signal-time">{escape(item.updated_time)}</span>'
+        '</div>'
+    )
+
+
+def after_hours_markup(data: TradeDeskPreview) -> str:
+    """Render the restrained end-of-session review surface."""
+    summary = data.after_hours
+    return dedent(
+        f"""
+        <div class="preview-card preview-after-card">
+          <div class="preview-eyebrow-row"><div class="preview-eyebrow">AFTER-HOURS REVIEW</div><div class="preview-sample-chip">SAMPLE REVIEW</div></div>
+          <div class="preview-after-heading"><div><span>SESSION COMPLETE</span><h2>Review, journal, prepare.</h2></div><div class="preview-after-result"><span>BEST CLOSED RESULT</span><strong>{summary.closed_trade_result:+.2f}%</strong></div></div>
+          <div class="preview-after-grid">
+            <div><span>STRONGEST SETUP</span><p>{escape(summary.strongest_setup)}</p></div>
+            <div><span>MISSED SETUP</span><p>{escape(summary.missed_setup)}</p></div>
+            <div><span>NEXT-SESSION WATCH</span><p>{escape(summary.next_session_watch)}</p></div>
+            <div><span>JOURNAL REMINDER</span><p>{escape(summary.journal_reminder)}</p></div>
           </div>
         </div>
         """
@@ -190,16 +331,77 @@ def action_markup(icon: str, label: str) -> str:
 def trade_desk_markup(data: TradeDeskPreview) -> str:
     """Build the complete preview shell without accessing application state."""
     signal_rows = "".join(signal_row_markup(signal) for signal in data.recent_signals)
+    if data.session_mode is SessionMode.PREMARKET:
+        action_specs = (
+            ("refresh", "Refresh Premarket"), ("watch", "Premarket Watchlist"),
+            ("market", "Market Overview"), ("positions", "Opening Plan"),
+            ("journal", "Journal"), ("tools", "Developer Tools"),
+        )
+        hero = premarket_setup_markup(data.premarket_setup)
+        watchlist_rows = "".join(
+            premarket_watchlist_row_markup(item) for item in data.premarket_watchlist
+        )
+        lower = dedent(f"""
+          <div class="preview-lower-grid preview-premarket-lower">
+            <div class="preview-card preview-open-card">
+              <div class="preview-panel-heading"><span>OPENING PLAN</span><a>Preview only</a></div>
+              <div class="preview-empty-position">
+                <div class="preview-empty-icon">{icon_markup("positions", size=43)}</div>
+                <strong>No opening plan selected.</strong>
+                <span>Choose a premarket setup to prepare<br>an opening-session checklist.</span>
+              </div>
+              <button class="preview-settings" type="button">{icon_markup("watch", size=18)}<span>Review Premarket Setups</span></button>
+            </div>
+            <div class="preview-card preview-watchlist-card">
+              <div class="preview-panel-heading"><span>PREMARKET WATCHLIST</span><a>Synthetic data</a></div>
+              <div class="preview-premarket-head"><span>Ticker</span><span>Bias</span><span>Gap</span><span>Activity</span><span>Readiness</span><span>Trigger</span><span>Updated</span></div>
+              <div class="preview-premarket-list">{watchlist_rows}</div>
+            </div>
+          </div>
+        """)
+        footer_label = "Opening Focus"
+        footer_tip = "Build the plan before the bell, then wait for regular-session confirmation."
+    elif data.session_mode is SessionMode.AFTER_HOURS:
+        action_specs = (
+            ("journal", "Review Journal"), ("watch", "Tomorrow's Watchlist"),
+            ("market", "Session Summary"), ("positions", "Closed Positions"),
+            ("scan", "Missed Setups"), ("tools", "Developer Tools"),
+        )
+        hero = after_hours_markup(data)
+        lower = dedent(f"""
+          <div class="preview-lower-grid">
+            <div class="preview-card preview-open-card"><div class="preview-panel-heading"><span>POSITIONS</span><a>Session closed</a></div><div class="preview-empty-position"><div class="preview-empty-icon">{icon_markup("positions", size=43)}</div><strong>No positions carried overnight.</strong><span>Review closed trades and prepare<br>tomorrow's risk plan.</span></div></div>
+            <div class="preview-card preview-signals-card"><div class="preview-panel-heading"><span>FINAL SIGNALS</span><a>View journal</a></div><div class="preview-signal-list">{signal_rows}</div><div class="preview-signal-count">Final sample signals from today's session</div></div>
+          </div>
+        """)
+        footer_label = "Review Focus"
+        footer_tip = data.after_hours.journal_reminder
+    else:
+        action_specs = (
+            ("scan", "New Scan"), ("watch", "Watchlist"),
+            ("market", "Market Overview"), ("positions", "Open Positions"),
+            ("journal", "Journal"), ("tools", "Developer Tools"),
+        )
+        hero = setup_card_markup(data.setup)
+        lower = dedent(f"""
+          <div class="preview-lower-grid">
+            <div class="preview-card preview-open-card">
+              <div class="preview-panel-heading"><span>OPEN POSITIONS</span><a>View all</a></div>
+              <div class="preview-empty-position"><div class="preview-empty-icon">{icon_markup("inbox", size=48)}</div><strong>No open positions</strong><span>When you take a trade,<br>it will appear here.</span></div>
+              <button class="preview-settings" type="button">{icon_markup("settings", size=18)}<span>Paper Trade Settings</span></button>
+            </div>
+            <div class="preview-card preview-signals-card">
+              <div class="preview-panel-heading"><span>RECENT SIGNALS</span><a>View all</a></div>
+              <div class="preview-signal-list">{signal_rows}</div>
+              <div class="preview-signal-count">Showing {len(data.recent_signals)} of {data.signal_count} signals</div>
+            </div>
+          </div>
+        """)
+        footer_label = "Focus Tip"
+        footer_tip = data.focus_tip
     actions = "".join(
         action_markup(icon, label)
-        for icon, label in (
-            ("scan", "New Scan"),
-            ("watch", "Watchlist"),
-            ("market", "Market Overview"),
-            ("positions", "Open Positions"),
-            ("journal", "Journal"),
-            ("tools", "Developer Tools"),
-        )
+        for icon, label in action_specs
     )
     return dedent(
         f"""
@@ -215,7 +417,7 @@ def trade_desk_markup(data: TradeDeskPreview) -> str:
               </div>
             </div>
             <div class="preview-header-right">
-              <div class="preview-market-line">
+              <div class="preview-market-line preview-session-{data.session_mode.name.lower().replace('_', '-')}">
                 <span class="preview-market-dot"></span>
                 <span class="preview-market-status">{escape(data.market_status)}</span>
                 <span class="preview-time">{escape(data.eastern_time)}</span>
@@ -237,42 +439,18 @@ def trade_desk_markup(data: TradeDeskPreview) -> str:
             <span class="preview-tab">Settings</span>
           </nav>
 
-          {setup_card_markup(data.setup)}
+          {hero}
 
           <div class="preview-card preview-quick-actions">
             <div class="preview-eyebrow">QUICK ACTIONS</div>
             <div class="preview-action-grid">{actions}</div>
           </div>
 
-          <div class="preview-lower-grid">
-            <div class="preview-card preview-open-card">
-              <div class="preview-panel-heading">
-                <span>OPEN POSITIONS</span><a>View all</a>
-              </div>
-              <div class="preview-empty-position">
-                <div class="preview-empty-icon">{icon_markup("inbox", size=48)}</div>
-                <strong>No open positions</strong>
-                <span>When you take a trade,<br>it will appear here.</span>
-              </div>
-              <button class="preview-settings" type="button">
-                {icon_markup("settings", size=18)}<span>Paper Trade Settings</span>
-              </button>
-            </div>
-
-            <div class="preview-card preview-signals-card">
-              <div class="preview-panel-heading">
-                <span>RECENT SIGNALS</span><a>View all</a>
-              </div>
-              <div class="preview-signal-list">{signal_rows}</div>
-              <div class="preview-signal-count">
-                Showing {len(data.recent_signals)} of {data.signal_count} signals
-              </div>
-            </div>
-          </div>
+          {lower}
 
           <div class="preview-card preview-focus-tip">
             <span class="preview-bulb">{icon_markup("bulb", size=28)}</span>
-            <div><strong>Focus Tip:</strong> {escape(data.focus_tip)}</div>
+            <div><strong>{escape(footer_label)}:</strong> {escape(footer_tip)}</div>
             <a>View trading checklist {icon_markup("external", size=16)}</a>
           </div>
         </main>
@@ -284,3 +462,17 @@ def render_trade_desk_preview(st_module, data: TradeDeskPreview) -> None:
     """Render the complete local-only preview."""
     markup = trade_desk_markup(data).replace("\n", "")
     st_module.markdown(markup, unsafe_allow_html=True)
+
+
+def render_session_selector(st_module, now: datetime | None = None) -> SessionMode:
+    """Render the isolated browser-session mode selector and return its mode."""
+    now = now or datetime.now(EASTERN)
+    automatic = resolve_session_mode(now)
+    selected = st_module.segmented_control(
+        "Local preview session",
+        options=[mode.value for mode in SessionMode],
+        default=automatic.value,
+        key="trade_desk_preview_session",
+        help="Preview-only control. It does not change scanner or production state.",
+    )
+    return resolve_session_mode(now, selected)
