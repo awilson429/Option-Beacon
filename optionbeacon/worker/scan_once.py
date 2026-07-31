@@ -114,7 +114,7 @@ def main() -> int:
     try:
         return run_scan_once()
     except RepositoryUnavailable as exc:
-        LOGGER.error("%s", exc)
+        LOGGER.exception("Scanner repository initialization failed: %s", exc)
         return 1
 
 

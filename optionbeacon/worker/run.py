@@ -28,6 +28,23 @@ class WorkerConfigurationError(ValueError):
     pass
 
 
+def configuration_error_record(exc):
+    """Build a sanitized startup failure record without exposing credentials."""
+    durable_required = (
+        os.getenv("OPTIONBEACON_REQUIRE_DURABLE_STORAGE", "").strip().lower()
+        in {"1", "true", "yes"}
+        or os.getenv("OPTIONBEACON_ENVIRONMENT", "").strip().lower()
+        == "production"
+    )
+    return {
+        "event": "worker_configuration_error",
+        "error": type(exc).__name__,
+        "message": str(exc),
+        "database_url_configured": bool(os.getenv("DATABASE_URL", "").strip()),
+        "durable_storage_required": durable_required,
+    }
+
+
 def configured_scan_seconds(value=None) -> int:
     raw = value if value is not None else os.getenv(
         "OPTIONBEACON_SCAN_SECONDS", str(DEFAULT_SCAN_SECONDS)
@@ -142,14 +159,8 @@ def main(argv=None):
             )
         repository = repository_for_runtime()
     except (RepositoryUnavailable, WorkerConfigurationError) as exc:
-        LOGGER.error(
-            json.dumps(
-                {
-                    "event": "worker_configuration_error",
-                    "error": type(exc).__name__,
-                },
-                sort_keys=True,
-            )
+        LOGGER.exception(
+            json.dumps(configuration_error_record(exc), sort_keys=True)
         )
         return 2
     run(

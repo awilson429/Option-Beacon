@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 
@@ -12,6 +13,9 @@ from trade_state_service import (
     repository_for_runtime,
     scanner_health_state,
 )
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def check_health(
@@ -55,6 +59,7 @@ def check_health(
         code = 0 if state["state"] == "CURRENT" else 1
         return code, result
     except RepositoryUnavailable as exc:
+        LOGGER.exception("Worker healthcheck repository initialization failed: %s", exc)
         return 2, {
             "database_reachable": False,
             "schema_present": False,

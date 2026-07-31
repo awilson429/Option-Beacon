@@ -11,6 +11,8 @@ from uuid import uuid4
 import pytest
 
 from optionbeacon.worker import run as worker
+from optionbeacon.worker import healthcheck as healthcheck_worker
+from optionbeacon.worker import scan_once as scan_once_worker
 from optionbeacon.worker.healthcheck import check_health, main as healthcheck_main
 from optionbeacon.worker.scan_once import main as scan_once_main
 from reliability_dashboard import reliability_status_model
@@ -310,6 +312,77 @@ def test_worker_startup_record_is_sanitized(monkeypatch, tmp_path):
     assert "secret" not in encoded
     assert "DATABASE_URL" not in encoded
     assert '"storage_backend": "sqlite"' in encoded
+
+
+def test_worker_configuration_error_logs_root_cause_and_traceback(
+    monkeypatch, caplog
+):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("OPTIONBEACON_ENVIRONMENT", "production")
+    monkeypatch.setattr(
+        worker,
+        "repository_for_runtime",
+        lambda: (_ for _ in ()).throw(
+            RepositoryUnavailable(
+                "Durable trade storage is required but DATABASE_URL is not configured."
+            )
+        ),
+    )
+
+    with caplog.at_level("ERROR"):
+        assert worker.main(["--max-runs", "0"]) == 2
+
+    record = next(
+        item for item in caplog.records if "worker_configuration_error" in item.message
+    )
+    payload = json.loads(record.message)
+    assert payload["error"] == "RepositoryUnavailable"
+    assert payload["message"] == (
+        "Durable trade storage is required but DATABASE_URL is not configured."
+    )
+    assert payload["database_url_configured"] is False
+    assert payload["durable_storage_required"] is True
+    assert record.exc_info is not None
+
+
+def test_worker_configuration_error_never_logs_database_credentials(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql://private-user:private-password@db.invalid/app"
+    )
+    error = RepositoryUnavailable("Trade repository unavailable: OperationalError")
+
+    encoded = json.dumps(worker.configuration_error_record(error), sort_keys=True)
+
+    assert "private-user" not in encoded
+    assert "private-password" not in encoded
+    assert "db.invalid" not in encoded
+    assert '"database_url_configured": true' in encoded
+
+
+def test_worker_diagnostic_entrypoints_log_repository_tracebacks(
+    monkeypatch, caplog
+):
+    def unavailable():
+        raise RepositoryUnavailable(
+            "Durable trade storage is required but DATABASE_URL is not configured."
+        )
+
+    monkeypatch.setattr(scan_once_worker, "repository_for_runtime", unavailable)
+    monkeypatch.setattr(healthcheck_worker, "repository_for_runtime", unavailable)
+
+    with caplog.at_level("ERROR"):
+        assert scan_once_worker.main() == 1
+        code, result = healthcheck_worker.check_health()
+
+    assert code == 2
+    assert result["error"] == "RepositoryUnavailable"
+    matching = [
+        record
+        for record in caplog.records
+        if "repository initialization failed" in record.message
+    ]
+    assert len(matching) == 2
+    assert all(record.exc_info is not None for record in matching)
 
 
 def test_healthcheck_exit_codes(tmp_path):

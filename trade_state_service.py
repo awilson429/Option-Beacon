@@ -240,6 +240,7 @@ def authoritative_trade_state(
             "error": None,
         }
     except RepositoryUnavailable as exc:
+        LOGGER.exception("Authoritative trade repository is unavailable: %s", exc)
         return {
             "repository": None,
             "records": [],
