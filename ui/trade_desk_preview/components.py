@@ -5,7 +5,53 @@ from __future__ import annotations
 from html import escape
 from textwrap import dedent
 
-from .sample_data import DevelopingSetup, RecentSignal, TradeDeskPreview
+from .sample_data import ConfidenceFactor, DevelopingSetup, RecentSignal, TradeDeskPreview
+
+
+_ICONS = {
+    "refresh": '<path d="M20 11a8 8 0 1 0 1.3 4.4"/><path d="M20 4v7h-7"/>',
+    "filter": '<path d="M4 5h16l-6.5 7.2V19l-3 1v-7.8z"/>',
+    "more": '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+    "scan": '<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4M11 2v3M2 11h3"/>',
+    "watch": '<path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+    "market": '<path d="M4 20V13M9.3 20V8M14.7 20V11M20 20V4"/>',
+    "positions": '<path d="M4 8h16v12H4zM8 8V5h8v3"/>',
+    "journal": '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3 1z"/><path d="M5 4v17"/>',
+    "tools": '<path d="M14.7 6.3a4 4 0 0 0-5-5L12 3.6 8.5 7.1 6.2 4.8a4 4 0 0 0 5 5L4 17l3 3 7.3-7.3a4 4 0 0 0 5-5L17 10l-3-3z"/>',
+    "inbox": '<path d="M4 7h16l2 7v6H2v-6z"/><path d="M2 14h6l2 3h4l2-3h6"/>',
+    "settings": '<circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a8 8 0 0 0-1.8-1L14.4 3h-4l-.4 3a8 8 0 0 0-1.8 1l-2.4-1-2 3.4 2 1.5a7 7 0 0 0 0 2L4 14.5l2 3.4 2.4-1a8 8 0 0 0 1.8 1l.4 3h4l.4-3a8 8 0 0 0 1.8-1l2.4 1 2-3.4-2-1.5a7 7 0 0 0 .1-1z"/>',
+    "bulb": '<path d="M9 18h6M10 22h4M8.5 15.5A7 7 0 1 1 15.5 15.5L15 18H9z"/>',
+    "external": '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v7H4V6h7"/>',
+    "chevron": '<path d="m9 6 6 6-6 6"/>',
+    "down": '<path d="m7 9 5 5 5-5"/>',
+}
+
+
+def icon_markup(name: str, *, size: int = 20, css_class: str = "") -> str:
+    """Return a dependency-free SVG icon from the preview's local icon set."""
+    paths = _ICONS.get(name)
+    if paths is None:
+        raise ValueError(f"Unknown preview icon: {name}")
+    class_attr = f' class="{escape(css_class)}"' if css_class else ""
+    return (
+        f'<svg{class_attr} aria-hidden="true" width="{size}" height="{size}" '
+        f'viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        f'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+        f"{paths}</svg>"
+    )
+
+
+def logo_markup() -> str:
+    """Return the replaceable OptionBeacon geometric beacon mark."""
+    return (
+        '<div class="preview-brand-mark" aria-hidden="true">'
+        '<svg viewBox="0 0 40 40" role="img">'
+        '<path class="preview-logo-beam" d="M20 4 7 13l13-4 13 4z"/>'
+        '<path class="preview-logo-tower" d="m16 13-3 22h14l-3-22z"/>'
+        '<path class="preview-logo-cut" d="M15.4 20h9.2M14.5 27h11"/>'
+        '<circle class="preview-logo-light" cx="20" cy="8" r="3"/>'
+        "</svg></div>"
+    )
 
 
 def format_price(value: float) -> str:
@@ -15,20 +61,29 @@ def format_price(value: float) -> str:
 
 def format_entry_zone(setup: DevelopingSetup) -> str:
     """Format the setup's entry range."""
-    return (
-        f"{format_price(setup.entry_zone_low)}–"
-        f"{format_price(setup.entry_zone_high)}"
-    )
+    return f"{format_price(setup.entry_zone_low)}–{format_price(setup.entry_zone_high)}"
 
 
 def status_class(status: str) -> str:
-    """Map display-only status text to an existing semantic accent."""
+    """Map display-only status text to a semantic preview accent."""
     normalized = str(status or "").strip().upper()
-    if normalized in {"WATCH", "READY", "OPEN"}:
-        return "preview-positive" if normalized in {"READY", "OPEN"} else "preview-watch"
+    if normalized in {"WATCH"}:
+        return "preview-watch"
+    if normalized in {"READY", "OPEN"}:
+        return "preview-positive"
     if normalized in {"WAIT", "STOP", "EXIT"}:
         return "preview-negative"
     return "preview-neutral"
+
+
+def confidence_factor_markup(factor: ConfidenceFactor) -> str:
+    """Render one sample confidence factor without implying production scoring."""
+    state = "positive" if factor.positive else "missing"
+    symbol = "✓" if factor.positive else "–"
+    return (
+        f'<div class="preview-factor preview-factor-{state}">'
+        f'<span aria-hidden="true">{symbol}</span><span>{escape(factor.label)}</span></div>'
+    )
 
 
 def signal_row_markup(signal: RecentSignal) -> str:
@@ -38,11 +93,11 @@ def signal_row_markup(signal: RecentSignal) -> str:
         f'<div class="preview-signal-symbol">{escape(signal.symbol)}</div>'
         f'<div><span class="preview-badge {status_class(signal.status)}">'
         f'{escape(signal.status)}</span></div>'
-        f'<div class="preview-signal-direction">'
-        f'{escape(signal.direction)} {escape(signal.option_type)}</div>'
+        f'<div class="preview-signal-direction">{escape(signal.direction)} '
+        f'{escape(signal.option_type)}</div>'
         f'<div class="preview-signal-confidence">{signal.confidence}%</div>'
         f'<div class="preview-signal-time">{escape(signal.time_label)}</div>'
-        '<div class="preview-chevron">›</div>'
+        f'<div class="preview-chevron">{icon_markup("chevron", size=16)}</div>'
         "</div>"
     )
 
@@ -53,8 +108,7 @@ def metric_markup(label: str, value: str, treatment: str = "") -> str:
     return (
         f'<div class="preview-plan-metric{treatment_class}">'
         f'<div class="preview-metric-label">{escape(label)}</div>'
-        f'<div class="preview-metric-value">{escape(value)}</div>'
-        "</div>"
+        f'<div class="preview-metric-value">{escape(value)}</div></div>'
     )
 
 
@@ -73,119 +127,155 @@ def setup_card_markup(setup: DevelopingSetup) -> str:
             metric_markup("Timing", setup.timing),
         )
     )
-    return dedent(f"""
-    <div class="preview-card preview-setup-card">
-      <div class="preview-eyebrow">BEST DEVELOPING SETUP</div>
-      <div class="preview-setup-grid">
-        <div class="preview-setup-identity">
-          <div class="preview-symbol">{escape(setup.symbol)}</div>
-          <div class="preview-direction">{escape(setup.direction)} {escape(setup.option_type)}</div>
-          <div class="preview-setup-name">{escape(setup.setup)}</div>
-          <div class="preview-status-line">
-            <span class="preview-badge preview-watch">{escape(setup.status)}</span>
-            <span>{escape(setup.status_detail)}</span>
+    factors = "".join(confidence_factor_markup(item) for item in setup.confidence_factors)
+    return dedent(
+        f"""
+        <div class="preview-card preview-setup-card">
+          <div class="preview-eyebrow-row">
+            <div class="preview-eyebrow">BEST DEVELOPING SETUP</div>
+            <div class="preview-sample-chip">SAMPLE DATA</div>
+          </div>
+          <div class="preview-setup-grid">
+            <div class="preview-setup-identity">
+              <div class="preview-symbol">{escape(setup.symbol)}</div>
+              <div class="preview-direction">{escape(setup.direction)} {escape(setup.option_type)}</div>
+              <div class="preview-setup-name">{escape(setup.setup)}</div>
+              <div class="preview-status-line">
+                <span class="preview-badge preview-watch">{escape(setup.status)}</span>
+                <span>{escape(setup.status_detail)}</span>
+              </div>
+            </div>
+            <div class="preview-plan-area">
+              <div class="preview-plan-grid">{metrics}</div>
+              <div class="preview-confidence-block">
+                <div class="preview-confidence-heading">
+                  <span>CONFIDENCE BREAKDOWN</span>
+                  <span>Preview factors</span>
+                </div>
+                <div class="preview-factor-grid">{factors}</div>
+              </div>
+              <button class="preview-plan-link" type="button">
+                View full trade plan {icon_markup("down", size=17)}
+              </button>
+            </div>
+            <aside class="preview-reasoning">
+              <div class="preview-reason-section">
+                <div class="preview-reason-label">WHY THIS SETUP</div>
+                <p>{escape(setup.reason)}</p>
+              </div>
+              <div class="preview-reason-section">
+                <div class="preview-reason-label">WHAT&rsquo;S MISSING</div>
+                <p>{escape(setup.missing_confirmation)}</p>
+              </div>
+              <div class="preview-reason-section">
+                <div class="preview-reason-label">INVALIDATION</div>
+                <p>{escape(setup.invalidation)}</p>
+              </div>
+            </aside>
           </div>
         </div>
-        <div>
-          <div class="preview-plan-grid">{metrics}</div>
-          <div class="preview-plan-link">View full trade plan <span>⌄</span></div>
-        </div>
-        <aside class="preview-reasoning">
-          <div class="preview-reason-label">WHY THIS SETUP</div>
-          <p>{escape(setup.reason)}</p>
-          <div class="preview-reason-label">WHAT’S MISSING</div>
-          <p>{escape(setup.missing_confirmation)}</p>
-          <div class="preview-reason-label">INVALIDATION</div>
-          <p>{escape(setup.invalidation)}</p>
-        </aside>
-      </div>
-    </div>
-    """)
+        """
+    )
+
+
+def action_markup(icon: str, label: str) -> str:
+    """Render a preview-only quick action with a coherent local SVG icon."""
+    return (
+        '<button class="preview-action" type="button">'
+        f'{icon_markup(icon, size=23)}<span>{escape(label)}</span></button>'
+    )
 
 
 def trade_desk_markup(data: TradeDeskPreview) -> str:
     """Build the complete preview shell without accessing application state."""
     signal_rows = "".join(signal_row_markup(signal) for signal in data.recent_signals)
-    return dedent(f"""
-    <main class="preview-shell">
-      <div class="preview-local-notice">LOCAL UI PREVIEW</div>
-      <header class="preview-header">
-        <div>
-          <h1>Trade Desk</h1>
-          <p>Focus on the best setups. Trade with a plan.</p>
-        </div>
-        <div class="preview-header-right">
-          <div class="preview-market-line">
-            <span class="preview-market-dot"></span>
-            <span class="preview-market-status">{escape(data.market_status)}</span>
-            <span class="preview-time">{escape(data.eastern_time)}</span>
-          </div>
-          <div class="preview-controls">
-            <button type="button"><span>↻</span> Refresh</button>
-            <button type="button"><span>▽</span> Filters</button>
-            <button type="button" aria-label="More options">•••</button>
-          </div>
-        </div>
-      </header>
+    actions = "".join(
+        action_markup(icon, label)
+        for icon, label in (
+            ("scan", "New Scan"),
+            ("watch", "Watchlist"),
+            ("market", "Market Overview"),
+            ("positions", "Open Positions"),
+            ("journal", "Journal"),
+            ("tools", "Developer Tools"),
+        )
+    )
+    return dedent(
+        f"""
+        <main class="preview-shell">
+          <div class="preview-local-notice">LOCAL UI PREVIEW</div>
+          <header class="preview-header">
+            <div class="preview-branding">
+              <div class="preview-brand-row">{logo_markup()}<span>OptionBeacon</span></div>
+              <h1>Trade Desk</h1>
+              <p>Focus on the best setups. Trade with a plan.</p>
+            </div>
+            <div class="preview-header-right">
+              <div class="preview-market-line">
+                <span class="preview-market-dot"></span>
+                <span class="preview-market-status">{escape(data.market_status)}</span>
+                <span class="preview-time">{escape(data.eastern_time)}</span>
+              </div>
+              <div class="preview-controls">
+                <button type="button">{icon_markup("refresh")}<span>Refresh</span></button>
+                <button type="button">{icon_markup("filter")}<span>Filters</span></button>
+                <button type="button" aria-label="More options">{icon_markup("more")}</button>
+              </div>
+            </div>
+          </header>
 
-      <nav class="preview-tabs" aria-label="Trade Desk sections">
-        <span class="preview-tab preview-tab-active">Overview</span>
-        <span class="preview-tab">Signals</span>
-        <span class="preview-tab">Positions</span>
-        <span class="preview-tab">Journal</span>
-        <span class="preview-tab">Analytics</span>
-      </nav>
+          <nav class="preview-tabs" aria-label="Trade Desk sections">
+            <span class="preview-tab preview-tab-active">Overview</span>
+            <span class="preview-tab">Signals</span>
+            <span class="preview-tab">Positions</span>
+            <span class="preview-tab">Journal</span>
+            <span class="preview-tab">Analytics</span>
+          </nav>
 
-      {setup_card_markup(data.setup)}
+          {setup_card_markup(data.setup)}
 
-      <div class="preview-card preview-quick-actions">
-        <div class="preview-eyebrow">QUICK ACTIONS</div>
-        <div class="preview-action-grid">
-          <span>⌕ <b>New Scan</b></span>
-          <span>☆ <b>Watchlist</b></span>
-          <span>▥ <b>Market Overview</b></span>
-          <span>▢ <b>Open Positions</b></span>
-          <span>▣ <b>Journal</b></span>
-          <span>⌕ <b>Developer Tools</b></span>
-        </div>
-      </div>
-
-      <div class="preview-lower-grid">
-        <div class="preview-card preview-open-card">
-          <div class="preview-panel-heading">
-            <span>OPEN POSITIONS</span><a>View all</a>
+          <div class="preview-card preview-quick-actions">
+            <div class="preview-eyebrow">QUICK ACTIONS</div>
+            <div class="preview-action-grid">{actions}</div>
           </div>
-          <div class="preview-empty-position">
-            <div class="preview-empty-icon">▱</div>
-            <strong>No open positions</strong>
-            <span>When you take a trade,<br>it will appear here.</span>
-          </div>
-          <button class="preview-settings" type="button">⚙ &nbsp; Paper Trade Settings</button>
-        </div>
 
-        <div class="preview-card preview-signals-card">
-          <div class="preview-panel-heading">
-            <span>RECENT SIGNALS</span><a>View all</a>
-          </div>
-          <div class="preview-signal-list">{signal_rows}</div>
-          <div class="preview-signal-count">
-            Showing {len(data.recent_signals)} of {data.signal_count} signals
-          </div>
-        </div>
-      </div>
+          <div class="preview-lower-grid">
+            <div class="preview-card preview-open-card">
+              <div class="preview-panel-heading">
+                <span>OPEN POSITIONS</span><a>View all</a>
+              </div>
+              <div class="preview-empty-position">
+                <div class="preview-empty-icon">{icon_markup("inbox", size=48)}</div>
+                <strong>No open positions</strong>
+                <span>When you take a trade,<br>it will appear here.</span>
+              </div>
+              <button class="preview-settings" type="button">
+                {icon_markup("settings", size=18)}<span>Paper Trade Settings</span>
+              </button>
+            </div>
 
-      <div class="preview-card preview-focus-tip">
-        <span class="preview-bulb">♧</span>
-        <div><strong>Focus Tip:</strong> {escape(data.focus_tip)}</div>
-        <a>View trading checklist &nbsp; ↗</a>
-      </div>
-    </main>
-    """)
+            <div class="preview-card preview-signals-card">
+              <div class="preview-panel-heading">
+                <span>RECENT SIGNALS</span><a>View all</a>
+              </div>
+              <div class="preview-signal-list">{signal_rows}</div>
+              <div class="preview-signal-count">
+                Showing {len(data.recent_signals)} of {data.signal_count} signals
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-card preview-focus-tip">
+            <span class="preview-bulb">{icon_markup("bulb", size=28)}</span>
+            <div><strong>Focus Tip:</strong> {escape(data.focus_tip)}</div>
+            <a>View trading checklist {icon_markup("external", size=16)}</a>
+          </div>
+        </main>
+        """
+    )
 
 
 def render_trade_desk_preview(st_module, data: TradeDeskPreview) -> None:
     """Render the complete local-only preview."""
-    # A single-line HTML fragment prevents Markdown from interpreting indented
-    # sibling cards as code blocks when reusable component markup is composed.
     markup = trade_desk_markup(data).replace("\n", "")
     st_module.markdown(markup, unsafe_allow_html=True)

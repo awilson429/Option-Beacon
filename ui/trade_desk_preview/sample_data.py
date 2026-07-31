@@ -11,6 +11,12 @@ EASTERN = ZoneInfo("America/New_York")
 
 
 @dataclass(frozen=True)
+class ConfidenceFactor:
+    label: str
+    positive: bool
+
+
+@dataclass(frozen=True)
 class DevelopingSetup:
     symbol: str
     direction: str
@@ -31,6 +37,7 @@ class DevelopingSetup:
     reason: str
     missing_confirmation: str
     invalidation: str
+    confidence_factors: tuple[ConfidenceFactor, ...]
 
 
 @dataclass(frozen=True)
@@ -90,6 +97,14 @@ def preview_data(now: datetime | None = None) -> TradeDeskPreview:
                 "Breakdown confirmation and increased selling volume."
             ),
             invalidation="Price above $302.90.",
+            confidence_factors=(
+                ConfidenceFactor("Trend alignment", True),
+                ConfidenceFactor("Price below support", True),
+                ConfidenceFactor("Momentum weakening", True),
+                ConfidenceFactor("Breakdown not confirmed", False),
+                ConfidenceFactor("Selling volume still weak", False),
+                ConfidenceFactor("Broader market not aligned", False),
+            ),
         ),
         recent_signals=(
             RecentSignal("TSLA", "WATCH", "Bearish", "PUT", 46, "10:41 AM"),
