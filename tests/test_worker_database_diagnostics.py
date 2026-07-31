@@ -1,5 +1,6 @@
 import json
 import logging
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from optionbeacon.worker import run as worker
 from optionbeacon.worker.database_diagnostics import (
     DatabaseProbeError,
+    SanitizedDiagnosticError,
     database_url_metadata,
     log_sanitized_traceback,
     probe_postgresql,
@@ -19,6 +21,10 @@ SAFE_URL = (
     "postgresql://railway-user:railway-password@"
     "ep-example-pooler.invalid/neondb?sslmode=require"
 )
+
+
+class OperationalError(RuntimeError):
+    pass
 
 
 class FakeCursor:
@@ -65,13 +71,13 @@ class FakeConnection:
         self.closed = True
 
 
-def fake_driver(*, fail_at=None):
+def fake_driver(*, fail_at=None, connect_error=None, connect_exception=RuntimeError):
     connection = FakeConnection(fail_at=fail_at)
 
     def connect(_url, **_kwargs):
         if fail_at == "connect":
-            detail = "sensitive connection detail"
-            raise RuntimeError(detail)
+            detail = connect_error or "connection refused"
+            raise connect_exception(detail)
         return connection
 
     return SimpleNamespace(
@@ -152,7 +158,14 @@ def test_database_probe_reports_exact_sanitized_failure_stage(
         )
 
     assert caught.value.stage == expected_stage
-    assert "sensitive" not in caplog.text
+    for secret in (
+        SAFE_URL,
+        "railway-user",
+        "railway-password",
+        "ep-example",
+        "neondb",
+    ):
+        assert secret not in caplog.text
     failure_record = next(
         record for record in messages(caplog) if record["event"] == "database_probe_failed"
     )
@@ -169,7 +182,13 @@ def test_driver_import_failure_is_sanitized(caplog):
         probe_postgresql(SAFE_URL, driver_loader=broken_loader)
 
     assert caught.value.stage == "driver_import"
-    assert "sensitive driver path" not in caplog.text
+    original = next(
+        record
+        for record in messages(caplog)
+        if record["event"] == "database_original_failure"
+    )
+    assert original["original_exception_type"] == "ImportError"
+    assert original["sanitized_original_exception_message"] == "sensitive driver path"
 
 
 def test_sanitized_traceback_never_includes_original_exception_message(caplog):
@@ -187,6 +206,92 @@ def test_sanitized_traceback_never_includes_original_exception_message(caplog):
     assert "password" not in caplog.text
     assert "private-host" not in caplog.text
     assert "Safe failure." in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("category", "error_message"),
+    [
+        (
+            "Name or service not known",
+            'could not translate host name "ep-example-pooler.invalid" to address: '
+            "Name or service not known",
+        ),
+        (
+            "connection timeout expired",
+            'connection to server at "ep-example-pooler.invalid" failed: '
+            "connection timeout expired",
+        ),
+        (
+            "Connection refused",
+            'connection to server at "ep-example-pooler.invalid" failed: '
+            "Connection refused",
+        ),
+        (
+            "SSL SYSCALL error",
+            'connection to server at "ep-example-pooler.invalid" failed: '
+            "SSL SYSCALL error: EOF detected",
+        ),
+        (
+            "channel binding required",
+            "channel binding required, but server did not offer it",
+        ),
+        (
+            "password authentication failed",
+            'password authentication failed for user "railway-user"',
+        ),
+        ("does not exist", 'database "neondb" does not exist'),
+        (
+            "Network is unreachable",
+            'connection to server at "ep-example-pooler.invalid" '
+            "(2600:1f18::1), port 5432 failed: Network is unreachable",
+        ),
+        ("other libpq connection error", 'other libpq connection error'),
+    ],
+)
+def test_original_postgres_error_category_is_preserved_and_secrets_redacted(
+    category, error_message, caplog
+):
+    detail = (
+        f"{error_message}\n"
+        f"connection string: {SAFE_URL}\n"
+        "password=railway-password user=railway-user host=ep-example-pooler.invalid "
+        "dbname=neondb"
+    )
+    driver = fake_driver(
+        fail_at="connect",
+        connect_error=detail,
+        connect_exception=OperationalError,
+    )
+
+    with caplog.at_level(logging.INFO), pytest.raises(DatabaseProbeError):
+        probe_postgresql(SAFE_URL, driver_loader=lambda _name: driver)
+
+    original = next(
+        record
+        for record in messages(caplog)
+        if record["event"] == "database_original_failure"
+    )
+    assert original["original_exception_type"] == "OperationalError"
+    assert category in original["sanitized_original_exception_message"]
+    assert category in original["sanitized_original_traceback"]
+    assert original["stage"] == "connect"
+    assert original["python_version"] == sys.version
+    assert original["psycopg2_version"] == "2.9.10 test"
+    for secret in (
+        SAFE_URL,
+        "railway-user",
+        "railway-password",
+        "ep-example-pooler.invalid",
+        "ep-example",
+        "neondb",
+    ):
+        assert secret not in caplog.text
+    wrapped = next(
+        record
+        for record in caplog.records
+        if '"event": "database_probe_failed"' in record.message
+    )
+    assert wrapped.exc_info[0] is SanitizedDiagnosticError
 
 
 def test_repository_reports_schema_operation_boundaries(tmp_path):

@@ -7,9 +7,12 @@ import json
 import logging
 import os
 import platform
+import re
+import sys
 import time
+import traceback
 from dataclasses import dataclass
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from trade_repository import database_connect_timeout_seconds
 
@@ -121,7 +124,95 @@ def log_sanitized_traceback(logger, record: dict, exc: BaseException) -> None:
     )
 
 
-def _fail(logger, stage, exc, started):
+def sanitize_database_diagnostic_text(text, database_url=None) -> str:
+    """Retain libpq error categories while removing connection identifiers."""
+    sanitized = str(text or "")
+    value = str(database_url or "").strip()
+    sensitive_values = {value}
+    query_names = set()
+    try:
+        parsed = urlsplit(value) if value else None
+        if parsed:
+            sensitive_values.update(
+                {
+                    parsed.username or "",
+                    parsed.password or "",
+                    parsed.hostname or "",
+                    parsed.path.lstrip("/"),
+                }
+            )
+            query_names = set(parse_qs(parsed.query, keep_blank_values=True))
+    except (TypeError, ValueError):
+        pass
+    expanded_values = set()
+    for item in sensitive_values:
+        if item:
+            expanded_values.add(item)
+            expanded_values.add(unquote(item))
+    for item in sorted(expanded_values, key=len, reverse=True):
+        sanitized = re.sub(
+            rf"(?<![A-Za-z0-9]){re.escape(item)}(?![A-Za-z0-9])",
+            "[REDACTED]",
+            sanitized,
+            flags=re.I,
+        )
+
+    sanitized = re.sub(
+        r"(?i)postgres(?:ql)?://[^\s\"']+", "[REDACTED_DATABASE_URL]", sanitized
+    )
+    for name in query_names:
+        sanitized = re.sub(
+            rf"(?i)({re.escape(name)}\s*=\s*)(?:\"[^\"]*\"|'[^']*'|[^\s&]+)",
+            r"\1[REDACTED]",
+            sanitized,
+        )
+    sanitized = re.sub(
+        r"(?i)\b(password|user(?:name)?|host(?:name)?|dbname|database)"
+        r"(\s*=\s*)(?:\"[^\"]*\"|'[^']*'|[^\s]+)",
+        r"\1\2[REDACTED]",
+        sanitized,
+    )
+    sanitized = re.sub(
+        r"(?i)\b(host name|server at|user|database)(\s+)[\"'][^\"']+[\"']",
+        r"\1\2\"[REDACTED]\"",
+        sanitized,
+    )
+    sanitized = re.sub(
+        r'(?i)(server at\s+"\[REDACTED\]"\s*)\([^)]*\)',
+        r"\1([REDACTED_HOST])",
+        sanitized,
+    )
+    sanitized = re.sub(
+        r"(?<![\w])(?:\d{1,3}\.){3}\d{1,3}(?![\w])", "[REDACTED_HOST]", sanitized
+    )
+    return sanitized
+
+
+def _fail(logger, stage, exc, started, *, database_url=None, driver=None):
+    original_traceback = traceback.format_exc()
+    if original_traceback.startswith("NoneType: None"):
+        original_traceback = "".join(
+            traceback.TracebackException.from_exception(exc).format()
+        )
+    original_record = {
+        "event": "database_original_failure",
+        "stage": stage,
+        "original_exception_type": type(exc).__name__,
+        "sanitized_original_exception_message": sanitize_database_diagnostic_text(
+            str(exc), database_url
+        ),
+        "sanitized_original_traceback": sanitize_database_diagnostic_text(
+            original_traceback, database_url
+        ),
+        "sqlstate": safe_sqlstate(exc),
+        "python_version": sys.version,
+        "psycopg2_version": (
+            str(getattr(driver, "__version__", "unknown"))
+            if driver is not None
+            else "unavailable"
+        ),
+    }
+    log_json(logger, logging.ERROR, original_record)
     record = {
         "event": "database_probe_failed",
         "stage": stage,
@@ -147,10 +238,16 @@ def probe_postgresql(database_url, *, logger=None, driver_loader=None, timeout=N
     try:
         metadata = database_url_metadata(database_url)
     except Exception as exc:
-        _fail(logger, "parse", exc, started)
+        _fail(logger, "parse", exc, started, database_url=database_url)
     log_json(logger, logging.INFO, metadata)
     if not metadata["database_url_configured"] or metadata["detected_scheme"] == "unknown":
-        _fail(logger, "parse", ValueError("database URL is absent or unsupported"), started)
+        _fail(
+            logger,
+            "parse",
+            ValueError("database URL is absent or unsupported"),
+            started,
+            database_url=database_url,
+        )
 
     try:
         driver = (driver_loader or importlib.import_module)(EXPECTED_DRIVER)
@@ -158,7 +255,13 @@ def probe_postgresql(database_url, *, logger=None, driver_loader=None, timeout=N
             raise AttributeError("driver connect API unavailable")
     except Exception as exc:
         log_json(logger, logging.INFO, runtime_dependency_record(None))
-        _fail(logger, "driver_import", exc, started)
+        _fail(
+            logger,
+            "driver_import",
+            exc,
+            started,
+            database_url=database_url,
+        )
     log_json(logger, logging.INFO, runtime_dependency_record(driver))
 
     parsed = urlsplit(str(database_url).strip())
@@ -171,34 +274,76 @@ def probe_postgresql(database_url, *, logger=None, driver_loader=None, timeout=N
         try:
             connection = driver.connect(database_url, **kwargs)
         except Exception as exc:
-            _fail(logger, "connect", exc, started)
+            _fail(
+                logger,
+                "connect",
+                exc,
+                started,
+                database_url=database_url,
+                driver=driver,
+            )
         log_json(logger, logging.INFO, {"event": "database_connection_opened"})
         try:
             cursor = connection.cursor()
         except Exception as exc:
-            _fail(logger, "cursor", exc, started)
+            _fail(
+                logger,
+                "cursor",
+                exc,
+                started,
+                database_url=database_url,
+                driver=driver,
+            )
         try:
             cursor.execute("SELECT 1")
         except Exception as exc:
-            _fail(logger, "execute", exc, started)
+            _fail(
+                logger,
+                "execute",
+                exc,
+                started,
+                database_url=database_url,
+                driver=driver,
+            )
         try:
             row = cursor.fetchone()
             if not row or row[0] != 1:
                 raise ValueError("unexpected SELECT 1 result")
         except Exception as exc:
-            _fail(logger, "fetch", exc, started)
+            _fail(
+                logger,
+                "fetch",
+                exc,
+                started,
+                database_url=database_url,
+                driver=driver,
+            )
         log_json(logger, logging.INFO, {"event": "database_select_one_passed"})
     finally:
         if cursor is not None:
             try:
                 cursor.close()
             except Exception as exc:
-                _fail(logger, "close", exc, started)
+                _fail(
+                    logger,
+                    "close",
+                    exc,
+                    started,
+                    database_url=database_url,
+                    driver=driver,
+                )
         if connection is not None:
             try:
                 connection.close()
             except Exception as exc:
-                _fail(logger, "close", exc, started)
+                _fail(
+                    logger,
+                    "close",
+                    exc,
+                    started,
+                    database_url=database_url,
+                    driver=driver,
+                )
     record = {
         "event": "database_probe_completed",
         "elapsed_milliseconds": round((time.monotonic() - started) * 1000, 1),
