@@ -42,14 +42,15 @@ def icon_markup(name: str, *, size: int = 20, css_class: str = "") -> str:
 
 
 def logo_markup() -> str:
-    """Return the replaceable OptionBeacon geometric beacon mark."""
+    """Return the replaceable Concept-4-inspired geometric beacon mark."""
     return (
         '<div class="preview-brand-mark" aria-hidden="true">'
-        '<svg viewBox="0 0 40 40" role="img">'
-        '<path class="preview-logo-beam" d="M20 4 7 13l13-4 13 4z"/>'
-        '<path class="preview-logo-tower" d="m16 13-3 22h14l-3-22z"/>'
-        '<path class="preview-logo-cut" d="M15.4 20h9.2M14.5 27h11"/>'
-        '<circle class="preview-logo-light" cx="20" cy="8" r="3"/>'
+        '<svg viewBox="0 0 48 48" role="img">'
+        '<path class="preview-logo-orbit" d="M8 21c4-7 9.3-10.5 16-10.5S36 14 40 21"/>'
+        '<path class="preview-logo-orbit preview-logo-orbit-inner" d="M14 22c2.8-4.1 6.1-6.2 10-6.2s7.2 2.1 10 6.2"/>'
+        '<path class="preview-logo-tower" d="m20.5 23-3.8 17h14.6l-3.8-17z"/>'
+        '<path class="preview-logo-cut" d="M19.2 31h9.6M18 37h12"/>'
+        '<path class="preview-logo-spark" d="m24 5 2.1 3.9L30 11l-3.9 2.1L24 17l-2.1-3.9L18 11l3.9-2.1z"/>'
         "</svg></div>"
     )
 
@@ -206,9 +207,12 @@ def trade_desk_markup(data: TradeDeskPreview) -> str:
           <div class="preview-local-notice">LOCAL UI PREVIEW</div>
           <header class="preview-header">
             <div class="preview-branding">
-              <div class="preview-brand-row">{logo_markup()}<span>OptionBeacon</span></div>
-              <h1>Trade Desk</h1>
-              <p>Focus on the best setups. Trade with a plan.</p>
+              <div class="preview-brand-row">
+                {logo_markup()}
+                <div class="preview-wordmark" aria-label="OptionBeacon">
+                  <span>OPTION</span><span>BEACON</span>
+                </div>
+              </div>
             </div>
             <div class="preview-header-right">
               <div class="preview-market-line">
@@ -225,11 +229,12 @@ def trade_desk_markup(data: TradeDeskPreview) -> str:
           </header>
 
           <nav class="preview-tabs" aria-label="Trade Desk sections">
-            <span class="preview-tab preview-tab-active">Overview</span>
+            <span class="preview-tab preview-tab-active">Trade Desk</span>
             <span class="preview-tab">Signals</span>
             <span class="preview-tab">Positions</span>
             <span class="preview-tab">Journal</span>
             <span class="preview-tab">Analytics</span>
+            <span class="preview-tab">Settings</span>
           </nav>
 
           {setup_card_markup(data.setup)}

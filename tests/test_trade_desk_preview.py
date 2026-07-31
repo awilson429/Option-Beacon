@@ -74,7 +74,8 @@ def test_branding_and_local_icons_are_dependency_free():
     icon = icon_markup("scan")
 
     assert "<svg" in logo
-    assert "preview-logo-light" in logo
+    assert "preview-logo-spark" in logo
+    assert "preview-logo-orbit" in logo
     assert "<svg" in icon
     assert "http" not in logo + icon
 
@@ -104,6 +105,19 @@ def test_full_preview_markup_contains_reference_sections_and_notice():
         "No open positions",
     ):
         assert text in markup
+
+    assert "<h1>Trade Desk</h1>" not in markup
+    assert "Focus on the best setups. Trade with a plan." not in markup
+
+
+def test_preview_navigation_uses_requested_order_and_active_trade_desk():
+    markup = trade_desk_markup(preview_data())
+    labels = ("Trade Desk", "Signals", "Positions", "Journal", "Analytics", "Settings")
+
+    offsets = [markup.index(f">{label}</span>") for label in labels]
+    assert offsets == sorted(offsets)
+    assert '<span class="preview-tab preview-tab-active">Trade Desk</span>' in markup
+    assert ">Overview</span>" not in markup
 
 
 def test_preview_css_is_scoped_and_responsive():
