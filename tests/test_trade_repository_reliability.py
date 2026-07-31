@@ -228,6 +228,33 @@ def test_status_model_does_not_call_unknown_empty_healthy():
     assert "never completed" in model["summary"]
 
 
+def test_dashboard_uses_latest_configured_worker_health(tmp_path):
+    database = tmp_path / "worker-health.db"
+    repository = TradeRepository(database, database_url="")
+    repository.record_scan_heartbeat(
+        "railway-production-worker",
+        started_at=NOW,
+        completed_at=NOW,
+        success_at=NOW,
+        symbols_processed=3,
+        market_data_state="AVAILABLE",
+    )
+
+    state = authoritative_trade_state(
+        db_file=database,
+        database_url="",
+        now=NOW,
+    )
+
+    assert repository.get_scan_health() is None
+    assert repository.get_latest_scan_health()["scanner_id"] == (
+        "railway-production-worker"
+    )
+    assert state["scanner_state"] == "CURRENT"
+    assert state["last_success_at"] == NOW
+    assert state["message"].startswith("Scanner data is current.")
+
+
 def test_status_model_distinguishes_market_closed():
     model = reliability_status_model(
         {

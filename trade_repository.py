@@ -717,6 +717,15 @@ class TradeRepository:
                 (scanner_id,),
             )
 
+    def get_latest_scan_health(self) -> dict | None:
+        """Return the health row most recently written by any scanner worker."""
+        with self.connection() as connection:
+            return self._fetchone(
+                connection,
+                "SELECT * FROM scanner_health "
+                "ORDER BY updated_at DESC,scanner_id ASC LIMIT 1",
+            )
+
     def acquire_scan_lock(
         self, scanner_id=DEFAULT_SCANNER_ID, *, owner_id=None, ttl_seconds=900
     ) -> str | None:

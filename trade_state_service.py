@@ -223,7 +223,7 @@ def authoritative_trade_state(
             database_url=database_url,
         )
         records = list_trade_outcomes(repository)
-        health = repository.get_scan_health()
+        health = repository.get_latest_scan_health()
         state = scanner_health_state(
             health,
             now=checked_at,
