@@ -103,6 +103,7 @@ class TradeRepository:
         database_url: str | None = None,
         require_durable: bool = False,
         connect_timeout_seconds: int | None = None,
+        diagnostic_callback=None,
     ):
         self.db_file = str(db_file)
         self.database_url = (
@@ -113,6 +114,7 @@ class TradeRepository:
         self.backend = "postgresql" if self.database_url else "sqlite"
         self.durable = self.backend == "postgresql"
         self.require_durable = require_durable
+        self.diagnostic_callback = diagnostic_callback
         if require_durable and not self.durable:
             raise RepositoryUnavailable(
                 "Durable trade storage is required but DATABASE_URL is not configured."
@@ -122,7 +124,12 @@ class TradeRepository:
             if self.durable
             else None
         )
+        self._diagnostic("repository_construction_completed", backend=self.backend)
         self.initialize()
+
+    def _diagnostic(self, event: str, **fields):
+        if self.diagnostic_callback is not None:
+            self.diagnostic_callback({"event": event, **fields})
 
     @contextmanager
     def connection(self):
@@ -148,6 +155,7 @@ class TradeRepository:
                 connection.row_factory = sqlite3.Row
                 connection.execute("PRAGMA foreign_keys=ON")
                 connection.execute("PRAGMA journal_mode=WAL")
+            self._diagnostic("repository_connection_ready", backend=self.backend)
             yield connection
             connection.commit()
         except RepositoryUnavailable:
@@ -155,7 +163,7 @@ class TradeRepository:
         except Exception as exc:
             raise RepositoryUnavailable(
                 f"Trade repository unavailable: {type(exc).__name__}"
-            ) from None
+            ) from exc
         finally:
             if "connection" in locals():
                 connection.close()
@@ -181,8 +189,12 @@ class TradeRepository:
         return rows
 
     def initialize(self):
+        self._diagnostic("repository_schema_initialization_started")
         with self.connection() as connection:
             text_id = "TEXT PRIMARY KEY"
+            self._diagnostic(
+                "repository_schema_operation_started", operation="opportunities"
+            )
             self._execute(
                 connection,
                 f"""
@@ -208,6 +220,13 @@ class TradeRepository:
                 )
                 """,
             ).close()
+            self._diagnostic(
+                "repository_schema_operation_completed", operation="opportunities"
+            )
+            self._diagnostic(
+                "repository_schema_operation_started",
+                operation="authoritative_trades",
+            )
             self._execute(
                 connection,
                 f"""
@@ -233,6 +252,13 @@ class TradeRepository:
                 )
                 """,
             ).close()
+            self._diagnostic(
+                "repository_schema_operation_completed",
+                operation="authoritative_trades",
+            )
+            self._diagnostic(
+                "repository_schema_operation_started", operation="scanner_health"
+            )
             self._execute(
                 connection,
                 """
@@ -251,6 +277,12 @@ class TradeRepository:
                 )
                 """,
             ).close()
+            self._diagnostic(
+                "repository_schema_operation_completed", operation="scanner_health"
+            )
+            self._diagnostic(
+                "repository_schema_operation_started", operation="scanner_locks"
+            )
             self._execute(
                 connection,
                 """
@@ -262,6 +294,12 @@ class TradeRepository:
                 )
                 """,
             ).close()
+            self._diagnostic(
+                "repository_schema_operation_completed", operation="scanner_locks"
+            )
+            self._diagnostic(
+                "repository_schema_operation_started", operation="legacy_imports"
+            )
             self._execute(
                 connection,
                 """
@@ -275,6 +313,10 @@ class TradeRepository:
                 )
                 """,
             ).close()
+            self._diagnostic(
+                "repository_schema_operation_completed", operation="legacy_imports"
+            )
+        self._diagnostic("repository_schema_initialization_completed")
 
     def create_opportunity(
         self,
@@ -673,6 +715,15 @@ class TradeRepository:
                 connection,
                 "SELECT * FROM scanner_health WHERE scanner_id=?",
                 (scanner_id,),
+            )
+
+    def get_latest_scan_health(self) -> dict | None:
+        """Return the health row most recently written by any scanner worker."""
+        with self.connection() as connection:
+            return self._fetchone(
+                connection,
+                "SELECT * FROM scanner_health "
+                "ORDER BY updated_at DESC,scanner_id ASC LIMIT 1",
             )
 
     def acquire_scan_lock(

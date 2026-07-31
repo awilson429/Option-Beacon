@@ -12,6 +12,14 @@ import threading
 
 from build_information import build_information
 from finnhub_universe import DEFAULT_SYMBOL_GROUPS, flatten_symbol_groups
+from optionbeacon.worker.database_diagnostics import (
+    DatabaseProbeError,
+    database_url_metadata,
+    durable_storage_required,
+    log_json,
+    log_sanitized_traceback,
+    probe_postgresql,
+)
 from optionbeacon.worker.scan_once import run_scan_once
 from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable
 from trade_state_service import repository_for_runtime
@@ -26,6 +34,24 @@ MAX_FAILURE_BACKOFF_SECONDS = 900
 
 class WorkerConfigurationError(ValueError):
     pass
+
+
+def configuration_error_record(exc):
+    """Build a sanitized startup failure record without exposing credentials."""
+    record = {
+        "event": "worker_configuration_error",
+        "error": type(exc).__name__,
+        "message": str(exc),
+        "database_url_configured": bool(os.getenv("DATABASE_URL", "").strip()),
+        "durable_storage_required": durable_storage_required(os.environ),
+    }
+    if isinstance(exc, DatabaseProbeError):
+        record.update(
+            stage=exc.stage,
+            underlying_exception_type=exc.cause_type,
+            sqlstate=exc.sqlstate,
+        )
+    return record
 
 
 def configured_scan_seconds(value=None) -> int:
@@ -131,7 +157,17 @@ def main(argv=None):
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    startup_stage = "worker_configuration"
+    repository_state = {"event": None}
+
+    def repository_diagnostic(record):
+        repository_state["event"] = record.get("event")
+        if record.get("operation"):
+            repository_state["operation"] = record["operation"]
+        log_json(LOGGER, logging.INFO, record)
+
     try:
+        log_json(LOGGER, logging.INFO, {"event": "worker_startup_started"})
         interval = configured_scan_seconds(args.interval_seconds)
         scanner_id = os.getenv(
             "OPTIONBEACON_SCANNER_ID", DEFAULT_SCANNER_ID
@@ -140,17 +176,40 @@ def main(argv=None):
             raise WorkerConfigurationError(
                 "OPTIONBEACON_SCANNER_ID cannot be empty."
             )
-        repository = repository_for_runtime()
-    except (RepositoryUnavailable, WorkerConfigurationError) as exc:
-        LOGGER.error(
-            json.dumps(
-                {
-                    "event": "worker_configuration_error",
-                    "error": type(exc).__name__,
-                },
-                sort_keys=True,
-            )
+        database_url = os.getenv("DATABASE_URL", "").strip()
+        log_json(
+            LOGGER,
+            logging.INFO,
+            database_url_metadata(database_url, environ=os.environ),
         )
+        if database_url:
+            startup_stage = "database_probe"
+            probe_postgresql(database_url, logger=LOGGER)
+        startup_stage = "repository_initialization"
+        log_json(
+            LOGGER, logging.INFO, {"event": "repository_initialization_started"}
+        )
+        repository = repository_for_runtime(
+            database_url=database_url,
+            diagnostic_callback=repository_diagnostic,
+        )
+        log_json(
+            LOGGER,
+            logging.INFO,
+            {
+                "event": "repository_ready",
+                "backend": repository.backend,
+                "durable": repository.durable,
+            },
+        )
+    except (DatabaseProbeError, RepositoryUnavailable, WorkerConfigurationError) as exc:
+        record = configuration_error_record(exc)
+        record["startup_stage"] = startup_stage
+        if startup_stage == "repository_initialization":
+            record["repository_stage"] = repository_state["event"]
+            if repository_state.get("operation"):
+                record["repository_operation"] = repository_state["operation"]
+        log_sanitized_traceback(LOGGER, record, exc)
         return 2
     run(
         repository=repository,
