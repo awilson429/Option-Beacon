@@ -102,12 +102,14 @@ def configure_page():
         }
 
         .brand-copy {
-            align-items: flex-start;
+            align-items: stretch;
             display: flex;
+            flex: 0 1 auto;
             flex-direction: column;
             justify-content: center;
             min-width: 0;
             text-align: left;
+            width: fit-content;
         }
 
         .brand-title {
@@ -128,6 +130,7 @@ def configure_page():
             margin-top: 0.45rem;
             text-transform: uppercase;
             letter-spacing: 0.08em;
+            text-align: center;
             white-space: nowrap;
         }
 
@@ -187,17 +190,21 @@ def configure_page():
         }
 
         .brand-controls .pill {
-            min-height: 1.8rem;
-            padding: 0.32rem 0.65rem;
+            border-width: 1px;
+            height: 3rem;
+            min-height: 3rem;
+            padding: 0.42rem 0.75rem;
+            width: 12rem;
         }
 
         .brand-refresh-label {
-            min-width: 8.25rem;
+            min-width: 12rem;
         }
 
         .brand-refreshed-at {
             display: block;
-            line-height: 1.2;
+            line-height: 1.05;
+            text-align: center;
             white-space: nowrap;
         }
 
