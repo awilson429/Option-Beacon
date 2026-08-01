@@ -2,33 +2,24 @@
 
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
+from ui.design_tokens import css_variables
 
 
 def configure_page():
     st.set_page_config(page_title="Option Beacon", layout="wide")
     st_autorefresh(interval=60000, key="option_beacon_refresh")
-    st.markdown(
-        """
+    theme_css = """
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap');
 
         :root {
-            --ob-bg: #050505;
-            --ob-panel: #101010;
-            --ob-panel-soft: #151515;
-            --ob-border: rgba(255, 255, 255, 0.12);
-            --ob-border-strong: rgba(255, 255, 255, 0.22);
-            --ob-text: #f7f7f2;
-            --ob-muted: #a9aaa5;
-            --ob-green: #2fd37a;
-            --ob-red: #ff5d5d;
-            --ob-gold: #d8b35a;
+            /* OPTIONBEACON_THEME_TOKENS */
         }
 
         html, body, [data-testid="stAppViewContainer"] {
             background:
-                radial-gradient(circle at top right, rgba(216, 179, 90, 0.10), transparent 28rem),
-                var(--ob-bg);
+                radial-gradient(circle at top right, rgba(42, 72, 102, 0.18), transparent 30rem),
+                var(--ob-bg-page);
             color: var(--ob-text);
             font-family: 'Source Sans 3', sans-serif;
         }
@@ -64,7 +55,7 @@ def configure_page():
             border: 1px solid var(--ob-border-strong);
             border-radius: 8px;
             padding: 1.15rem 1.25rem;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+            background: var(--ob-bg-header);
             box-sizing: border-box;
             margin-bottom: 0.65rem;
             max-width: 100%;
@@ -94,8 +85,8 @@ def configure_page():
             width: 148px;
             height: 148px;
             object-fit: contain;
-            background: #000000;
-            border: 1px solid rgba(255, 255, 255, 0.20);
+            background: var(--ob-bg-page);
+            border: 1px solid var(--ob-border-default);
             border-radius: 8px;
             padding: 0;
             flex: 0 0 auto;
@@ -159,7 +150,7 @@ def configure_page():
             letter-spacing: 0.04em;
             text-transform: uppercase;
             color: var(--ob-text);
-            background: rgba(255, 255, 255, 0.04);
+            background: var(--ob-bg-control);
             white-space: nowrap;
         }
 
@@ -223,12 +214,12 @@ def configure_page():
         }
 
         .pill-open {
-            border-color: rgba(47, 211, 122, 0.55);
+            border-color: color-mix(in srgb, var(--ob-positive) 62%, transparent);
             color: var(--ob-green);
         }
 
         .pill-closed {
-            border-color: rgba(255, 255, 255, 0.18);
+            border-color: var(--ob-border-default);
             color: var(--ob-muted);
         }
 
@@ -240,20 +231,33 @@ def configure_page():
         }
 
         .signal-call {
-            border-color: rgba(47, 211, 122, 0.75);
+            border-color: var(--ob-positive);
             color: var(--ob-green);
-            background: rgba(47, 211, 122, 0.09);
+            background: color-mix(in srgb, var(--ob-positive) 10%, var(--ob-bg-control));
         }
 
         .signal-put {
-            border-color: rgba(255, 93, 93, 0.75);
+            border-color: var(--ob-negative);
             color: var(--ob-red);
-            background: rgba(255, 93, 93, 0.09);
+            background: var(--ob-wait-bg);
         }
 
         .signal-wait {
-            border-color: rgba(255, 255, 255, 0.18);
-            color: var(--ob-muted);
+            background: var(--ob-wait-bg);
+            border-color: var(--ob-wait-border);
+            color: var(--ob-negative);
+        }
+
+        .signal-watch {
+            background: var(--ob-watch-bg);
+            border-color: var(--ob-watch-border);
+            color: var(--ob-warning);
+        }
+
+        .signal-neutral {
+            background: var(--ob-bg-control);
+            border-color: var(--ob-border-default);
+            color: var(--ob-text-muted);
         }
 
         .section-title {
@@ -275,7 +279,7 @@ def configure_page():
 
         .section-subtitle {
             align-items: center;
-            background: rgba(255, 255, 255, 0.045);
+            background: var(--ob-bg-card-elevated);
             border: 1px solid var(--ob-border);
             border-left: 6px solid var(--ob-gold);
             border-radius: 8px;
@@ -328,13 +332,13 @@ def configure_page():
         }
 
         .notice-warning {
-            background: rgba(216, 179, 90, 0.08);
-            border-color: rgba(216, 179, 90, 0.28);
-            color: #d9c385;
+            background: var(--ob-watch-bg);
+            border-color: var(--ob-watch-border);
+            color: var(--ob-warning);
         }
 
         .notice-info {
-            background: rgba(255, 255, 255, 0.035);
+            background: var(--ob-bg-card);
         }
 
         .health-grid {
@@ -345,8 +349,8 @@ def configure_page():
         }
 
         .health-card {
-            background: rgba(255, 255, 255, 0.035);
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: var(--ob-bg-card-elevated);
+            border: 1px solid var(--ob-border-default);
             border-radius: 8px;
             min-height: 6.1rem;
             padding: 0.75rem;
@@ -415,8 +419,8 @@ def configure_page():
         }
 
         .empty-state {
-            background: rgba(255, 255, 255, 0.035);
-            border: 1px dashed var(--ob-border-strong);
+            background: var(--ob-bg-empty-state);
+            border: 1px dashed var(--ob-border-default);
             border-radius: 8px;
             color: var(--ob-muted);
             padding: 1rem;
@@ -441,7 +445,7 @@ def configure_page():
         }
 
         .price-metric {
-            background: rgba(255, 255, 255, 0.035);
+            background: var(--ob-bg-card-elevated);
             border: 1px solid var(--ob-border);
             border-radius: 8px;
             margin-bottom: 0.75rem;
@@ -466,7 +470,7 @@ def configure_page():
 
         .opportunity-row {
             align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: 1px solid var(--ob-divider);
             display: grid;
             gap: 0.75rem;
             grid-template-columns: minmax(4rem, 0.8fr) minmax(5rem, 0.8fr) minmax(5rem, 0.8fr) 1fr;
@@ -513,7 +517,7 @@ def configure_page():
         .coach-card {
             border: 1px solid var(--ob-border);
             border-radius: 8px;
-            background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018));
+            background: var(--ob-bg-card);
             padding: 1rem;
             margin-bottom: 0.85rem;
         }
@@ -523,7 +527,7 @@ def configure_page():
             align-items: flex-start;
             justify-content: space-between;
             gap: 1rem;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
+            border-bottom: 1px solid var(--ob-divider);
             padding-bottom: 0.75rem;
             margin-bottom: 0.75rem;
         }
@@ -550,7 +554,7 @@ def configure_page():
         .coach-metric {
             border: 1px solid var(--ob-border);
             border-radius: 8px;
-            background: rgba(255,255,255,0.035);
+            background: var(--ob-bg-card-elevated);
             padding: 0.65rem;
             min-height: 4.2rem;
         }
@@ -571,7 +575,7 @@ def configure_page():
         }
 
         .decision-summary {
-            background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018));
+            background: var(--ob-bg-card);
             border: 1px solid var(--ob-border-strong);
             border-left: 6px solid var(--ob-muted);
             border-radius: 8px;
@@ -616,7 +620,7 @@ def configure_page():
         }
 
         .decision-metric {
-            background: rgba(255,255,255,0.03);
+            background: var(--ob-bg-card-elevated);
             border: 1px solid var(--ob-border);
             border-radius: 6px;
             min-width: 0;
@@ -671,7 +675,7 @@ def configure_page():
 
         .decision-caution {
             border-left-color: var(--ob-gold);
-            color: #d9c385;
+            color: var(--ob-warning);
         }
 
         .decision-urgent {
@@ -696,7 +700,7 @@ def configure_page():
             border: 1px solid var(--ob-border);
             border-radius: 999px;
             color: var(--ob-muted);
-            background: rgba(255,255,255,0.025);
+            background: var(--ob-bg-control);
             padding: 0.32rem 0.65rem;
             font-size: 0.72rem;
         }
@@ -708,7 +712,7 @@ def configure_page():
 
         .factor-warn {
             border-color: rgba(216, 179, 90, 0.35);
-            color: #d9c385;
+            color: var(--ob-warning);
         }
 
         .why-list {
@@ -724,11 +728,11 @@ def configure_page():
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border-color: var(--ob-border);
             border-radius: 8px;
-            background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018));
+            background: var(--ob-bg-card);
         }
 
         div[data-testid="stMetric"] {
-            background: rgba(255, 255, 255, 0.035);
+            background: var(--ob-bg-card-elevated);
             border: 1px solid var(--ob-border);
             border-radius: 8px;
             padding: 0.75rem;
@@ -750,6 +754,7 @@ def configure_page():
         }
 
         [data-testid="stDataFrame"] {
+            background: var(--ob-bg-card);
             border: 1px solid var(--ob-border);
             border-radius: 8px;
             overflow: hidden;
@@ -770,8 +775,8 @@ def configure_page():
         div[data-testid="stTabs"] button[role="tab"],
         .stTabs [data-baseweb="tab"] {
             align-items: flex-start;
-            background: rgba(255, 255, 255, 0.035);
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: var(--ob-bg-control);
+            border: 1px solid var(--ob-border-default);
             border-radius: 8px;
             color: var(--ob-muted);
             display: flex !important;
@@ -798,14 +803,15 @@ def configure_page():
 
         div[data-testid="stTabs"] button[role="tab"][aria-selected="true"],
         .stTabs [aria-selected="true"] {
-            border-color: rgba(216, 179, 90, 0.85);
+            border-color: var(--ob-active-border);
             color: var(--ob-text);
-            background: linear-gradient(180deg, rgba(216, 179, 90, 0.14), rgba(255, 255, 255, 0.04));
-            box-shadow: inset 0 -3px 0 rgba(216, 179, 90, 0.85);
+            background: var(--ob-active-bg);
+            box-shadow: inset 0 -3px 0 var(--ob-accent-gold-muted);
         }
 
         div[data-testid="stTabs"] button[role="tab"]:hover {
-            border-color: rgba(216, 179, 90, 0.55);
+            background: var(--ob-bg-control-hover);
+            border-color: var(--ob-accent-gold-muted);
             color: var(--ob-text);
         }
 
@@ -824,8 +830,8 @@ def configure_page():
         }
 
         .board-panel {
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(0, 0, 0, 0.05)), #070707;
-            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: var(--ob-bg-card);
+            border: 1px solid var(--ob-border-default);
             border-radius: 8px;
             min-height: 10rem;
             overflow: hidden;
@@ -841,8 +847,8 @@ def configure_page():
 
         .board-header {
             align-items: center;
-            background: rgba(255, 255, 255, 0.055);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            background: var(--ob-bg-card-elevated);
+            border-bottom: 1px solid var(--ob-divider);
             color: var(--ob-muted);
             display: flex;
             font-size: 0.78rem;
@@ -859,7 +865,7 @@ def configure_page():
 
         .board-row {
             align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+            border-bottom: 1px solid var(--ob-divider);
             display: grid;
             gap: 0.75rem;
             grid-template-columns: minmax(4rem, 0.62fr) minmax(0, 1.55fr) minmax(2.25rem, 0.28fr);
@@ -922,7 +928,7 @@ def configure_page():
         }
 
         .board-callout-chip {
-            background: rgba(255, 255, 255, 0.035);
+            background: var(--ob-bg-control);
             border: 1px solid currentColor;
             white-space: nowrap;
         }
@@ -996,9 +1002,9 @@ def configure_page():
         }
 
         .board-tile {
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            border: 1px solid var(--ob-border-default);
             border-radius: 8px;
-            background: rgba(255, 255, 255, 0.035);
+            background: var(--ob-bg-card-elevated);
             padding: 0.55rem 0.65rem;
         }
 
@@ -1028,8 +1034,8 @@ def configure_page():
         }
 
         .snapshot-tile {
-            background: rgba(255, 255, 255, 0.035);
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: var(--ob-bg-card-elevated);
+            border: 1px solid var(--ob-border-default);
             border-radius: 8px;
             min-height: 6.25rem;
             padding: 0.8rem;
@@ -1059,7 +1065,7 @@ def configure_page():
         }
 
         .beacon-tape {
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            border: 1px solid var(--ob-border-default);
             border-radius: 8px;
             display: grid;
             grid-template-columns: 1fr 1.15fr 1fr 1fr;
@@ -1068,8 +1074,8 @@ def configure_page():
         }
 
         .tape-panel {
-            background: #050505;
-            border-right: 1px solid rgba(255, 255, 255, 0.12);
+            background: var(--ob-bg-card);
+            border-right: 1px solid var(--ob-divider);
             min-height: 13rem;
         }
 
@@ -1079,8 +1085,8 @@ def configure_page():
 
         .tape-header {
             align-items: center;
-            background: rgba(255, 255, 255, 0.04);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            background: var(--ob-bg-card-elevated);
+            border-bottom: 1px solid var(--ob-divider);
             color: var(--ob-muted);
             display: flex;
             font-size: 0.75rem;
@@ -1093,7 +1099,7 @@ def configure_page():
 
         .tape-row {
             align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            border-bottom: 1px solid var(--ob-divider);
             display: grid;
             gap: 0.45rem;
             grid-template-columns: 0.75fr 0.85fr 0.55fr;
@@ -1288,6 +1294,8 @@ def configure_page():
             }
         }
         </style>
-        """,
+        """
+    st.markdown(
+        theme_css.replace("/* OPTIONBEACON_THEME_TOKENS */", css_variables()),
         unsafe_allow_html=True,
     )

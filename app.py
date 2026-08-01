@@ -227,6 +227,12 @@ def signal_class(signal):
         return "signal-call"
     if signal in ["BUY PUT", "BEARISH SETUP"]:
         return "signal-put"
+    if signal == "WATCHLIST":
+        return "signal-watch"
+    if signal in ["WAIT", "WAITING FOR CANDLE", "MARKET CLOSED / WAIT"]:
+        return "signal-wait"
+    if signal == "DATA UNAVAILABLE":
+        return "signal-neutral"
     return "signal-wait"
 
 

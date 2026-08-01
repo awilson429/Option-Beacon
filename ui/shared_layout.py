@@ -29,11 +29,11 @@ SHARED_UI_CSS = f"""
 }}
 .ob-page-controls {{align-items:center;display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end}}
 .ob-control {{
-  background:#11171e;border:1px solid var(--ob-border);border-radius:var(--ob-button-radius);
+  background:var(--ob-bg-control);border:1px solid var(--ob-border-default);border-radius:var(--ob-button-radius);
   color:var(--ob-text) !important;display:inline-flex;font-size:13px;font-weight:750;
   min-height:42px;padding:10px 14px;text-decoration:none !important;
 }}
-.ob-control:hover {{border-color:var(--ob-amber);color:#f8dfa0 !important}}
+.ob-control:hover {{background:var(--ob-bg-control-hover);border-color:var(--ob-accent-gold);color:var(--ob-accent-gold) !important}}
 .ob-page-tabs {{
   border-bottom:1px solid var(--ob-border);display:flex;gap:8px;margin:-8px 0 24px;
   overflow-x:auto;
@@ -82,16 +82,16 @@ SHARED_UI_CSS = f"""
   letter-spacing:.045em;line-height:1;min-height:1.8rem;padding:.32rem .65rem;
   text-transform:uppercase;vertical-align:middle;
 }}
-.ob-badge-pass,.ob-badge-active,.ob-badge-ready {{border-color:#318f51;color:var(--ob-green)}}
-.ob-badge-warning,.ob-badge-watch,.ob-badge-wait {{border-color:#aa8420;color:var(--ob-amber)}}
-.ob-badge-fail,.ob-badge-invalidated {{border-color:#a43c40;color:var(--ob-red)}}
+.ob-badge-pass,.ob-badge-active,.ob-badge-ready {{border-color:var(--ob-positive);color:var(--ob-positive)}}
+.ob-badge-warning,.ob-badge-watch {{background:var(--ob-watch-bg);border-color:var(--ob-watch-border);color:var(--ob-warning)}}
+.ob-badge-wait,.ob-badge-fail,.ob-badge-invalidated {{background:var(--ob-wait-bg);border-color:var(--ob-wait-border);color:var(--ob-negative)}}
 .ob-badge-closed {{color:var(--ob-text-muted)}}
 .ob-empty {{
-  align-items:center;border:1px dashed #3b4651;border-radius:var(--ob-card-radius);
+  align-items:center;background:var(--ob-bg-empty-state);border:1px dashed var(--ob-border-default);border-radius:var(--ob-card-radius);
   color:var(--ob-text-secondary);display:flex;flex-direction:column;justify-content:center;
   min-height:180px;padding:28px;text-align:center;
 }}
-.ob-empty-icon {{color:#697582;font-size:30px;line-height:1}}
+.ob-empty-icon {{color:var(--ob-text-disabled);font-size:30px;line-height:1}}
 .ob-empty-title {{color:var(--ob-text);font-size:17px;font-weight:760;margin-top:12px}}
 .ob-empty-copy {{color:var(--ob-text-muted);font-size:14px;line-height:1.45;margin-top:6px;max-width:420px}}
 .ob-callout {{
@@ -110,19 +110,19 @@ SHARED_UI_CSS = f"""
 .ob-status-name {{color:var(--ob-text);font-size:14px;font-weight:730}}
 .ob-status-detail {{color:var(--ob-text-muted);font-size:13px;overflow-wrap:anywhere}}
 .ob-table-wrap {{
-  background:var(--ob-panel);border:1px solid var(--ob-border);
+  background:var(--ob-bg-card);border:1px solid var(--ob-border-default);
   border-radius:var(--ob-card-radius);overflow:hidden;
 }}
 .ob-table {{border-collapse:collapse;table-layout:fixed;width:100%}}
 .ob-table th {{
-  background:rgba(255,255,255,.025);color:var(--ob-text-muted);font-size:11px;
+  background:var(--ob-bg-card-elevated);color:var(--ob-text-muted);font-size:11px;
   font-weight:850;letter-spacing:.04em;padding:10px 9px;text-align:left;text-transform:uppercase;
 }}
 .ob-table td {{
-  border-top:1px solid var(--ob-border-muted);color:var(--ob-text-secondary);
+  background:var(--ob-bg-card);border-top:1px solid var(--ob-divider);color:var(--ob-text-secondary);
   font-size:13px;line-height:1.35;overflow-wrap:anywhere;padding:11px 9px;vertical-align:middle;
 }}
-.ob-table tbody tr:hover {{background:rgba(255,255,255,.025)}}
+.ob-table tbody tr:hover td {{background:var(--ob-bg-control-hover)}}
 .ob-table td:first-child {{color:var(--ob-text);font-weight:730}}
 div[data-testid="stDataFrame"] {{
   background:var(--ob-panel);border:1px solid var(--ob-border);border-radius:var(--ob-card-radius);
@@ -134,10 +134,10 @@ div[data-testid="stExpander"] {{
 }}
 div[data-testid="stExpander"] summary {{color:var(--ob-text);font-size:14px;font-weight:750}}
 div[data-testid="stButton"] button {{
-  background:#11171e;border:1px solid var(--ob-border);border-radius:var(--ob-button-radius);
+  background:var(--ob-bg-control);border:1px solid var(--ob-border-default);border-radius:var(--ob-button-radius);
   color:var(--ob-text);font-size:13px;font-weight:740;min-height:42px;
 }}
-div[data-testid="stButton"] button:hover {{border-color:var(--ob-amber);color:#f8dfa0}}
+div[data-testid="stButton"] button:hover {{background:var(--ob-bg-control-hover);border-color:var(--ob-accent-gold);color:var(--ob-accent-gold)}}
 div[data-testid="stSelectbox"],div[data-testid="stTextInput"] {{font-size:14px}}
 .ob-helper-strip {{
   align-items:center;background:var(--ob-panel);border:1px solid var(--ob-border);

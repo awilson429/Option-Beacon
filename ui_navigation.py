@@ -97,11 +97,11 @@ CARD_NAVIGATION_CSS = """
 }
 div[class*="st-key-ob_nav_"] button {
     align-items: center;
-    background: #15191f;
-    border: 1px solid #3a414b;
+    background: var(--ob-bg-control);
+    border: 1px solid var(--ob-border-default);
     border-radius: 0.55rem;
     box-sizing: border-box;
-    color: #f3f4f6 !important;
+    color: var(--ob-text-primary) !important;
     display: flex;
     justify-content: center;
     height: 2.75rem;
@@ -112,7 +112,7 @@ div[class*="st-key-ob_nav_"] button {
     width: 100%;
 }
 div[class*="st-key-ob_nav_"] button p {
-    color: #f3f4f6 !important;
+    color: var(--ob-text-primary) !important;
     font-size: 0.86rem;
     font-weight: 650;
     line-height: 1;
@@ -120,18 +120,18 @@ div[class*="st-key-ob_nav_"] button p {
     white-space: nowrap;
 }
 div[class*="st-key-ob_nav_"] button:hover {
-    background: #20252c;
-    border-color: #c8a84e;
-    color: #ffffff !important;
+    background: var(--ob-bg-control-hover);
+    border-color: var(--ob-accent-gold-muted);
+    color: var(--ob-text-primary) !important;
 }
 div[class*="st-key-ob_nav_"] button:focus-visible {
-    border-color: #d2ad4f;
-    box-shadow: inset 0 0 0 1px rgba(210, 173, 79, 0.32);
-    outline: 2px solid rgba(210, 173, 79, 0.55);
+    border-color: var(--ob-accent-gold);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ob-accent-gold) 32%, transparent);
+    outline: 2px solid var(--ob-accent-gold-muted);
     outline-offset: 2px;
 }
 div[class*="st-key-ob_nav_"] button:hover p {
-    color: #ffffff !important;
+    color: var(--ob-text-primary) !important;
 }
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-ob_nav_"]) {
     align-items: stretch;
@@ -210,20 +210,20 @@ def _active_card_css(workspace):
     return f"""
 <style>
 div.st-key-{key} button {{
-    background: #292415;
-    border: 1px solid #d2ad4f;
-    box-shadow: inset 0 -2px 0 rgba(210, 173, 79, 0.65) !important;
-    color: #f7df9a !important;
+    background: var(--ob-active-bg);
+    border: 1px solid var(--ob-active-border);
+    box-shadow: inset 0 -2px 0 var(--ob-accent-gold-muted) !important;
+    color: var(--ob-accent-gold) !important;
 }}
 div.st-key-{key} button p {{
-    color: #f7df9a !important;
+    color: var(--ob-accent-gold) !important;
     font-weight: 650;
 }}
 div.st-key-{key} button:hover,
 div.st-key-{key} button:focus-visible {{
-    background: #302918;
-    border: 1px solid #d2ad4f;
-    box-shadow: inset 0 -2px 0 rgba(210, 173, 79, 0.78) !important;
+    background: color-mix(in srgb, var(--ob-active-bg) 82%, var(--ob-bg-control-hover));
+    border: 1px solid var(--ob-active-border);
+    box-shadow: inset 0 -2px 0 var(--ob-accent-gold) !important;
 }}
 </style>
 """
