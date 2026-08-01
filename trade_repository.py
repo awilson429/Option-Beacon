@@ -337,6 +337,49 @@ class TradeRepository:
             self._diagnostic(
                 "repository_schema_operation_completed", operation="legacy_imports"
             )
+            for operation, ddl in (
+                (
+                    "intelligence_setup_snapshots",
+                    f"""
+                    CREATE TABLE IF NOT EXISTS intelligence_setup_snapshots (
+                        opportunity_id {text_id},
+                        snapshot_json TEXT NOT NULL,
+                        schema_version INTEGER NOT NULL,
+                        created_at TEXT NOT NULL,
+                        FOREIGN KEY(opportunity_id) REFERENCES opportunities(id)
+                    )
+                    """,
+                ),
+                (
+                    "intelligence_outcome_labels",
+                    f"""
+                    CREATE TABLE IF NOT EXISTS intelligence_outcome_labels (
+                        opportunity_id {text_id},
+                        outcome_json TEXT NOT NULL,
+                        schema_version INTEGER NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        FOREIGN KEY(opportunity_id) REFERENCES opportunities(id)
+                    )
+                    """,
+                ),
+                (
+                    "intelligence_shadow_events",
+                    f"""
+                    CREATE TABLE IF NOT EXISTS intelligence_shadow_events (
+                        id {text_id},
+                        opportunity_id TEXT,
+                        event_type TEXT NOT NULL,
+                        model_version TEXT,
+                        payload_json TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        FOREIGN KEY(opportunity_id) REFERENCES opportunities(id)
+                    )
+                    """,
+                ),
+            ):
+                self._diagnostic("repository_schema_operation_started", operation=operation)
+                self._execute(connection, ddl).close()
+                self._diagnostic("repository_schema_operation_completed", operation=operation)
         self._diagnostic("repository_schema_initialization_completed")
 
     def create_opportunity(
@@ -839,6 +882,72 @@ class TradeRepository:
                     (source_fingerprint, str(source_row)),
                 )
             )
+
+    def create_intelligence_snapshot(self, opportunity_id, snapshot, *, schema_version=1):
+        """Insert an immutable decision-time snapshot, returning the original on repeats."""
+        existing = self.get_intelligence_snapshot(opportunity_id)
+        if existing is not None:
+            return existing
+        with self.connection() as connection:
+            try:
+                self._execute(
+                    connection,
+                    "INSERT INTO intelligence_setup_snapshots "
+                    "(opportunity_id,snapshot_json,schema_version,created_at) VALUES (?,?,?,?)",
+                    (opportunity_id, json.dumps(snapshot, sort_keys=True), int(schema_version), utc_iso()),
+                ).close()
+            except Exception:
+                existing = self.get_intelligence_snapshot(opportunity_id)
+                if existing is not None:
+                    return existing
+                raise
+        return self.get_intelligence_snapshot(opportunity_id)
+
+    def get_intelligence_snapshot(self, opportunity_id):
+        with self.connection() as connection:
+            row = self._fetchone(connection, "SELECT * FROM intelligence_setup_snapshots WHERE opportunity_id=?", (opportunity_id,))
+        return self._decode_intelligence(row, "snapshot_json", "snapshot")
+
+    def list_intelligence_snapshots(self, *, limit=5000):
+        with self.connection() as connection:
+            rows = self._fetchall(connection, "SELECT * FROM intelligence_setup_snapshots ORDER BY created_at DESC,opportunity_id ASC LIMIT ?", (int(limit),))
+        return [self._decode_intelligence(row, "snapshot_json", "snapshot") for row in rows]
+
+    def upsert_intelligence_outcome(self, opportunity_id, outcome, *, schema_version=1):
+        now, encoded = utc_iso(), json.dumps(outcome, sort_keys=True)
+        with self.connection() as connection:
+            existing = self._fetchone(connection, "SELECT opportunity_id FROM intelligence_outcome_labels WHERE opportunity_id=?", (opportunity_id,))
+            if existing:
+                self._execute(connection, "UPDATE intelligence_outcome_labels SET outcome_json=?,schema_version=?,updated_at=? WHERE opportunity_id=?", (encoded, int(schema_version), now, opportunity_id)).close()
+            else:
+                self._execute(connection, "INSERT INTO intelligence_outcome_labels (opportunity_id,outcome_json,schema_version,updated_at) VALUES (?,?,?,?)", (opportunity_id, encoded, int(schema_version), now)).close()
+        return self.get_intelligence_outcome(opportunity_id)
+
+    def get_intelligence_outcome(self, opportunity_id):
+        with self.connection() as connection:
+            row = self._fetchone(connection, "SELECT * FROM intelligence_outcome_labels WHERE opportunity_id=?", (opportunity_id,))
+        return self._decode_intelligence(row, "outcome_json", "outcome")
+
+    def list_intelligence_outcomes(self, *, limit=5000):
+        with self.connection() as connection:
+            rows = self._fetchall(connection, "SELECT * FROM intelligence_outcome_labels ORDER BY updated_at DESC,opportunity_id ASC LIMIT ?", (int(limit),))
+        return [self._decode_intelligence(row, "outcome_json", "outcome") for row in rows]
+
+    def record_intelligence_shadow_event(self, event_type, payload, *, opportunity_id=None, model_version=None):
+        identifier = uuid4().hex
+        with self.connection() as connection:
+            self._execute(connection, "INSERT INTO intelligence_shadow_events (id,opportunity_id,event_type,model_version,payload_json,created_at) VALUES (?,?,?,?,?,?)", (identifier, opportunity_id, event_type, model_version, json.dumps(payload, sort_keys=True), utc_iso())).close()
+        return identifier
+
+    @staticmethod
+    def _decode_intelligence(row, source, target):
+        if not row:
+            return None
+        try:
+            row[target] = json.loads(row.get(source) or "{}")
+        except Exception:
+            row[target] = {}
+        return row
 
     @staticmethod
     def _decode(row):

@@ -25,6 +25,7 @@ from intraday_session import (
     intraday_entry_allowed,
     intraday_trade_exit_due,
 )
+from intelligence_capture import outcome_label, setup_feature_snapshot
 from trade_repository import (
     DEFAULT_REPOSITORY_FILE,
     RepositoryUnavailable,
@@ -217,6 +218,7 @@ def process_scanner_result(
                 record,
                 source_version=source_version,
             )
+            _persist_outcome_label(repository, record)
             changed += 1
     candidate = scanner_result_to_trade_outcome(result)
     if (
@@ -228,8 +230,31 @@ def process_scanner_result(
             candidate,
             source_version=source_version,
         )
+        _persist_intelligence_snapshot(
+            repository, result, candidate, source_version=source_version
+        )
+        _persist_outcome_label(repository, candidate)
         changed += 1
     return changed
+
+
+def _persist_intelligence_snapshot(repository, result, record, *, source_version):
+    try:
+        scanner_id = str((result or {}).get("scanner_id") or "optionbeacon-scanner")
+        snapshot_input = dict(result or {})
+        snapshot_input.setdefault("source_version", source_version)
+        snapshot = setup_feature_snapshot(snapshot_input, record, scanner_id=scanner_id)
+        repository.create_intelligence_snapshot(record.trade_id, snapshot.to_dict(), schema_version=snapshot.schema_version)
+    except Exception:
+        LOGGER.exception("Could not persist intelligence snapshot %s", record.trade_id)
+
+
+def _persist_outcome_label(repository, record):
+    try:
+        label = outcome_label(record)
+        repository.upsert_intelligence_outcome(record.trade_id, label.to_dict(), schema_version=label.schema_version)
+    except Exception:
+        LOGGER.exception("Could not persist intelligence outcome %s", record.trade_id)
 
 
 def list_trade_outcomes(repository: TradeRepository, *, limit=5000) -> list[TradeOutcome]:
