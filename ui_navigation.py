@@ -88,6 +88,8 @@ CARD_NAVIGATION_SLUGS = {
     "Developer Tools": "developer-tools",
 }
 
+DESKTOP_NAVIGATION_COLUMNS = 6
+
 CARD_NAVIGATION_CSS = """
 <style>
 .ob-nav-grid {
@@ -97,21 +99,24 @@ div[class*="st-key-ob_nav_"] button {
     align-items: center;
     background: #15191f;
     border: 1px solid #3a414b;
-    border-radius: 0.75rem;
+    border-radius: 0.55rem;
     color: #f3f4f6 !important;
     display: flex;
     justify-content: center;
-    min-height: 4.25rem;
-    padding: 0.8rem 0.65rem;
+    height: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0.45rem 0.65rem;
     text-align: center;
     transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
     width: 100%;
 }
 div[class*="st-key-ob_nav_"] button p {
     color: #f3f4f6 !important;
-    font-size: 0.92rem;
+    font-size: 0.86rem;
     font-weight: 650;
-    line-height: 1.2;
+    line-height: 1;
+    margin: 0;
+    white-space: nowrap;
 }
 div[class*="st-key-ob_nav_"] button:hover {
     background: #20252c;
@@ -123,19 +128,31 @@ div[class*="st-key-ob_nav_"] button:hover p {
     color: #ffffff !important;
 }
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-ob_nav_"]) {
-    gap: 0.75rem;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    margin: 0.4rem 0 0.7rem;
+    max-width: 100%;
+    overflow: hidden;
 }
-div[data-testid="stHorizontalBlock"]:has(.st-key-ob_nav_trade_desk) {
-    margin-top: 0.75rem;
-    margin-bottom: -0.25rem;
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-ob_nav_"])
+    > div[data-testid="stColumn"] {
+    min-width: 0;
 }
-div[data-testid="stHorizontalBlock"]:has(.st-key-ob_nav_history) {
-    margin-bottom: 1.5rem;
-}
-@media (max-width: 600px) {
+@media (max-width: 760px) {
+    div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-ob_nav_"]) {
+        flex-wrap: wrap;
+        overflow: visible;
+    }
+    div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-ob_nav_"])
+        > div[data-testid="stColumn"] {
+        flex: 1 1 9rem;
+        width: auto !important;
+    }
     div[class*="st-key-ob_nav_"] button {
-        min-height: 3.75rem;
-        padding: 0.65rem 0.5rem;
+        height: 2.75rem;
+        min-height: 2.75rem;
+        padding: 0.45rem 0.5rem;
     }
 }
 </style>
@@ -187,9 +204,9 @@ def _active_card_css(workspace):
     return f"""
 <style>
 div.st-key-{key} button {{
-    background: linear-gradient(135deg, #332b18, #211d14);
-    border: 2px solid #d2ad4f;
-    box-shadow: 0 0 0 1px rgba(210, 173, 79, 0.16) !important;
+    background: #292415;
+    border: 1px solid #d2ad4f;
+    box-shadow: inset 0 -2px 0 rgba(210, 173, 79, 0.65) !important;
     color: #f7df9a !important;
 }}
 div.st-key-{key} button p {{
@@ -211,18 +228,8 @@ def render_card_navigation(st_module=None):
         unsafe_allow_html=True,
     )
 
-    first_row = st_module.columns(3)
-    for column, workspace in zip(first_row, CARD_NAVIGATION[:3]):
-        column.button(
-            workspace,
-            key=_card_key(workspace),
-            on_click=set_active_workspace,
-            args=(workspace, st_module.session_state),
-            use_container_width=True,
-        )
-
-    second_row = st_module.columns(3)
-    for column, workspace in zip(second_row, CARD_NAVIGATION[3:]):
+    navigation_row = st_module.columns(DESKTOP_NAVIGATION_COLUMNS)
+    for column, workspace in zip(navigation_row, CARD_NAVIGATION):
         column.button(
             workspace,
             key=_card_key(workspace),

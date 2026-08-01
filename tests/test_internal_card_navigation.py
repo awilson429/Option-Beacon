@@ -3,6 +3,7 @@ from pathlib import Path
 from ui_navigation import (
     CARD_NAVIGATION,
     CARD_NAVIGATION_CSS,
+    DESKTOP_NAVIGATION_COLUMNS,
     active_card_workspace,
     render_card_navigation,
     set_active_workspace,
@@ -52,7 +53,7 @@ def test_each_card_updates_active_workspace_and_navigation_remains_visible():
         assert render_card_navigation(st_module=fake) == workspace
         assert state["active_workspace"] == workspace
         assert tuple(fake.rendered) == CARD_NAVIGATION
-        assert fake.column_counts == [3, 3]
+        assert fake.column_counts == [DESKTOP_NAVIGATION_COLUMNS]
 
 
 def test_selected_workspace_is_highlighted():
@@ -63,32 +64,43 @@ def test_selected_workspace_is_highlighted():
     css = "\n".join(fake.markdown_calls)
     assert "div.st-key-ob_nav_history button" in css
     assert "div.st-key-ob_nav_history button p" in css
-    assert "border: 2px solid #d2ad4f" in css
+    assert "border: 1px solid #d2ad4f" in css
     assert "color: #f7df9a !important" in css
 
 
-def test_desktop_navigation_is_exactly_three_columns_by_two_rows():
+def test_desktop_navigation_is_one_row_of_six_columns_in_order():
     fake = FakeStreamlit()
 
     render_card_navigation(st_module=fake)
 
-    assert fake.column_counts == [3, 3]
-    assert fake.rendered[:3] == list(CARD_NAVIGATION[:3])
-    assert fake.rendered[3:] == list(CARD_NAVIGATION[3:])
+    assert DESKTOP_NAVIGATION_COLUMNS == 6
+    assert fake.column_counts == [6]
+    assert tuple(fake.rendered) == CARD_NAVIGATION
 
 
-def test_button_css_matches_production_card_geometry_and_typography():
+def test_button_css_uses_compact_equal_height_geometry_and_typography():
     compact = CARD_NAVIGATION_CSS.replace(" ", "")
 
-    assert "min-height:4.25rem" in compact
-    assert "border-radius:0.75rem" in compact
+    assert "height:2.75rem" in compact
+    assert "min-height:2.75rem" in compact
+    assert "border-radius:0.55rem" in compact
     assert "background:#15191f" in compact
     assert "border:1pxsolid#3a414b" in compact
-    assert "gap:0.75rem" in compact
-    assert "margin-top:0.75rem" in compact
-    assert "margin-bottom:1.5rem" in compact
+    assert "gap:0.5rem" in compact
+    assert "margin:0.4rem00.7rem" in compact
     assert 'div[class*="st-key-ob_nav_"]buttonp' in compact
     assert "font-weight:650" in compact
+
+
+def test_desktop_navigation_prevents_overflow_and_responsive_mode_wraps():
+    compact = CARD_NAVIGATION_CSS.replace(" ", "").replace("\n", "").lower()
+
+    assert "flex-wrap:nowrap" in compact
+    assert "max-width:100%" in compact
+    assert "overflow:hidden" in compact
+    assert "@media(max-width:760px)" in compact
+    assert "flex-wrap:wrap" in compact
+    assert "flex:119rem" in compact
 
 
 def test_invalid_workspace_does_not_replace_selection():
