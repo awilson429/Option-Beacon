@@ -65,6 +65,11 @@ def load_signal_outcomes(file_name=OUTCOME_FILE):
         except EmptyDataError:
             return _empty_outcomes()
 
+    # A caller-supplied path is an isolated store. Falling back to the remote
+    # production CSV would mix unrelated history into tests and local research.
+    if os.fspath(file_name) != OUTCOME_FILE:
+        return _empty_outcomes()
+
     try:
         history = pd.read_csv(REMOTE_OUTCOME_URL, dtype=str)
         return normalize_outcomes(history)

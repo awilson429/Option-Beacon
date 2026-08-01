@@ -6,6 +6,7 @@ from signal_outcomes import (
     directional_return,
     record_signal_outcomes,
     summarize_outcomes,
+    load_signal_outcomes,
 )
 
 
@@ -74,3 +75,8 @@ def test_record_signal_outcomes_updates_10_minute_result(tmp_path):
     summary = summarize_outcomes(history)
     assert summary["completed_10m"] == 1
     assert summary["win_rate_10m"] == 100.0
+
+
+def test_missing_explicit_history_path_does_not_load_remote_history(tmp_path, monkeypatch):
+    monkeypatch.setattr("signal_outcomes.pd.read_csv", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("remote read attempted")))
+    assert load_signal_outcomes(tmp_path / "isolated.csv").empty
