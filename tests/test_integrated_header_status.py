@@ -33,6 +33,8 @@ def test_refresh_label_timestamp_and_branding_remain_present():
     assert "Refresh 1 min" in markup
     assert f"Last refreshed {TIMESTAMP}" in markup
     assert 'src="logo.png"' in markup
+    assert 'class="pill pill-secondary brand-refresh-label"' in markup
+    assert 'class="pill-subtext brand-refreshed-at"' in markup
 
 
 def test_shared_css_uses_single_desktop_row_and_internal_responsive_fallback():
@@ -42,13 +44,28 @@ def test_shared_css_uses_single_desktop_row_and_internal_responsive_fallback():
     assert ".brand-row{" in compact
     assert "flex-direction:row" in compact
     assert ".brand-controls{" in compact
+    assert "flex:1170%" in compact
+    assert "max-width:70%" in compact
+    assert "flex:0130%" in compact
+    assert "flex-direction:column" in compact
+    assert "align-items:flex-end" in compact
+    assert "text-align:right" in compact
     assert "max-width:100%" in compact
     assert "@media(max-width:760px)" in compact
     mobile = compact.split("@media(max-width:760px)", 1)[1]
     assert ".brand-row{" in mobile
     assert "flex-direction:column" in mobile
     assert ".brand-controls{" in mobile
+    assert "align-items:center" in mobile
+    assert "max-width:100%" in mobile
     assert "width:100%" in mobile
+
+
+def test_header_layout_uses_no_absolute_positioning():
+    source = Path("ui/theme.py").read_text(encoding="utf-8")
+    header_css = source.split(".brand-shell", 1)[1].split(".signal-pill", 1)[0]
+
+    assert "position: absolute" not in header_css
 
 
 def test_standalone_status_container_css_is_removed():

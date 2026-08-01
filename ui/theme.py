@@ -85,9 +85,9 @@ def configure_page():
             align-items: center;
             gap: 1rem;
             justify-content: flex-start;
-            max-width: 100%;
+            flex: 1 1 70%;
+            max-width: 70%;
             min-width: 0;
-            flex: 1 1 auto;
         }
 
         .brand-logo {
@@ -132,13 +132,16 @@ def configure_page():
         }
 
         .brand-controls {
-            align-items: center;
+            align-items: flex-end;
+            box-sizing: border-box;
             display: flex;
-            flex: 0 0 auto;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            justify-content: flex-end;
+            flex: 0 1 30%;
+            flex-direction: column;
+            gap: 0.35rem;
+            justify-content: center;
             max-width: 100%;
+            min-width: 11rem;
+            text-align: right;
         }
 
         .pill, .signal-pill {
@@ -188,8 +191,14 @@ def configure_page():
             padding: 0.32rem 0.65rem;
         }
 
-        .brand-controls .pill-stack {
-            min-width: 10.5rem;
+        .brand-refresh-label {
+            min-width: 8.25rem;
+        }
+
+        .brand-refreshed-at {
+            display: block;
+            line-height: 1.2;
+            white-space: nowrap;
         }
 
         .pill-stack {
@@ -1164,6 +1173,8 @@ def configure_page():
 
             .brand-left {
                 gap: 1.25rem;
+                max-width: 100%;
+                width: 100%;
             }
 
             .brand-title {
@@ -1173,7 +1184,10 @@ def configure_page():
 
             .brand-controls {
                 align-items: center;
+                flex: 0 0 auto;
                 justify-content: center;
+                min-width: 0;
+                text-align: center;
                 width: 100%;
             }
 
