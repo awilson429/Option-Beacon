@@ -332,6 +332,9 @@ def test_repository_reports_schema_operation_boundaries(tmp_path):
         "scanner_health",
         "scanner_locks",
         "legacy_imports",
+        "intelligence_setup_snapshots",
+        "intelligence_outcome_labels",
+        "intelligence_shadow_events",
     ]
 
 

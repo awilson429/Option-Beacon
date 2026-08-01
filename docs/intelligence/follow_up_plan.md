@@ -1,0 +1,3 @@
+# Trading intelligence follow-up
+
+This branch establishes safe capture, descriptive analytics, shadow calibration, ranking, and coaching foundations. Follow-up work should: measure time-to-MFE/MAE prospectively; enrich scanner results with point-in-time SPY/QQQ, breadth, day-range, EMA9/21 slope, sector returns, and data-quality fields; add a scheduled analytics materialization job; persist shadow ranking/calibration and coaching state changes during an opt-in diagnostic run; add confidence intervals; and expose minimal Developer Tools view models. None should be enabled for production decisions until the governance promotion path is completed.

@@ -448,6 +448,15 @@ def test_real_postgresql_repository_lifecycle_and_concurrency():
         assert errors == []
         opportunity = repo.get_opportunity(opportunity_id)
         assert opportunity["id"] == opportunity_id
+        repo.create_intelligence_snapshot(
+            opportunity_id,
+            {"opportunity_id": opportunity_id, "immutable": True},
+        )
+        repo.upsert_intelligence_outcome(
+            opportunity_id,
+            {"opportunity_id": opportunity_id, "result_class": "PENDING"},
+        )
+        assert repo.get_intelligence_snapshot(opportunity_id)["snapshot"]["immutable"] is True
 
         trade = repo.open_trade(
             opportunity_id,
@@ -490,6 +499,7 @@ def test_real_postgresql_repository_lifecycle_and_concurrency():
             require_durable=True,
         )
         assert reinitialized.get_trade(trade_id=trade_id)["status"] == "CLOSED"
+        assert reinitialized.get_intelligence_outcome(opportunity_id)["outcome"]["result_class"] == "PENDING"
     finally:
         with repo.connection() as connection:
             repo._execute(
@@ -501,6 +511,16 @@ def test_real_postgresql_repository_lifecycle_and_concurrency():
                 connection,
                 "DELETE FROM authoritative_trades WHERE id=?",
                 (trade_id,),
+            ).close()
+            repo._execute(
+                connection,
+                "DELETE FROM intelligence_outcome_labels WHERE opportunity_id=?",
+                (opportunity_id,),
+            ).close()
+            repo._execute(
+                connection,
+                "DELETE FROM intelligence_setup_snapshots WHERE opportunity_id=?",
+                (opportunity_id,),
             ).close()
             repo._execute(
                 connection,
