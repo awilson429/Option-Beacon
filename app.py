@@ -538,14 +538,11 @@ def board_color_class(value):
 
 
 
-def render_header():
-    market_open = is_market_open_now()
+def header_markup(market_open, refreshed_at, header_logo):
+    """Return the cohesive brand and live-status header markup."""
     market_status = "Market Open" if market_open else "Market Closed"
     market_class = "pill-open" if market_open else "pill-closed"
-    refreshed_at = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
-    header_logo = logo_source()
-
-    st.markdown(
+    return dedent(
         f"""
         <div class="brand-shell">
             <div class="brand-row">
@@ -556,14 +553,8 @@ def render_header():
                         <div class="brand-subtitle">ETF + Single Stock Scanner</div>
                     </div>
                 </div>
-            </div>
-        </div>
-        <div class="status-shell">
-            <div class="status-strip">
-                <div class="status-primary">
+                <div class="brand-controls">
                     <span class="pill pill-market {market_class}">{market_status}</span>
-                </div>
-                <div class="status-secondary">
                     <span class="pill pill-secondary pill-stack">
                         <span>Refresh 1 min</span>
                         <span class="pill-subtext">Last refreshed {refreshed_at}</span>
@@ -571,7 +562,15 @@ def render_header():
                 </div>
             </div>
         </div>
-        """,
+        """
+    ).strip()
+
+
+def render_header():
+    market_open = is_market_open_now()
+    refreshed_at = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
+    st.markdown(
+        header_markup(market_open, refreshed_at, logo_source()),
         unsafe_allow_html=True,
     )
 
