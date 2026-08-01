@@ -65,25 +65,29 @@ def configure_page():
             border-radius: 8px;
             padding: 1.15rem 1.25rem;
             background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
-            margin-bottom: 0.55rem;
+            box-sizing: border-box;
+            margin-bottom: 0.65rem;
+            max-width: 100%;
         }
 
         .brand-row {
             display: flex;
             align-items: center;
-            flex-direction: column;
+            flex-direction: row;
             justify-content: space-between;
             gap: 1rem;
+            max-width: 100%;
+            min-width: 0;
         }
 
         .brand-left {
             display: flex;
             align-items: center;
             gap: 1rem;
-            justify-content: center;
+            justify-content: flex-start;
+            max-width: 100%;
             min-width: 0;
             flex: 1 1 auto;
-            width: 100%;
         }
 
         .brand-logo {
@@ -98,12 +102,12 @@ def configure_page():
         }
 
         .brand-copy {
-            align-items: center;
+            align-items: flex-start;
             display: flex;
             flex-direction: column;
             justify-content: center;
             min-width: 0;
-            text-align: center;
+            text-align: left;
         }
 
         .brand-title {
@@ -127,39 +131,14 @@ def configure_page():
             white-space: nowrap;
         }
 
-        .status-shell {
+        .brand-controls {
             align-items: center;
-            background: rgba(255, 255, 255, 0.035);
-            border: 1px solid var(--ob-border);
-            border-radius: 8px;
             display: flex;
-            justify-content: center;
-            margin: 0 0 1rem;
-            padding: 0.45rem;
-        }
-
-        .status-strip {
-            display: flex;
-            flex-direction: row;
+            flex: 0 0 auto;
             flex-wrap: wrap;
-            gap: 0.55rem;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-        }
-
-        .status-primary,
-        .status-secondary {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.55rem;
-            justify-content: center;
-            align-items: stretch;
-        }
-
-        .status-secondary {
-            align-items: stretch;
-            justify-content: center;
+            gap: 0.5rem;
+            justify-content: flex-end;
+            max-width: 100%;
         }
 
         .pill, .signal-pill {
@@ -204,10 +183,13 @@ def configure_page():
             padding: 0.32rem 0.65rem;
         }
 
-        .status-strip .pill {
+        .brand-controls .pill {
             min-height: 1.8rem;
-            min-width: 8.25rem;
             padding: 0.32rem 0.65rem;
+        }
+
+        .brand-controls .pill-stack {
+            min-width: 10.5rem;
         }
 
         .pill-stack {
@@ -1189,13 +1171,10 @@ def configure_page():
                 letter-spacing: 0.08em;
             }
 
-            .status-strip {
+            .brand-controls {
                 align-items: center;
-            }
-
-            .status-primary,
-            .status-secondary {
                 justify-content: center;
+                width: 100%;
             }
 
             .pill-market {
