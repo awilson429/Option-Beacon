@@ -65,8 +65,8 @@ def test_selected_workspace_is_highlighted():
     css = "\n".join(fake.markdown_calls)
     assert "div.st-key-ob_nav_history button" in css
     assert "div.st-key-ob_nav_history button p" in css
-    assert "border: 1px solid #d2ad4f" in css
-    assert "color: #f7df9a !important" in css
+    assert "border: 1px solid var(--ob-active-border)" in css
+    assert "color: var(--ob-accent-gold) !important" in css
 
 
 def test_desktop_navigation_is_one_row_of_six_columns_in_order():
@@ -85,8 +85,8 @@ def test_button_css_uses_compact_equal_height_geometry_and_typography():
     assert "height:2.75rem" in compact
     assert "min-height:2.75rem" in compact
     assert "border-radius:0.55rem" in compact
-    assert "background:#15191f" in compact
-    assert "border:1pxsolid#3a414b" in compact
+    assert "background:var(--ob-bg-control)" in compact
+    assert "border:1pxsolidvar(--ob-border-default)" in compact
     assert "gap:0.5rem" in compact
     assert "margin:0.4rem00.7rem" in compact
     assert 'div[class*="st-key-ob_nav_"]buttonp' in compact
@@ -108,8 +108,8 @@ def test_hover_focus_and_active_states_preserve_border_and_dimensions():
     compact = CARD_NAVIGATION_CSS.replace(" ", "").replace("\n", "").lower()
 
     assert "box-sizing:border-box" in compact
-    assert "button:hover{background:#20252c;border-color:#c8a84e" in compact
-    assert "button:focus-visible{border-color:#d2ad4f" in compact
+    assert "button:hover{background:var(--ob-bg-control-hover);border-color:var(--ob-accent-gold-muted)" in compact
+    assert "button:focus-visible{border-color:var(--ob-accent-gold)" in compact
     assert "transform:" not in compact
     assert "button:hover" in compact
     assert "height:2.75rem" in compact
@@ -117,7 +117,7 @@ def test_hover_focus_and_active_states_preserve_border_and_dimensions():
     active = _active_card_css("Trade Desk").replace(" ", "").replace("\n", "").lower()
     assert "button:hover," in active
     assert "button:focus-visible{" in active
-    assert "border:1pxsolid#d2ad4f" in active
+    assert "border:1pxsolidvar(--ob-active-border)" in active
 
 
 def test_invalid_workspace_does_not_replace_selection():
