@@ -555,8 +555,10 @@ def header_markup(market_open, refreshed_at, header_logo):
                 </div>
                 <div class="brand-controls">
                     <span class="pill pill-market {market_class}">{market_status}</span>
-                    <span class="pill pill-secondary brand-refresh-label">Refresh 1 min</span>
-                    <span class="pill-subtext brand-refreshed-at">Last refreshed {refreshed_at}</span>
+                    <span class="pill pill-secondary pill-stack brand-refresh-label">
+                        <span>Refresh 1 min</span>
+                        <span class="pill-subtext brand-refreshed-at">Last refreshed {refreshed_at}</span>
+                    </span>
                 </div>
             </div>
         </div>

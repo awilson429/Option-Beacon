@@ -100,6 +100,7 @@ div[class*="st-key-ob_nav_"] button {
     background: #15191f;
     border: 1px solid #3a414b;
     border-radius: 0.55rem;
+    box-sizing: border-box;
     color: #f3f4f6 !important;
     display: flex;
     justify-content: center;
@@ -107,7 +108,7 @@ div[class*="st-key-ob_nav_"] button {
     min-height: 2.75rem;
     padding: 0.45rem 0.65rem;
     text-align: center;
-    transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+    transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
     width: 100%;
 }
 div[class*="st-key-ob_nav_"] button p {
@@ -122,7 +123,12 @@ div[class*="st-key-ob_nav_"] button:hover {
     background: #20252c;
     border-color: #c8a84e;
     color: #ffffff !important;
-    transform: translateY(-1px);
+}
+div[class*="st-key-ob_nav_"] button:focus-visible {
+    border-color: #d2ad4f;
+    box-shadow: inset 0 0 0 1px rgba(210, 173, 79, 0.32);
+    outline: 2px solid rgba(210, 173, 79, 0.55);
+    outline-offset: 2px;
 }
 div[class*="st-key-ob_nav_"] button:hover p {
     color: #ffffff !important;
@@ -212,6 +218,12 @@ div.st-key-{key} button {{
 div.st-key-{key} button p {{
     color: #f7df9a !important;
     font-weight: 650;
+}}
+div.st-key-{key} button:hover,
+div.st-key-{key} button:focus-visible {{
+    background: #302918;
+    border: 1px solid #d2ad4f;
+    box-shadow: inset 0 -2px 0 rgba(210, 173, 79, 0.78) !important;
 }}
 </style>
 """

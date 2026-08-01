@@ -4,6 +4,7 @@ from ui_navigation import (
     CARD_NAVIGATION,
     CARD_NAVIGATION_CSS,
     DESKTOP_NAVIGATION_COLUMNS,
+    _active_card_css,
     active_card_workspace,
     render_card_navigation,
     set_active_workspace,
@@ -101,6 +102,22 @@ def test_desktop_navigation_prevents_overflow_and_responsive_mode_wraps():
     assert "@media(max-width:760px)" in compact
     assert "flex-wrap:wrap" in compact
     assert "flex:119rem" in compact
+
+
+def test_hover_focus_and_active_states_preserve_border_and_dimensions():
+    compact = CARD_NAVIGATION_CSS.replace(" ", "").replace("\n", "").lower()
+
+    assert "box-sizing:border-box" in compact
+    assert "button:hover{background:#20252c;border-color:#c8a84e" in compact
+    assert "button:focus-visible{border-color:#d2ad4f" in compact
+    assert "transform:" not in compact
+    assert "button:hover" in compact
+    assert "height:2.75rem" in compact
+
+    active = _active_card_css("Trade Desk").replace(" ", "").replace("\n", "").lower()
+    assert "button:hover," in active
+    assert "button:focus-visible{" in active
+    assert "border:1pxsolid#d2ad4f" in active
 
 
 def test_invalid_workspace_does_not_replace_selection():

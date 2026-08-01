@@ -33,8 +33,10 @@ def test_refresh_label_timestamp_and_branding_remain_present():
     assert "Refresh 1 min" in markup
     assert f"Last refreshed {TIMESTAMP}" in markup
     assert 'src="logo.png"' in markup
-    assert 'class="pill pill-secondary brand-refresh-label"' in markup
-    assert 'class="pill-subtext brand-refreshed-at"' in markup
+    assert 'class="pill pill-secondary pill-stack brand-refresh-label"' in markup
+    refresh_start = markup.index('class="pill pill-secondary pill-stack brand-refresh-label"')
+    refresh_end = markup.index("</span>", markup.index("</span>", refresh_start) + 1)
+    assert refresh_start < markup.index("Last refreshed", refresh_start) < refresh_end
 
 
 def test_shared_css_uses_single_desktop_row_and_internal_responsive_fallback():
@@ -66,6 +68,28 @@ def test_header_layout_uses_no_absolute_positioning():
     header_css = source.split(".brand-shell", 1)[1].split(".signal-pill", 1)[0]
 
     assert "position: absolute" not in header_css
+
+
+def test_status_pills_share_identical_dimensions_and_box_model():
+    source = Path("ui/theme.py").read_text(encoding="utf-8")
+    controls = source.split(".brand-controls .pill", 1)[1].split("}", 1)[0]
+
+    assert "width: 12rem" in controls
+    assert "height: 3rem" in controls
+    assert "min-height: 3rem" in controls
+    assert "border-width: 1px" in controls
+    assert "padding: 0.42rem 0.75rem" in controls
+
+
+def test_subtitle_is_centered_only_within_branding_text_wrapper():
+    source = Path("ui/theme.py").read_text(encoding="utf-8")
+    brand_copy = source.split(".brand-copy", 1)[1].split("}", 1)[0]
+    subtitle = source.split(".brand-subtitle", 1)[1].split("}", 1)[0]
+    title = source.split(".brand-title", 1)[1].split("}", 1)[0]
+
+    assert "width: fit-content" in brand_copy
+    assert "text-align: center" in subtitle
+    assert "text-align: center" not in title
 
 
 def test_standalone_status_container_css_is_removed():
