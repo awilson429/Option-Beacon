@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 
 DEFAULT_REPOSITORY_FILE = "optionbeacon_state.db"
@@ -277,6 +278,38 @@ class TradeRepository:
                 "repository_schema_operation_completed",
                 operation="authoritative_trades",
             )
+            self._execute(
+                connection,
+                f"""
+                CREATE TABLE IF NOT EXISTS authoritative_trade_events (
+                    id {text_id},
+                    dedup_key TEXT NOT NULL UNIQUE,
+                    trade_id TEXT,
+                    opportunity_id TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    direction TEXT,
+                    setup TEXT,
+                    event_type TEXT NOT NULL,
+                    event_timestamp TEXT NOT NULL,
+                    underlying_price REAL,
+                    entry_price REAL,
+                    exit_price REAL,
+                    current_return REAL,
+                    realized_return REAL,
+                    exit_reason TEXT,
+                    rule_score REAL,
+                    description TEXT NOT NULL,
+                    metadata_json TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(opportunity_id) REFERENCES opportunities(id)
+                )
+                """,
+            ).close()
+            self._execute(
+                connection,
+                "CREATE INDEX IF NOT EXISTS idx_trade_events_timestamp "
+                "ON authoritative_trade_events(event_timestamp DESC)",
+            ).close()
             self._diagnostic(
                 "repository_schema_operation_started", operation="scanner_health"
             )
@@ -685,6 +718,80 @@ class TradeRepository:
                 )
             ]
 
+    def record_trade_event(
+        self,
+        *,
+        dedup_key,
+        opportunity_id,
+        symbol,
+        event_type,
+        event_timestamp,
+        description,
+        trade_id=None,
+        direction=None,
+        setup=None,
+        underlying_price=None,
+        entry_price=None,
+        exit_price=None,
+        current_return=None,
+        realized_return=None,
+        exit_reason=None,
+        rule_score=None,
+        metadata=None,
+        event_id=None,
+    ) -> dict:
+        """Append one immutable lifecycle event, suppressing duplicate material events."""
+        identifier = event_id or uuid4().hex
+        with self.connection() as connection:
+            self._execute(
+                    connection,
+                    """
+                    INSERT INTO authoritative_trade_events (
+                        id,dedup_key,trade_id,opportunity_id,symbol,direction,setup,
+                        event_type,event_timestamp,underlying_price,entry_price,
+                        exit_price,current_return,realized_return,exit_reason,
+                        rule_score,description,metadata_json,created_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(dedup_key) DO NOTHING
+                    """,
+                    (
+                        identifier, str(dedup_key), trade_id, opportunity_id,
+                        str(symbol).upper(), direction, setup, event_type,
+                        utc_iso(event_timestamp), underlying_price, entry_price,
+                        exit_price, current_return, realized_return, exit_reason,
+                        rule_score, str(description)[:500],
+                        json.dumps(metadata or {}, sort_keys=True), utc_iso(),
+                    ),
+                ).close()
+            row = self._fetchone(
+                connection,
+                "SELECT * FROM authoritative_trade_events WHERE dedup_key=?",
+                (str(dedup_key),),
+            )
+        return self._decode_trade_event(row)
+
+    def get_trade_event(self, event_id) -> dict | None:
+        with self.connection() as connection:
+            return self._decode_trade_event(self._fetchone(
+                connection,
+                "SELECT * FROM authoritative_trade_events WHERE id=?",
+                (event_id,),
+            ))
+
+    def list_trade_events(self, *, limit=20, opportunity_id=None) -> list[dict]:
+        query = "SELECT * FROM authoritative_trade_events"
+        params = []
+        if opportunity_id:
+            query += " WHERE opportunity_id=?"
+            params.append(opportunity_id)
+        query += " ORDER BY event_timestamp DESC,created_at DESC,id DESC LIMIT ?"
+        params.append(int(limit))
+        with self.connection() as connection:
+            return [
+                self._decode_trade_event(row)
+                for row in self._fetchall(connection, query, tuple(params))
+            ]
+
     def _list_trades(self, status) -> list[dict]:
         with self.connection() as connection:
             return [
@@ -962,6 +1069,15 @@ class TradeRepository:
                     row[target] = json.loads(row.get(source) or "{}")
                 except Exception:
                     row[target] = {}
+        return row
+
+    @classmethod
+    def _decode_trade_event(cls, row):
+        row = cls._decode(row)
+        if row and row.get("event_timestamp"):
+            row["eastern_timestamp"] = parse_utc(
+                row["event_timestamp"]
+            ).astimezone(ZoneInfo("America/New_York")).isoformat()
         return row
 
 

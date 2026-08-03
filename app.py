@@ -41,6 +41,15 @@ from live_coach_alerts import (
     symbol_alert_timeline,
     timeline_summary,
 )
+from live_trade_activity import (
+    activity_rows,
+    format_eastern_seconds,
+    notification_markup,
+    notification_model,
+    priority_notification,
+    recently_closed_rows,
+    relative_age,
+)
 from live_trade_coach import coach_live_setup, coach_rows
 from live_trade_coach_dashboard import (
     latest_symbol_price,
@@ -2929,6 +2938,45 @@ def render_signal_outcomes():
         )
 
 
+@st.fragment(run_every="10s")
+def render_critical_trade_event(repository):
+    """Poll only the authoritative event table for durable five-minute notices."""
+    if repository is None:
+        return
+    events = repository.list_trade_events(limit=20)
+    model = notification_model(priority_notification(events), now=eastern_now())
+    if model:
+        st.markdown(notification_markup(model), unsafe_allow_html=True)
+
+
+@st.fragment(run_every="10s")
+def render_live_activity_tape(repository):
+    """Lightweight event-only fragment; it never invokes the market scanner."""
+    st.markdown("### Live Activity")
+    if repository is None:
+        render_empty_state("Authoritative live activity is unavailable.")
+        return
+    rows = activity_rows(repository.list_trade_events(limit=50), now=eastern_now(), limit=20)
+    if rows:
+        display = pd.DataFrame(rows).drop(columns=["Priority"])
+        st.dataframe(display, use_container_width=True, hide_index=True)
+    else:
+        render_empty_state("No meaningful lifecycle events have been recorded yet.")
+
+
+def render_recently_closed(repository):
+    st.markdown("### Recently Closed")
+    if repository is None:
+        render_empty_state("Authoritative closed-trade history is unavailable.")
+        return
+    rows = recently_closed_rows(repository.list_recent_trades(limit=100), now=eastern_now(), limit=10)
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.caption("Latest 10 shown · Full authoritative history remains available in Opened Alerts and Journal.")
+    else:
+        render_empty_state("No trades have closed today.")
+
+
 def render_outcome_trade_journal(
     records=None,
     latest_results=None,
@@ -2947,13 +2995,17 @@ def render_outcome_trade_journal(
             latest_results or {},
             records,
         )
-    render_live_session_opportunity(latest_results or {}, records)
+    repository = (reliability_state or {}).get("repository")
+    render_critical_trade_event(repository)
     build_branch = build_information()["branch"]
     modern_scorecard = modern_style_active(st.query_params, build_branch)
     demo_scorecard = demo_scorecard_enabled(st.query_params, build_branch)
     if not records:
-        st.markdown("### Open Positions Needing Attention")
+        st.markdown("### Active Positions")
         render_empty_state("No open positions currently require attention.")
+        render_live_activity_tape(repository)
+        render_live_session_opportunity(latest_results or {}, records)
+        render_recently_closed(repository)
         if modern_scorecard:
             if demo_scorecard:
                 score_fields, scorecard_summary = demo_scorecard_presentation()
@@ -3003,7 +3055,30 @@ def render_outcome_trade_journal(
         now,
         quote_status,
     )
-    st.markdown("### Open Positions Needing Attention")
+    st.markdown("### Active Positions")
+    active_rows = [row for row in all_opened_alerts["rows"] if row["Status"] == "OPEN"]
+    if active_rows:
+        record_by_symbol = {
+            record.symbol: record for record in records
+            if record.entry_time is not None and record.exit_time is None
+        }
+        active_display = []
+        for row in active_rows:
+            record = record_by_symbol.get(row["Symbol"])
+            active_display.append({
+                "State": "ACTIVE",
+                "Symbol": row["Symbol"], "Direction": row["Direction"],
+                "Entered": format_eastern_seconds(record.entry_time if record else None),
+                "Age": relative_age(record.entry_time if record else None, now),
+                "Entry": row["Entry"], "Current": row["Current Price"],
+                "Unrealized": row["Open Return"], "Stop": row["Stop"],
+                "Target": row["Target 1"], "Coach": row["Coach Status"],
+            })
+        st.dataframe(pd.DataFrame(active_display), use_container_width=True, hide_index=True)
+    else:
+        render_empty_state("No authoritative positions are currently active.")
+
+    st.markdown("### Positions Needing Attention")
     attention = attention_positions(all_opened_alerts["rows"])
     if attention:
         attention_columns = [
@@ -3017,6 +3092,10 @@ def render_outcome_trade_journal(
         )
     else:
         render_empty_state("No open positions currently require attention.")
+
+    render_live_activity_tape(repository)
+    render_live_session_opportunity(latest_results or {}, records)
+    render_recently_closed(repository)
 
     scorecard = daily_scorecard(records, now.date())
     score_fields = (
