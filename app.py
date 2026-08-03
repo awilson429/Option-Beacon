@@ -121,6 +121,15 @@ from trade_desk_view_models import (
     opportunity_entry_presentation,
     trade_timeline,
 )
+from trade_desk_compact import (
+    ACTIVITY_FILTERS,
+    filtered_activity_rows,
+    paper_active_row,
+    paper_position_events,
+    status_strip_markup,
+    status_strip_model,
+    today_summary_model,
+)
 from setup_intelligence import setup_intelligence
 from trade_management import coach_recommendation, trade_summary
 from trade_planning import trade_plan_view
@@ -2978,7 +2987,7 @@ def render_recently_closed(repository):
         render_empty_state("No trades have closed today.")
 
 
-def render_outcome_trade_journal(
+def _render_legacy_trade_desk_details(
     records=None,
     latest_results=None,
     current_prices=None,
@@ -3379,6 +3388,179 @@ def render_outcome_trade_journal(
             st.dataframe(pd.DataFrame(history_rows), use_container_width=True, hide_index=True)
         else:
             render_empty_state("No trade history has been recorded yet.")
+
+
+def render_outcome_trade_journal(
+    records=None,
+    latest_results=None,
+    current_prices=None,
+    quote_status=None,
+    reliability_state=None,
+):
+    """Compact production Trade Desk; lifecycle data remains authoritative."""
+    render_section_header("Trade Desk", TRADE_DESK_SUBTITLE)
+    records = list(records) if records is not None else load_trade_outcomes()
+    latest_results = latest_results or {}
+    repository = (reliability_state or {}).get("repository")
+    now = eastern_now()
+    market_open = is_market_open_now()
+    config = ExecutionConfig.from_environment()
+
+    status = status_strip_model(
+        reliability_state,
+        market_open=market_open,
+        paper_active=config.mode == "PAPER" and config.trading_enabled,
+        configured_symbols=len(latest_results),
+        now=now,
+    )
+    st.markdown(status_strip_markup(status), unsafe_allow_html=True)
+    if status["severity"] != "healthy":
+        message = (reliability_state or {}).get("message") or status["scanner"]
+        (st.error if status["severity"] == "error" else st.warning)(message)
+
+    # Only the newest five-minute entry/exit notification is promoted.
+    render_critical_trade_event(repository)
+
+    database_url = dashboard_database_url()
+    option_positions, execution_journal = [], []
+    paper_available = False
+    if database_url:
+        try:
+            paper_repository = PaperExecutionRepository(
+                TradeRepository(database_url=database_url, require_durable=True)
+            )
+            option_positions = paper_repository.load()
+            execution_journal = paper_repository.journal_rows(limit=50)
+            paper_available = config.mode == "PAPER" and config.trading_enabled
+        except Exception:
+            st.warning("PAPER account state is temporarily unavailable; authoritative trade metrics remain visible.")
+
+    scorecard = daily_scorecard(records, now.date())
+    open_records = [
+        record for record in records
+        if record.entry_time is not None and record.exit_time is None
+    ]
+    scorecard["open_positions"] = len(open_records)
+    paper_summary = paper_account_summary(option_positions, config=config, now=now)
+    today = today_summary_model(
+        scorecard, paper_summary, paper_available=paper_available
+    )
+
+    st.markdown("### Today")
+    today_columns = st.columns(6)
+    today_columns[0].metric(
+        "TODAY'S P&L",
+        f"${today['pnl']:+,.2f}" if today["pnl"] is not None else "—",
+    )
+    today_columns[1].metric("OPEN POSITIONS", today["open_positions"])
+    today_columns[2].metric("TRADES TODAY", today["trades_today"])
+    today_columns[3].metric("WINS / LOSSES", f"{today['wins']} / {today['losses']}")
+    today_columns[4].metric(
+        "WIN RATE",
+        f"{today['win_rate']:.1f}%" if today["win_rate"] is not None else "—",
+    )
+    today_columns[5].metric(
+        "DEPLOYED",
+        f"${today['deployed_capital']:,.2f}" if today["deployed_capital"] is not None else "—",
+    )
+
+    summary = journal_summary_metrics(records) if records else None
+    with st.expander("More stats", expanded=False):
+        detail_columns = st.columns(5)
+        detail_columns[0].metric("Average Winner", f"${paper_summary['average_winner']:+,.2f}" if paper_available else "—")
+        detail_columns[1].metric("Average Loser", f"${paper_summary['average_loser']:+,.2f}" if paper_available else "—")
+        detail_columns[2].metric("Average Return", format_signed_return(scorecard["average_realized_return"]))
+        detail_columns[3].metric("Best Trade", format_signed_return(scorecard["best_trade"]))
+        detail_columns[4].metric("Average Hold", f"{format_metric(scorecard['average_hold_minutes'])}m")
+        if summary:
+            st.caption(
+                f"Expectancy {format_signed_return(summary['expectancy'])} · "
+                f"Profit factor {format_metric(summary['profit_factor'])}"
+            )
+
+    current_prices = current_prices or {
+        record.symbol: latest_symbol_price(latest_results, record.symbol)
+        for record in open_records
+    }
+    authoritative = opened_alerts_analytics(
+        records, current_prices, now, quote_status
+    ) if records else {"rows": []}
+    authoritative_open = [row for row in authoritative["rows"] if row["Status"] == "OPEN"]
+    paper_open = [position for position in option_positions if position.status == "OPEN"]
+    paper_symbols = {position.ticker for position in paper_open}
+    authoritative_open = [row for row in authoritative_open if row["Symbol"] not in paper_symbols]
+    has_active = bool(paper_open or authoritative_open)
+
+    st.markdown("### Active Trades")
+    if not has_active:
+        st.caption("No active positions · best opportunity is prioritized below.")
+    for position in paper_open:
+        row = paper_active_row(position, now)
+        stop = position.entry_mid * (1 + config.stop_loss_percent / 100)
+        target = position.entry_mid * (1 + config.profit_target_percent / 100)
+        treatment = "positive" if row["pnl_dollars"] >= 0 else "negative"
+        st.markdown(
+            f'<div class="ob-active-trade ob-active-trade-{treatment}">'
+            f'<div><strong>{escape(row["symbol"])} · {escape(row["contract"])}</strong>'
+            f'<span class="ob-active-state">ACTIVE</span></div>'
+            f'<div class="ob-active-result">${row["pnl_dollars"]:+,.2f} '
+            f'({row["pnl_percent"]:+.2f}%) · {row["duration"]}</div>'
+            f'<div class="ob-active-levels">Entry ${row["entry"]:.2f} · Now ${row["current"]:.2f} · '
+            f'Stop ${stop:.2f} · Target ${target:.2f}</div></div>',
+            unsafe_allow_html=True,
+        )
+        with st.expander(f"{row['symbol']} position details", expanded=False):
+            st.write(
+                f"Quantity {row['quantity']} · MFE {row['mfe']:+.2f}% · "
+                f"MAE {row['mae']:+.2f}% · Entered {format_eastern_seconds(row['opened_at'])}"
+            )
+            st.caption("Full execution history remains available in the PAPER repository and Activity feed.")
+
+    for row in authoritative_open:
+        active_display = {"State": "ACTIVE", **row}
+        record = next((item for item in open_records if item.symbol == row["Symbol"]), None)
+        st.markdown(
+            f'<div class="ob-active-trade"><div><strong>{escape(str(row["Symbol"]))} · '
+            f'{escape(str(row["Direction"]))}</strong><span class="ob-active-state">'
+            f'{escape(str(row.get("Coach Status") or "ACTIVE"))}</span></div>'
+            f'<div class="ob-active-result">{escape(str(row["Open Return"]))} · '
+            f'{escape(relative_age(record.entry_time if record else None, now))}</div>'
+            f'<div class="ob-active-levels">Entry {escape(str(row["Entry"]))} · '
+            f'Now {escape(str(row["Current Price"]))} · Stop {escape(str(row["Stop"]))} · '
+            f'Target {escape(str(row["Target 1"]))}</div></div>',
+            unsafe_allow_html=True,
+        )
+        with st.expander(f"{row['Symbol']} trade details", expanded=False):
+            st.write(active_display)
+
+    if has_active:
+        with st.expander("Today's Best Trade", expanded=False):
+            render_live_session_opportunity(latest_results, records)
+    else:
+        render_live_session_opportunity(latest_results, records)
+
+    st.markdown("### Activity")
+    event_filter = st.radio(
+        "Activity filter", ACTIVITY_FILTERS, horizontal=True,
+        label_visibility="collapsed", key="trade_desk_activity_filter",
+    )
+    view_all = st.toggle("View all activity", value=False, key="trade_desk_activity_all")
+    authoritative_events = repository.list_trade_events(limit=200) if repository else []
+    events = [*authoritative_events, *paper_position_events(option_positions)]
+    rows = filtered_activity_rows(
+        events, selected=event_filter, now=now, view_all=view_all, limit=8
+    )
+    if rows:
+        display_columns = ["Time", "Event", "Symbol", "Contract", "Price / Result", "Detail"]
+        st.dataframe(
+            pd.DataFrame(rows)[display_columns],
+            use_container_width=True,
+            hide_index=True,
+        )
+        if not view_all and len(events) > 8:
+            st.caption("Latest 8 meaningful events shown · use View all activity for full results.")
+    else:
+        st.caption("No meaningful activity has been recorded yet.")
 
 
 def render_live_session_opportunity(latest_results, trade_history):

@@ -260,7 +260,7 @@ def test_empty_daily_alert_selection_is_safe():
     assert opened_alerts_for_date([], None) == []
 
 
-def test_trade_desk_removes_old_six_dropdown_filters_and_keeps_empty_states():
+def test_trade_desk_removes_old_history_filters_and_uses_compact_empty_state():
     source = open("app.py", encoding="utf-8").read()
     start = source.index("def render_outcome_trade_journal(")
     end = source.index("def render_live_session_opportunity(", start)
@@ -275,6 +275,7 @@ def test_trade_desk_removes_old_six_dropdown_filters_and_keeps_empty_states():
         "outcome_journal_status",
     ):
         assert key not in journal
-    assert '"Date"' in journal
-    assert "No opened alerts are available for the selected date." in journal
+    assert 'key="opened_alert_date"' not in journal
+    assert "No active positions · best opportunity is prioritized below." in journal
+    assert "trade_desk_activity_filter" in journal
     assert "No trade currently meets the entry requirements." in source

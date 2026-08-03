@@ -50,17 +50,16 @@ def test_opened_alerts_rendering_is_outside_scorecard_change():
     assert "pd.DataFrame(opened_alerts[\"rows\"])[primary_columns]" in opened_alerts
 
 
-def test_empty_history_checks_develop_style_before_returning():
+def test_compact_trade_desk_has_no_demo_or_empty_history_fork():
     source = Path("app.py").read_text(encoding="utf-8")
     start = source.index("def render_outcome_trade_journal(")
     end = source.index("    summary = journal_summary_metrics(records)", start)
     empty_branch = source[start:end]
 
-    assert "modern_style_active(st.query_params, build_branch)" in empty_branch
-    assert "demo_scorecard_enabled(st.query_params, build_branch)" in empty_branch
-    assert "render_modern_scorecard(" in empty_branch
-    assert "show_indicator=True" in empty_branch
-    assert empty_branch.index("modern_style_active(") < empty_branch.index("if not records:")
+    assert "modern_style_active" not in empty_branch
+    assert "demo_scorecard" not in empty_branch
+    assert "if not records:" not in empty_branch
+    assert "today_summary_model(" in empty_branch
 
 
 def test_demo_fixture_is_presentation_only():

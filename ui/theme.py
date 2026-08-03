@@ -74,6 +74,33 @@ def configure_page():
         .ob-live-losing .ob-live-result {color:#e07a80}
         .ob-live-detail {color:var(--ob-text-muted);font-size:.86rem}
 
+        .ob-desk-status {
+            align-items:center; background:var(--ob-bg-card); border:1px solid var(--ob-border-default);
+            border-radius:8px; display:flex; flex-wrap:wrap; gap:.35rem .7rem;
+            margin:.25rem 0 .65rem; padding:.42rem .65rem; max-width:100%; overflow:hidden;
+        }
+        .ob-desk-status-warning {border-color:#c49b45;background:rgba(196,155,69,.08)}
+        .ob-desk-status-error {border-color:#d96b72;background:rgba(217,107,114,.08)}
+        .ob-desk-status-pill {
+            color:var(--ob-text-muted); font-size:.7rem; font-weight:800; letter-spacing:.045em;
+            line-height:1; white-space:nowrap;
+        }
+        .ob-desk-status-pill + .ob-desk-status-pill::before {content:"·";color:var(--ob-border-strong);margin-right:.7rem}
+        .ob-active-trade {
+            background:var(--ob-bg-card); border:1px solid var(--ob-border-default); border-left:3px solid var(--ob-accent-gold);
+            border-radius:8px; display:grid; gap:.18rem; margin:.35rem 0; padding:.58rem .72rem;
+            max-width:100%; overflow-wrap:anywhere;
+        }
+        .ob-active-trade-positive {border-left-color:#5fd38b}.ob-active-trade-negative {border-left-color:#d96b72}
+        .ob-active-state {color:var(--ob-gold);float:right;font-size:.7rem;font-weight:800;letter-spacing:.06em;margin-left:.7rem}
+        .ob-active-result {font-size:1rem;font-weight:800}.ob-active-levels {color:var(--ob-text-muted);font-size:.78rem}
+
+        @media (max-width: 700px) {
+            .ob-desk-status {align-items:flex-start;flex-direction:column;gap:.38rem}
+            .ob-desk-status-pill + .ob-desk-status-pill::before {content:"";margin:0}
+            .ob-active-state {float:none;display:inline-block}.ob-active-result{font-size:.92rem}
+        }
+
         .brand-row {
             display: flex;
             align-items: center;
