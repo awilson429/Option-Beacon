@@ -416,6 +416,7 @@ def test_dashboard_does_not_launch_worker_loop():
     not os.getenv("TEST_DATABASE_URL"),
     reason="TEST_DATABASE_URL is not configured",
 )
+@pytest.mark.network_integration
 def test_real_postgresql_repository_lifecycle_and_concurrency():
     url = os.environ["TEST_DATABASE_URL"]
     repo = TradeRepository(database_url=url, require_durable=True)
