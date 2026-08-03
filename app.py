@@ -137,6 +137,7 @@ from paper_trading_page import (
     open_paper_position_rows,
 )
 from setup_intelligence import setup_intelligence
+from selectivity_dashboard import render_selectivity_analysis
 from trade_management import coach_recommendation, trade_summary
 from trade_planning import trade_plan_view
 from trade_replay import (
@@ -3799,6 +3800,10 @@ def render_developer_tools(trade_state=None):
     st.info(
         "Developer Tools runs diagnostics only. It does not place trades or "
         "modify production trade history."
+    )
+    render_selectivity_analysis(
+        st,
+        (trade_state or {}).get("repository"),
     )
 
     st.markdown("### System Status")
