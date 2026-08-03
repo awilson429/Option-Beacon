@@ -9,6 +9,7 @@ import os
 import signal
 import sys
 import threading
+from uuid import uuid4
 
 from build_information import build_information
 from finnhub_universe import DEFAULT_SYMBOL_GROUPS, flatten_symbol_groups
@@ -98,6 +99,13 @@ def startup_record(repository, interval_seconds, scanner_id):
     }
 
 
+def worker_lock_owner_id(scanner_id):
+    """Non-secret identity persisted in lock diagnostics across one worker process."""
+    deployment = os.getenv("RAILWAY_DEPLOYMENT_ID", "local").strip() or "local"
+    replica = os.getenv("RAILWAY_REPLICA_ID", "primary").strip() or "primary"
+    return f"{scanner_id}:{deployment}:{replica}:{os.getpid()}:{uuid4().hex[:12]}"
+
+
 def run(
     *,
     repository,
@@ -110,6 +118,7 @@ def run(
     completed = 0
     failures = 0
     stopping = stop_event or threading.Event()
+    lock_owner_id = worker_lock_owner_id(scanner_id)
 
     def stop(signum, _frame):
         LOGGER.info(
@@ -128,6 +137,7 @@ def run(
             repository=repository,
             scanner_id=scanner_id,
             run_number=completed + 1,
+            lock_owner_id=lock_owner_id,
         )
         completed += 1
         failures = failures + 1 if result == 1 else 0

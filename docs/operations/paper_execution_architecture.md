@@ -59,3 +59,11 @@ The command reads `paper_option_trades.jsonl`, `paper_option_positions.json`, an
 9. Monitor entry rejections, quote failures, database health, and scanner-lock conflicts for the first session.
 
 Recovery consists of disabling `OPTIONBEACON_TRADING_ENABLED`, leaving Railway running so existing positions remain managed, correcting the provider or database issue, and allowing the next locked cycle to resume from PostgreSQL.
+
+## Scanner lock operations
+
+`scanner_locks` is a durable PostgreSQL lease table, not a session-level advisory lock. A row is keyed by `scanner_id`, contains its owner identity and UTC acquisition/expiration timestamps, and is deleted only by the matching owner. It therefore survives a crashed process, lost database connection, or Railway deployment until its lease expires. Connection pooling cannot retain it because ownership is data rather than connection state.
+
+Acquisition is an atomic PostgreSQL `INSERT ... ON CONFLICT ... DO UPDATE` that succeeds only for an expired lease or the same sequential worker identity. A different unexpired owner is never displaced. Railway owner identities include scanner, deployment, replica, process, and a random process-start suffix. Structured events expose attempts, acquisition, contention, owner, expiry, release, mismatch, release failure, and stale recovery without credentials.
+
+The lock is released in the scan's `finally` block after successful scans, provider failures, PAPER failures, and ordinary exceptions. If Neon is unavailable during release, the durable lease remains and becomes recoverable only on expiry. Worker shutdown cannot interrupt another process into ownership; a replacement deployment must wait for release or expiry.

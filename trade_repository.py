@@ -915,6 +915,63 @@ class TradeRepository:
         now = utc_now()
         expires = now + timedelta(seconds=ttl_seconds)
         with self.connection() as connection:
+            if self.backend == "postgresql":
+                previous = self._fetchone(
+                    connection,
+                    "SELECT * FROM scanner_locks WHERE scanner_id=?",
+                    (scanner_id,),
+                )
+                cursor = self._execute(
+                    connection,
+                    """
+                    INSERT INTO scanner_locks
+                    (scanner_id,owner_id,acquired_at,expires_at) VALUES (?,?,?,?)
+                    ON CONFLICT (scanner_id) DO UPDATE SET
+                        owner_id=EXCLUDED.owner_id,
+                        acquired_at=EXCLUDED.acquired_at,
+                        expires_at=EXCLUDED.expires_at
+                    WHERE scanner_locks.expires_at <= ?
+                       OR scanner_locks.owner_id = EXCLUDED.owner_id
+                    RETURNING owner_id
+                    """,
+                    (
+                        scanner_id, owner, utc_iso(now), utc_iso(expires),
+                        utc_iso(now),
+                    ),
+                )
+                acquired = cursor.fetchone()
+                cursor.close()
+                if not acquired:
+                    row = self._fetchone(
+                        connection,
+                        "SELECT * FROM scanner_locks WHERE scanner_id=?",
+                        (scanner_id,),
+                    )
+                    self._diagnostic(
+                        "scanner_lock_contention",
+                        scanner_id=scanner_id,
+                        requested_owner_id=owner,
+                        lock_owner_id=(row or {}).get("owner_id"),
+                        acquired_at=(row or {}).get("acquired_at"),
+                        expires_at=(row or {}).get("expires_at"),
+                    )
+                    return None
+                self._diagnostic(
+                    "scanner_lock_acquired",
+                    scanner_id=scanner_id,
+                    owner_id=owner,
+                    expires_at=utc_iso(expires),
+                )
+                if previous and parse_utc(previous["expires_at"]) <= now:
+                    self._diagnostic(
+                        "scanner_stale_lock_recovered",
+                        scanner_id=scanner_id,
+                        previous_owner_id=previous["owner_id"],
+                        owner_id=owner,
+                        previous_expires_at=previous["expires_at"],
+                    )
+                return owner
+
             if self.backend == "sqlite":
                 connection.execute("BEGIN IMMEDIATE")
             row = self._fetchone(
@@ -922,9 +979,22 @@ class TradeRepository:
                 "SELECT * FROM scanner_locks WHERE scanner_id=?",
                 (scanner_id,),
             )
-            if row and parse_utc(row["expires_at"]) > now:
+            if (
+                row
+                and parse_utc(row["expires_at"]) > now
+                and row["owner_id"] != owner
+            ):
+                self._diagnostic(
+                    "scanner_lock_contention",
+                    scanner_id=scanner_id,
+                    requested_owner_id=owner,
+                    lock_owner_id=row["owner_id"],
+                    acquired_at=row["acquired_at"],
+                    expires_at=row["expires_at"],
+                )
                 return None
             if row:
+                previous_owner = row["owner_id"]
                 self._execute(
                     connection,
                     """
@@ -933,6 +1003,12 @@ class TradeRepository:
                     """,
                     (owner, utc_iso(now), utc_iso(expires), scanner_id),
                 ).close()
+                self._diagnostic(
+                    "scanner_stale_lock_recovered",
+                    scanner_id=scanner_id,
+                    previous_owner_id=previous_owner,
+                    owner_id=owner,
+                )
             else:
                 self._execute(
                     connection,
@@ -942,15 +1018,37 @@ class TradeRepository:
                     """,
                     (scanner_id, owner, utc_iso(now), utc_iso(expires)),
                 ).close()
+            self._diagnostic(
+                "scanner_lock_acquired",
+                scanner_id=scanner_id,
+                owner_id=owner,
+                expires_at=utc_iso(expires),
+            )
         return owner
 
     def release_scan_lock(self, scanner_id, owner_id):
         with self.connection() as connection:
-            self._execute(
+            cursor = self._execute(
                 connection,
                 "DELETE FROM scanner_locks WHERE scanner_id=? AND owner_id=?",
                 (scanner_id, owner_id),
-            ).close()
+            )
+            released = cursor.rowcount > 0
+            cursor.close()
+        self._diagnostic(
+            "scanner_lock_released" if released else "scanner_lock_release_mismatch",
+            scanner_id=scanner_id,
+            owner_id=owner_id,
+        )
+        return released
+
+    def get_scan_lock(self, scanner_id=DEFAULT_SCANNER_ID):
+        with self.connection() as connection:
+            return self._fetchone(
+                connection,
+                "SELECT * FROM scanner_locks WHERE scanner_id=?",
+                (scanner_id,),
+            )
 
     def record_legacy_import(
         self, source_path, source_fingerprint, source_row, opportunity_id
