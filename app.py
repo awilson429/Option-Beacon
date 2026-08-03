@@ -130,6 +130,12 @@ from trade_desk_compact import (
     status_strip_model,
     today_summary_model,
 )
+from paper_trading_page import (
+    closed_paper_trade_rows,
+    execution_journal_rows,
+    execution_status_model,
+    open_paper_position_rows,
+)
 from setup_intelligence import setup_intelligence
 from trade_management import coach_recommendation, trade_summary
 from trade_planning import trade_plan_view
@@ -160,6 +166,7 @@ from ui_navigation import (
     RECORDED_CANDIDATES_LABEL,
     TRADE_DESK_SUBTITLE,
     render_card_navigation,
+    set_active_workspace,
 )
 from ui_modern_style import (
     demo_scorecard_enabled,
@@ -3463,6 +3470,12 @@ def render_outcome_trade_journal(
         "DEPLOYED",
         f"${today['deployed_capital']:,.2f}" if today["deployed_capital"] is not None else "—",
     )
+    st.button(
+        "View Paper Trading →",
+        key="trade_desk_view_paper",
+        on_click=set_active_workspace,
+        args=("Paper Trading", st.session_state),
+    )
 
     summary = journal_summary_metrics(records) if records else None
     with st.expander("More stats", expanded=False):
@@ -3680,6 +3693,103 @@ def render_live_session_opportunity(latest_results, trade_history):
             st.write(f"Coach rationale: {coach.get('summary') or '—'}")
 
 
+def render_paper_trading_page():
+    """Render the SQL-backed simulated brokerage workspace without lifecycle writes."""
+    render_section_header(
+        "Paper Trading",
+        "Authoritative simulated account, positions, trade history, and execution decisions.",
+    )
+    now = eastern_now()
+    config = ExecutionConfig.from_environment()
+    positions, raw_journal, captures = [], [], []
+    database_url = dashboard_database_url()
+    if database_url:
+        try:
+            repository = PaperExecutionRepository(
+                TradeRepository(database_url=database_url, require_durable=True)
+            )
+            positions = repository.load()
+            raw_journal = repository.journal_rows(limit=500)
+            captures = repository.records()
+        except Exception:
+            st.error("Authoritative PAPER state is temporarily unavailable.")
+    else:
+        st.warning("Authoritative PAPER storage is not configured for this dashboard.")
+
+    status = execution_status_model(positions, raw_journal)
+    st.markdown(
+        f'<div class="ob-paper-status ob-paper-status-{status["treatment"]}">'
+        f'<span>MODE: {escape(status["mode"])}</span>'
+        f'<span>TRADING: {escape(status["trading"])}</span>'
+        f'<span>WRITER: {escape(status["writer"])}</span>'
+        f'<span>UI: {escape(status["ui_role"])}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    summary = paper_account_summary(positions, config=config, now=now)
+    account_rows = (
+        (
+            ("Paper Account", f"${summary['account_size']:,.2f}"),
+            ("Today's P&L", f"${summary['today_pnl']:+,.2f}"),
+            ("Open P&L", f"${summary['open_pnl']:+,.2f}"),
+            ("Realized P&L", f"${summary['realized_pnl']:+,.2f}"),
+        ),
+        (
+            ("Trades Today", summary["trades_today"]),
+            ("Open Positions", summary["open_positions"]),
+            ("Daily Loss Remaining", f"${summary['daily_loss_remaining']:,.2f}"),
+            ("Deployed Capital", f"${summary['deployed_capital']:,.2f}"),
+        ),
+        (
+            ("Wins / Losses", f"{summary['wins']} / {summary['losses']}"),
+            ("Win Rate", f"{summary['win_rate']:.1f}%"),
+            ("Average Winner", f"${summary['average_winner']:+,.2f}"),
+            ("Average Loser", f"${summary['average_loser']:+,.2f}"),
+        ),
+    )
+    for metric_row in account_rows:
+        columns = st.columns(4)
+        for column, (label, value) in zip(columns, metric_row):
+            column.metric(label, value)
+
+    st.markdown("### Open Option Positions")
+    open_rows = open_paper_position_rows(positions, config, now)
+    if open_rows:
+        st.dataframe(pd.DataFrame(open_rows), use_container_width=True, hide_index=True)
+        with st.expander("Open-position risk and execution details", expanded=False):
+            for row in open_rows:
+                st.write(
+                    f"{row['Underlying']} · {row['Contract']} · {row['State']} · "
+                    f"Stop {row['Stop']} · Target {row['Target']} · "
+                    f"MFE {row['MFE']} · MAE {row['MAE']}"
+                )
+    else:
+        st.caption("No PAPER option positions are currently open.")
+
+    st.markdown("### Closed PAPER Trades")
+    history_scope = st.radio(
+        "History scope", ("Today", "All History"), horizontal=True,
+        label_visibility="collapsed", key="paper_history_scope",
+    )
+    closed_rows = closed_paper_trade_rows(
+        positions, now=now, today_only=history_scope == "Today"
+    )
+    if closed_rows:
+        st.dataframe(pd.DataFrame(closed_rows), use_container_width=True, hide_index=True)
+    else:
+        st.caption("No completed PAPER trades are available for this view.")
+
+    with st.expander("Execution Journal", expanded=False):
+        journal = execution_journal_rows(raw_journal, captures)
+        if journal:
+            st.dataframe(pd.DataFrame(journal), use_container_width=True, hide_index=True)
+        else:
+            st.caption("No PAPER execution decisions have been recorded yet.")
+        st.caption(
+            "Read-only decision audit · accepted and rejected entries remain owned by Railway."
+        )
+
+
 def render_developer_tools(trade_state=None):
     """Render read-only internal diagnostics without exposing provider secrets."""
     render_section_header(
@@ -3879,6 +3989,9 @@ def main():
                 symbol_groups,
                 trade_evidence_history,
             )
+
+    elif active_page == "Paper Trading":
+        render_paper_trading_page()
 
     elif active_page == "Trade Desk":
         render_outcome_trade_journal(

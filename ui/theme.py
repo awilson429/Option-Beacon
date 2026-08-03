@@ -94,11 +94,20 @@ def configure_page():
         .ob-active-trade-positive {border-left-color:#5fd38b}.ob-active-trade-negative {border-left-color:#d96b72}
         .ob-active-state {color:var(--ob-gold);float:right;font-size:.7rem;font-weight:800;letter-spacing:.06em;margin-left:.7rem}
         .ob-active-result {font-size:1rem;font-weight:800}.ob-active-levels {color:var(--ob-text-muted);font-size:.78rem}
+        .ob-paper-status {
+            align-items:center;background:var(--ob-bg-card);border:1px solid var(--ob-border-default);
+            border-radius:8px;display:flex;flex-wrap:wrap;gap:.45rem 1rem;margin:.25rem 0 .8rem;
+            max-width:100%;overflow:hidden;padding:.5rem .7rem;
+        }
+        .ob-paper-status span {color:var(--ob-text-secondary);font-size:.72rem;font-weight:800;letter-spacing:.05em;white-space:nowrap}
+        .ob-paper-status-active {border-color:var(--ob-positive)}
+        .ob-paper-status-warning {border-color:var(--ob-warning)}
 
         @media (max-width: 700px) {
             .ob-desk-status {align-items:flex-start;flex-direction:column;gap:.38rem}
             .ob-desk-status-pill + .ob-desk-status-pill::before {content:"";margin:0}
             .ob-active-state {float:none;display:inline-block}.ob-active-result{font-size:.92rem}
+            .ob-paper-status {align-items:flex-start;flex-direction:column;gap:.35rem;overflow:visible}
         }
 
         .brand-row {

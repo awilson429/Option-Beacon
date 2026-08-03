@@ -73,6 +73,7 @@ SIDEBAR_CSS = """
 CARD_NAVIGATION = (
     "Trade Desk",
     "Opportunities",
+    "Paper Trading",
     "After Hours",
     "History",
     "Tools",
@@ -82,13 +83,14 @@ CARD_NAVIGATION = (
 CARD_NAVIGATION_SLUGS = {
     "Trade Desk": "trade-desk",
     "Opportunities": "opportunities",
+    "Paper Trading": "paper-trading",
     "After Hours": "after-hours",
     "History": "history",
     "Tools": "tools",
     "Developer Tools": "developer-tools",
 }
 
-DESKTOP_NAVIGATION_COLUMNS = 6
+DESKTOP_NAVIGATION_COLUMNS = 7
 
 CARD_NAVIGATION_CSS = """
 <style>
@@ -106,14 +108,14 @@ div[class*="st-key-ob_nav_"] button {
     justify-content: center;
     height: 2.75rem;
     min-height: 2.75rem;
-    padding: 0.45rem 0.65rem;
+    padding: 0.4rem 0.42rem;
     text-align: center;
     transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
     width: 100%;
 }
 div[class*="st-key-ob_nav_"] button p {
     color: var(--ob-text-primary) !important;
-    font-size: 0.86rem;
+    font-size: 0.8rem;
     font-weight: 650;
     line-height: 1;
     margin: 0;

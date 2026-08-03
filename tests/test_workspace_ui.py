@@ -126,6 +126,7 @@ def test_workspace_routing_isolated_by_selected_page():
     for page, renderer in (
         ("Trade Desk", "render_outcome_trade_journal("),
         ("Opportunities", "render_top_opportunities("),
+        ("Paper Trading", "render_paper_trading_page()"),
         ("After Hours", "render_after_hours("),
         ("History", "render_coach_timeline()"),
         ("Tools", "render_scanner_health("),
