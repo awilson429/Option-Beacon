@@ -33,17 +33,21 @@ MARKET_DATA_BACKOFF_SECONDS = 0.5
 MARKET_DATA_MAX_JITTER_SECONDS = 0.25
 _MARKET_DATA_SCAN_CACHE = None
 _MARKET_DATA_SCAN_STATS = None
+_LAST_SIGNAL_TIMING = {}
 
 
 def begin_market_data_scan_cycle():
     """Start one serial scan cache and provider-warning accumulator."""
     global _MARKET_DATA_SCAN_CACHE, _MARKET_DATA_SCAN_STATS
     _MARKET_DATA_SCAN_CACHE = {}
+    _LAST_SIGNAL_TIMING.clear()
     _MARKET_DATA_SCAN_STATS = {
         "provider": "Yahoo Finance via yfinance",
         "requests": 0,
         "cache_hits": 0,
+        "retries": 0,
         "rate_limited_symbols": set(),
+        "rate_limit_count": 0,
     }
 
 
@@ -54,7 +58,9 @@ def end_market_data_scan_cycle() -> dict:
         "provider": "Yahoo Finance via yfinance",
         "requests": 0,
         "cache_hits": 0,
+        "retries": 0,
         "rate_limited_symbols": set(),
+        "rate_limit_count": 0,
     }
     result = {
         **stats,
@@ -63,6 +69,11 @@ def end_market_data_scan_cycle() -> dict:
     _MARKET_DATA_SCAN_CACHE = None
     _MARKET_DATA_SCAN_STATS = None
     return result
+
+
+def consume_signal_timing(symbol) -> dict:
+    """Return phase timing for diagnostics without emitting per-symbol logs."""
+    return _LAST_SIGNAL_TIMING.pop(str(symbol).upper(), {})
 
 
 def _rate_limit_error(exc) -> bool:
@@ -120,7 +131,10 @@ def _download_market_data(symbol, period, *, sleep=time.sleep, jitter=random.uni
                 _MARKET_DATA_SCAN_STATS["rate_limited_symbols"].add(
                     str(symbol).upper()
                 )
+                _MARKET_DATA_SCAN_STATS["rate_limit_count"] += 1
             if attempt < MARKET_DATA_MAX_ATTEMPTS - 1:
+                if _MARKET_DATA_SCAN_STATS is not None:
+                    _MARKET_DATA_SCAN_STATS["retries"] += 1
                 delay = MARKET_DATA_BACKOFF_SECONDS * (2**attempt)
                 delay += jitter(0, MARKET_DATA_MAX_JITTER_SECONDS)
                 sleep(delay)
@@ -184,14 +198,32 @@ def add_indicators(df):
 
 
 def generate_signal(symbol):
-    raw_data = get_data(symbol)
+    phase_started = time.perf_counter()
+    try:
+        raw_data = get_data(symbol)
+    except Exception:
+        _LAST_SIGNAL_TIMING[str(symbol).upper()] = {
+            "market_data_seconds": time.perf_counter() - phase_started,
+            "analysis_seconds": 0.0,
+        }
+        raise
+    market_data_seconds = time.perf_counter() - phase_started
+    analysis_started = time.perf_counter()
 
     if raw_data.empty:
+        _LAST_SIGNAL_TIMING[str(symbol).upper()] = {
+            "market_data_seconds": market_data_seconds,
+            "analysis_seconds": time.perf_counter() - analysis_started,
+        }
         return None
 
     df = add_indicators(raw_data)
 
     if len(df) < 30:
+        _LAST_SIGNAL_TIMING[str(symbol).upper()] = {
+            "market_data_seconds": market_data_seconds,
+            "analysis_seconds": time.perf_counter() - analysis_started,
+        }
         return None
 
     i = len(df) - 1
@@ -233,6 +265,10 @@ def generate_signal(symbol):
             symbol,
             exc,
         )
+    _LAST_SIGNAL_TIMING[str(symbol).upper()] = {
+        "market_data_seconds": market_data_seconds,
+        "analysis_seconds": time.perf_counter() - analysis_started,
+    }
     return result
 
 

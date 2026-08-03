@@ -318,6 +318,32 @@ class TradeRepository:
             self._diagnostic(
                 "repository_schema_operation_completed", operation="scanner_locks"
             )
+            self._execute(
+                connection,
+                f"""
+                CREATE TABLE IF NOT EXISTS scanner_capacity_metrics (
+                    id {text_id}, scanner_id TEXT NOT NULL,
+                    scan_started_at TEXT NOT NULL, scan_completed_at TEXT NOT NULL,
+                    scanner_interval_seconds REAL NOT NULL,
+                    configured_symbols INTEGER NOT NULL, attempted_symbols INTEGER NOT NULL,
+                    successful_symbols INTEGER NOT NULL, failed_symbols INTEGER NOT NULL,
+                    skipped_symbols INTEGER NOT NULL, rate_limit_count INTEGER NOT NULL,
+                    provider_warning_count INTEGER NOT NULL, retry_count INTEGER NOT NULL,
+                    request_count INTEGER NOT NULL, cache_hit_count INTEGER NOT NULL,
+                    scan_duration_seconds REAL NOT NULL, avg_symbol_seconds REAL NOT NULL,
+                    p50_symbol_seconds REAL NOT NULL, p95_symbol_seconds REAL NOT NULL,
+                    max_symbol_seconds REAL NOT NULL, repository_write_seconds REAL NOT NULL,
+                    opportunities_generated INTEGER NOT NULL, actionable_opportunities INTEGER NOT NULL,
+                    watch_count INTEGER NOT NULL, wait_count INTEGER NOT NULL, open_count INTEGER NOT NULL,
+                    top_ranked_count INTEGER NOT NULL, opportunity_density REAL NOT NULL,
+                    partial_scan INTEGER NOT NULL, scan_status TEXT NOT NULL,
+                    utilization_percent REAL NOT NULL, capacity_health TEXT NOT NULL,
+                    overlap_detected INTEGER NOT NULL, overlap_count INTEGER NOT NULL,
+                    schedule_delay_seconds REAL NOT NULL, intended_scan_start TEXT,
+                    metadata_json TEXT, created_at TEXT NOT NULL
+                )
+                """,
+            ).close()
             self._diagnostic(
                 "repository_schema_operation_started", operation="legacy_imports"
             )
@@ -836,6 +862,34 @@ class TradeRepository:
                     (scanner_id, owner, utc_iso(now), utc_iso(expires)),
                 ).close()
         return owner
+
+    def record_capacity_metrics(self, metrics):
+        values = dict(metrics)
+        values.setdefault("id", uuid4().hex)
+        values.setdefault("created_at", utc_iso())
+        values["scan_started_at"] = utc_iso(values["scan_started_at"])
+        values["scan_completed_at"] = utc_iso(values["scan_completed_at"])
+        if values.get("intended_scan_start"):
+            values["intended_scan_start"] = utc_iso(values["intended_scan_start"])
+        values["metadata_json"] = json.dumps(values.get("metadata_json") or {}, sort_keys=True)
+        columns = list(values)
+        with self.connection() as connection:
+            self._execute(connection, f"INSERT INTO scanner_capacity_metrics ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})", tuple(values.values())).close()
+        return values["id"]
+
+    def list_capacity_metrics(self, scanner_id=None, *, limit=200):
+        query = "SELECT * FROM scanner_capacity_metrics"
+        params = []
+        if scanner_id:
+            query += " WHERE scanner_id=?"
+            params.append(scanner_id)
+        query += " ORDER BY scan_started_at DESC LIMIT ?"
+        params.append(int(limit))
+        with self.connection() as connection:
+            rows = self._fetchall(connection, query, tuple(params))
+        for row in rows:
+            row["metadata_json"] = json.loads(row.get("metadata_json") or "{}")
+        return rows
 
     def release_scan_lock(self, scanner_id, owner_id):
         with self.connection() as connection:

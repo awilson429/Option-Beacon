@@ -18,6 +18,7 @@ from developer_tools import (
     load_latest_diagnostic,
     option_engine_diagnostic,
     save_diagnostic_result,
+    scanner_capacity_summary,
     system_status,
     verify_finnhub_connection,
     verify_position_tracking,
@@ -3410,6 +3411,39 @@ def render_developer_tools(trade_state=None):
             ]
         )
     st.dataframe(pd.DataFrame(status_rows), use_container_width=True, hide_index=True)
+
+    st.markdown("### Scanner Capacity")
+    capacity = scanner_capacity_summary((trade_state or {}).get("repository"))
+    current = capacity.get("current")
+    if current:
+        st.dataframe(pd.DataFrame([{
+            "Configured": current["configured_symbols"],
+            "Processed": current["successful_symbols"],
+            "Failed": current["failed_symbols"],
+            "Duration (s)": round(current["scan_duration_seconds"], 2),
+            "Utilization (%)": round(current["utilization_percent"], 1),
+            "Health": current["capacity_health"],
+        }]), use_container_width=True, hide_index=True)
+        recent = capacity.get("recent") or {}
+        st.caption(
+            f"Recent: avg {recent.get('average_duration_seconds', 0):.1f}s · "
+            f"p95 {recent.get('p95_duration_seconds', 0):.1f}s · "
+            f"success {recent.get('success_rate_percent', 0):.1f}% · "
+            f"429 {recent.get('rate_limit_percent', 0):.1f}% · "
+            f"retries {recent.get('average_retries', 0):.1f} · "
+            f"overlaps {recent.get('overlap_count', 0)}"
+        )
+        comparisons = capacity.get("universe_comparison") or []
+        if comparisons:
+            st.dataframe(pd.DataFrame(comparisons), use_container_width=True, hide_index=True)
+        recommendation = capacity.get("recommended_max_symbols")
+        st.caption(
+            f"Evidence-based recommended maximum: {recommendation} symbols"
+            if recommendation is not None
+            else f"Recommendation pending: at least {capacity['minimum_scans_required']} scans per universe size are required."
+        )
+    else:
+        render_empty_state("No scanner capacity benchmark scans have been recorded yet.")
 
     def run_diagnostic(button_label, key, diagnostic):
         running_key = f"{key}_running"

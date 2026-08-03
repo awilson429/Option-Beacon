@@ -44,3 +44,4 @@ Thumbs.db
 experiment_001_shadow.jsonl
 experiment_002_shadow.jsonl
 experiment_003_signal_funnel.jsonl
+.codex-test-deps/

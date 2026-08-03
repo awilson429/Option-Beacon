@@ -25,6 +25,7 @@ NOW = datetime(2026, 7, 28, 15, 0, tzinfo=timezone.utc)
 def test_app_developer_tool_imports_are_explicitly_exported():
     expected = {
         "hosted_configuration_status",
+        "scanner_capacity_summary",
         "latest_production_ledger_entry",
         "load_latest_diagnostic",
         "option_engine_diagnostic",

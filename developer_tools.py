@@ -37,6 +37,7 @@ from trade_plan_journal import (
 from trade_plan_lifecycle import update_trade_plan
 from trade_plan_models import LifecycleEventType, PlanStatus
 from verify_option_engine import run_verification
+from optionbeacon.worker.capacity import percentile, summarize_capacity
 
 
 LOGGER = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ DEFAULT_DIAGNOSTICS_FILE = "runtime_diagnostics.json"
 UNAVAILABLE = "—"
 __all__ = (
     "hosted_configuration_status",
+    "scanner_capacity_summary",
     "latest_production_ledger_entry",
     "load_latest_diagnostic",
     "option_engine_diagnostic",
@@ -58,6 +60,32 @@ HOSTED_SECRET_NAMES = (
     "TRADIER_ACCESS_TOKEN",
     "FINNHUB_API_KEY",
 )
+
+
+def scanner_capacity_summary(repository, *, limit=200, minimum_scans=10):
+    """Return current and recent capacity evidence for Developer Tools."""
+    if repository is None:
+        return {"current": None, **summarize_capacity([], minimum_scans=minimum_scans)}
+    records = repository.list_capacity_metrics(limit=limit)
+    summary = summarize_capacity(records, minimum_scans=minimum_scans)
+    summary["current"] = records[0] if records else None
+    if records:
+        durations = [float(row["scan_duration_seconds"]) for row in records]
+        attempts = sum(int(row["attempted_symbols"]) for row in records)
+        successes = sum(int(row["successful_symbols"]) for row in records)
+        requests = sum(int(row["request_count"]) for row in records)
+        rate_limits = sum(int(row["rate_limit_count"]) for row in records)
+        summary["recent"] = {
+            "average_duration_seconds": sum(durations) / len(durations),
+            "p95_duration_seconds": percentile(durations, 95),
+            "success_rate_percent": successes / attempts * 100 if attempts else 0,
+            "rate_limit_percent": rate_limits / requests * 100 if requests else 0,
+            "average_retries": sum(int(row["retry_count"]) for row in records) / len(records),
+            "overlap_count": sum(bool(row["overlap_detected"]) for row in records),
+        }
+    else:
+        summary["recent"] = None
+    return summary
 
 
 def hosted_configuration_status() -> dict:

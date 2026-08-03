@@ -9,6 +9,7 @@ import os
 import signal
 import sys
 import threading
+from datetime import datetime, timedelta, timezone
 
 from build_information import build_information
 from finnhub_universe import DEFAULT_SYMBOL_GROUPS, flatten_symbol_groups
@@ -123,8 +124,13 @@ def run(
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
     LOGGER.info(json.dumps(startup_record(repository, interval_seconds, scanner_id), sort_keys=True))
+    intended_start = datetime.now(timezone.utc)
     while not stopping.is_set() and (max_runs is None or completed < max_runs):
-        result = scan_once(repository=repository, scanner_id=scanner_id)
+        result = scan_once(
+            repository=repository, scanner_id=scanner_id,
+            scanner_interval_seconds=interval_seconds,
+            intended_start=intended_start,
+        )
         completed += 1
         failures = failures + 1 if result == 1 else 0
         LOGGER.info(
@@ -140,6 +146,7 @@ def run(
         )
         if not stopping.is_set() and (max_runs is None or completed < max_runs):
             delay = failure_backoff_seconds(failures, interval_seconds)
+            intended_start = datetime.now(timezone.utc) + timedelta(seconds=delay)
             stopping.wait(delay)
     LOGGER.info(
         json.dumps(
