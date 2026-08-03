@@ -66,6 +66,8 @@ def test_sector_mapping_ranking_alignment_and_missing_data():
 
 def test_snapshot_is_point_in_time_and_repository_is_immutable(tmp_path):
     repository = TradeRepository(tmp_path / "state.db")
+    assert repository.backend == "sqlite"
+    assert repository.db_file == str(tmp_path / "state.db")
     result, record = _result(), _candidate()
     repository.create_opportunity(opportunity_id=record.trade_id, idempotency_key=record.trade_id,
         symbol=record.symbol, direction=record.direction, playbook=record.setup,
@@ -81,7 +83,7 @@ def test_snapshot_is_point_in_time_and_repository_is_immutable(tmp_path):
 
 
 def test_scanner_hook_persists_snapshot_and_evolving_outcome(tmp_path):
-    repository = TradeRepository(tmp_path / "state.db")
+    repository = TradeRepository(tmp_path / "state.db", database_url="")
     assert process_scanner_result(repository, _result(), source_version="test") == 1
     snapshots = repository.list_intelligence_snapshots()
     outcomes = repository.list_intelligence_outcomes()

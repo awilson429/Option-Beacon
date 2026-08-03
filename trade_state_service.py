@@ -26,6 +26,7 @@ from intraday_session import (
     intraday_trade_exit_due,
 )
 from intelligence_capture import outcome_label, setup_feature_snapshot
+from live_trade_activity import persist_outcome_transition
 from trade_repository import (
     DEFAULT_REPOSITORY_FILE,
     RepositoryUnavailable,
@@ -69,9 +70,18 @@ def repository_for_runtime(
 
 
 def sync_trade_outcome(
-    repository: TradeRepository, record: TradeOutcome, *, source_version="stable-v1"
+    repository: TradeRepository, record: TradeOutcome, *, source_version="stable-v1",
+    underlying_price=None, rule_score=None,
 ) -> dict:
     """Idempotently project one legacy-compatible outcome into SQL."""
+    previous_opportunity = repository.get_opportunity(opportunity_id=record.trade_id)
+    previous = None
+    previous_payload = ((previous_opportunity or {}).get("metadata") or {}).get("trade_outcome")
+    if previous_payload:
+        try:
+            previous = deserialize_trade_outcome(previous_payload)
+        except Exception:
+            LOGGER.exception("Could not decode previous outcome %s", record.trade_id)
     payload = serialize_trade_outcome(record)
     state = _outcome_state(record)
     opportunity = repository.create_opportunity(
@@ -126,8 +136,13 @@ def sync_trade_outcome(
         else:
             repository.update_trade(
                 trade["id"],
+                last_price=underlying_price,
                 metadata_json={"trade_outcome": payload},
             )
+    persist_outcome_transition(
+        repository, previous, record,
+        underlying_price=underlying_price, rule_score=rule_score,
+    )
     return repository.get_opportunity(opportunity["id"])
 
 
@@ -217,6 +232,8 @@ def process_scanner_result(
                 repository,
                 record,
                 source_version=source_version,
+                underlying_price=price,
+                rule_score=(result or {}).get("score") or (result or {}).get("confidence"),
             )
             _persist_outcome_label(repository, record)
             changed += 1
@@ -229,6 +246,8 @@ def process_scanner_result(
             repository,
             candidate,
             source_version=source_version,
+            underlying_price=price,
+            rule_score=(result or {}).get("score") or (result or {}).get("confidence"),
         )
         _persist_intelligence_snapshot(
             repository, result, candidate, source_version=source_version

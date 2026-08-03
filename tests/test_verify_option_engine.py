@@ -59,6 +59,7 @@ def test_live_provider_verification_uses_temporary_ledger(tmp_path):
 
 def test_missing_credentials_uses_mock_provider(tmp_path):
     mode, checks, record = run_verification(
+        live_provider=FailedProvider(),
         credentials_found=False,
         now=NOW,
         protected_root=tmp_path,
@@ -110,6 +111,7 @@ def test_credential_diagnostic_names_keys_without_values(tmp_path, monkeypatch):
 
 def test_midpoint_spread_and_contract_fields_are_verified(tmp_path):
     _mode, checks, record = run_verification(
+        live_provider=FailedProvider(),
         credentials_found=False,
         now=NOW,
         protected_root=tmp_path,
@@ -138,6 +140,7 @@ def test_protected_files_remain_byte_and_timestamp_identical(tmp_path):
     before = snapshot_files(paths)
 
     _mode, checks, _record = run_verification(
+        live_provider=FailedProvider(),
         credentials_found=False,
         now=NOW,
         protected_root=tmp_path,
@@ -161,6 +164,7 @@ def test_file_fingerprint_reports_missing_file(tmp_path):
 
 def test_report_is_sanitized_and_labels_mock_mode(tmp_path, capsys):
     mode, checks, record = run_verification(
+        live_provider=FailedProvider(),
         credentials_found=False,
         now=NOW,
         protected_root=tmp_path,
@@ -171,3 +175,16 @@ def test_report_is_sanitized_and_labels_mock_mode(tmp_path, capsys):
     assert "Selected contract (sanitized)" in output
     assert "Authorization" not in output
     assert "Bearer" not in output
+
+
+@pytest.mark.live_provider
+def test_live_tradier_verification_is_explicitly_opt_in(tmp_path):
+    """Manual integration test; excluded unless the explicit live flag is set."""
+    mode, checks, record = run_verification(
+        credentials_found=True,
+        now=NOW,
+        protected_root=tmp_path,
+    )
+    assert mode == "LIVE PROVIDER VALIDATION"
+    assert record is not None and record.status == "QUALIFIED"
+    assert check_map(checks)["provider connection succeeded"].passed is True

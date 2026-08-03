@@ -61,6 +61,19 @@ def configure_page():
             max-width: 100%;
         }
 
+        .ob-live-notice {
+            border: 1px solid var(--ob-border-strong); border-left-width: 5px;
+            border-radius: 8px; margin: .5rem 0 1rem; padding: 1rem 1.1rem;
+            background: var(--ob-bg-header);
+        }
+        .ob-live-entry,.ob-live-winning {border-left-color:#5fd38b}
+        .ob-live-losing {border-left-color:#d96b72}
+        .ob-live-kicker {font-size:.76rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+        .ob-live-symbol {font-size:1.35rem;font-weight:800;margin:.2rem 0}
+        .ob-live-result {display:block;font-size:1.65rem;color:#5fd38b}
+        .ob-live-losing .ob-live-result {color:#e07a80}
+        .ob-live-detail {color:var(--ob-text-muted);font-size:.86rem}
+
         .brand-row {
             display: flex;
             align-items: center;
