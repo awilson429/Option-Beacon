@@ -71,8 +71,8 @@ def test_daily_alert_and_diagnostics_controls_use_stable_keys():
         "outcome_journal_status",
     )
     assert all(f'key="{key}"' not in journal for key in removed_keys)
-    assert 'key="opened_alert_date"' in journal
-    assert 'key="entered_alert_detail"' in journal
+    assert 'key="trade_desk_activity_filter"' in journal
+    assert 'key="trade_desk_activity_all"' in journal
     for key in (
         "developer_verify_tradier",
         "developer_verify_finnhub",
@@ -94,13 +94,14 @@ def test_page_tabs_and_headers_preserve_complete_values():
     assert "ellipsis" not in SHARED_UI_CSS
 
 
-def test_approved_default_uses_legacy_header_and_compact_scorecard_metrics():
+def test_approved_default_uses_header_and_compact_today_metrics():
     source = Path("app.py").read_text(encoding="utf-8")
     journal = source.split("def render_outcome_trade_journal", 1)[1].split("\ndef ", 1)[0]
     main = source.split("def main", 1)[1]
     assert main.count("render_header()") == 1
-    assert "render_journal_metric(" in journal
-    assert "st.metric(" not in journal
+    assert "today_summary_model(" in journal
+    assert ".metric(" in journal
+    assert "render_journal_metric(" not in journal
 
 
 def test_primary_content_isolation_remains_explicit():
