@@ -1,8 +1,7 @@
 name: Scheduled Scanner
 
 on:
-  schedule:
-    - cron: "*/5 13-22 * * 1-5"
+  # Manual, non-authoritative maintenance scan only. Railway owns production cadence.
   workflow_dispatch:
     inputs:
       send_test_alert:
