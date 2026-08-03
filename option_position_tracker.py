@@ -6,7 +6,7 @@ import json
 import logging
 import math
 from dataclasses import asdict, dataclass, replace
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -54,6 +54,14 @@ class PaperOptionPosition:
     exit_ask: float | None = None
     exit_mid: float | None = None
     exit_return_percent: float | None = None
+    quantity: int = 1
+    signal_quote_bid: float | None = None
+    signal_quote_ask: float | None = None
+    signal_quote_mid: float | None = None
+    paper_fill_price: float | None = None
+    total_entry_cost: float = 0.0
+    scanner_score: float | None = None
+    execution_mode: str = "PAPER"
 
 
 class OptionPositionStore:
@@ -68,7 +76,15 @@ class OptionPositionStore:
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
             rows = payload.get("positions", []) if isinstance(payload, dict) else []
-            return [_deserialize(row) for row in rows if isinstance(row, dict)]
+            positions = []
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                try:
+                    positions.append(_deserialize(row))
+                except Exception:
+                    LOGGER.warning("Ignoring malformed paper position row", exc_info=True)
+            return positions
         except Exception:
             LOGGER.exception("Could not read paper option position store")
             return []
@@ -96,7 +112,14 @@ class TradierOptionQuoteProvider:
         return option_quote(option_symbol)
 
 
-def position_from_trade(trade: PaperOptionTrade) -> PaperOptionPosition | None:
+def position_from_trade(
+    trade: PaperOptionTrade,
+    *,
+    execution_time: datetime | None = None,
+    fill_price: float | None = None,
+    quantity: int = 1,
+    scanner_score: float | None = None,
+) -> PaperOptionPosition | None:
     """Create an OPEN lifecycle record without changing the capture snapshot."""
     if (
         trade.status != "QUALIFIED"
@@ -106,14 +129,17 @@ def position_from_trade(trade: PaperOptionTrade) -> PaperOptionPosition | None:
         or trade.strike is None
     ):
         return None
-    entry_mid = _positive(trade.mid)
+    entry_mid = _positive(fill_price if fill_price is not None else trade.mid)
     if entry_mid is None:
         return None
+    entered_at = execution_time or trade.created_timestamp
+    if entered_at.tzinfo is None:
+        entered_at = entered_at.replace(tzinfo=timezone.utc)
     return PaperOptionPosition(
         trade_id=trade.trade_id,
         status="OPEN",
-        entry_time=trade.created_timestamp,
-        last_update=trade.created_timestamp,
+        entry_time=entered_at,
+        last_update=entered_at,
         ticker=trade.ticker,
         direction=trade.direction,
         option_symbol=trade.option_symbol,
@@ -132,7 +158,14 @@ def position_from_trade(trade: PaperOptionTrade) -> PaperOptionPosition | None:
         max_favorable_excursion_percent=0.0,
         max_adverse_excursion_percent=0.0,
         last_underlying_price=_finite(trade.underlying_entry_price),
-        last_option_quote_time=trade.created_timestamp,
+        last_option_quote_time=entered_at,
+        quantity=max(1, int(quantity)),
+        signal_quote_bid=_finite(trade.bid),
+        signal_quote_ask=_finite(trade.ask),
+        signal_quote_mid=_finite(trade.mid),
+        paper_fill_price=entry_mid,
+        total_entry_cost=round(entry_mid * 100 * max(1, int(quantity)), 2),
+        scanner_score=_finite(scanner_score),
     )
 
 
@@ -168,6 +201,8 @@ def update_position(
     current_time: datetime,
     profit_target_percent: float = DEFAULT_PROFIT_TARGET_PERCENT,
     stop_loss_percent: float = DEFAULT_STOP_LOSS_PERCENT,
+    max_hold_minutes: int | None = None,
+    force_close_end_of_day: bool = False,
 ) -> PaperOptionPosition:
     """Advance one OPEN position from a current option quote."""
     if position.status != "OPEN":
@@ -180,6 +215,14 @@ def update_position(
             reason="EXPIRATION",
             status="EXPIRED",
         )
+    if max_hold_minutes is not None and current_time >= position.entry_time + timedelta(minutes=max_hold_minutes):
+        return _close_position(position, current_time=current_time, reason="MAX_HOLD_TIME", status="CLOSED")
+    if force_close_end_of_day:
+        from zoneinfo import ZoneInfo
+        current_et = current_time.astimezone(ZoneInfo("America/New_York"))
+        entry_et = position.entry_time.astimezone(ZoneInfo("America/New_York"))
+        if current_et.date() > entry_et.date() or current_et.time() >= time(15, 55):
+            return _close_position(position, current_time=current_time, reason="END_OF_DAY", status="CLOSED")
     normalized = normalize_live_quote(quote)
     if normalized is None:
         return position
@@ -236,13 +279,19 @@ def refresh_option_positions(
     current_time: datetime | None = None,
     profit_target_percent: float = DEFAULT_PROFIT_TARGET_PERCENT,
     stop_loss_percent: float = DEFAULT_STOP_LOSS_PERCENT,
+    max_hold_minutes: int | None = None,
+    force_close_end_of_day: bool = False,
+    synchronize_new_captures: bool = True,
+    quote_failure_callback=None,
 ) -> list[PaperOptionPosition]:
     """Synchronize captures and quote only OPEN option symbols."""
     position_store = position_store or OptionPositionStore()
     trade_ledger = trade_ledger or OptionTradeLedger(DEFAULT_LEDGER_FILE)
     provider = provider or TradierOptionQuoteProvider()
     checked_at = current_time or datetime.now(timezone.utc)
-    positions = synchronize_captures(position_store.load(), trade_ledger.records())
+    positions = position_store.load()
+    if synchronize_new_captures:
+        positions = synchronize_captures(positions, trade_ledger.records())
     quote_cache: dict[str, dict | None] = {}
     updated = []
     for position in positions:
@@ -265,6 +314,8 @@ def refresh_option_positions(
                         _safe_error(error),
                     )
                     quote = None
+                    if quote_failure_callback:
+                        quote_failure_callback(position, "QUOTE_UNAVAILABLE")
                 quote_cache[position.option_symbol] = quote
             except Exception as exc:
                 LOGGER.warning(
@@ -273,6 +324,8 @@ def refresh_option_positions(
                     type(exc).__name__,
                 )
                 quote_cache[position.option_symbol] = None
+                if quote_failure_callback:
+                    quote_failure_callback(position, "PROVIDER_ERROR")
         updated.append(
             update_position(
                 position,
@@ -280,6 +333,8 @@ def refresh_option_positions(
                 current_time=checked_at,
                 profit_target_percent=profit_target_percent,
                 stop_loss_percent=stop_loss_percent,
+                max_hold_minutes=max_hold_minutes,
+                force_close_end_of_day=force_close_end_of_day,
             )
         )
     position_store.save(updated)
@@ -320,20 +375,20 @@ def open_position_rows(positions, now=None) -> list[dict]:
     for position in positions:
         if position.status != "OPEN":
             continue
-        rows.append(
-            {
-                "Ticker": position.ticker,
-                "Direction": position.direction,
-                "Strike": f"${position.strike:.2f}",
-                "Expiration": position.expiration,
-                "Current Return": _percent(position.current_return_percent),
-                "MFE": _percent(position.max_favorable_excursion_percent),
-                "MAE": _percent(position.max_adverse_excursion_percent),
-                "Status": position.status,
-                "Age": _duration(position.entry_time, checked_at),
-            }
-        )
-    return sorted(rows, key=lambda row: row["Age"])
+        rows.append({
+            "Ticker": position.ticker, "Direction": position.direction,
+            "Beacon Score": position.scanner_score, "Contract": position.option_symbol,
+            "Quantity": position.quantity, "Trade Entered": _et_time(position.entry_time),
+            "Entry Premium": _money(position.entry_mid), "Current Premium": _money(position.current_mid),
+            "Position Cost": _money(position.total_entry_cost),
+            "Current Value": _money(position.current_mid * 100 * position.quantity),
+            "Dollar P&L": _money((position.current_mid - position.entry_mid) * 100 * position.quantity),
+            "Current Return": _percent(position.current_return_percent),
+            "MFE": _percent(position.max_favorable_excursion_percent),
+            "MAE": _percent(position.max_adverse_excursion_percent),
+            "Status": position.status, "Age": _duration(position.entry_time, checked_at),
+        })
+    return rows
 
 
 def completed_position_rows(positions) -> list[dict]:
@@ -346,23 +401,24 @@ def completed_position_rows(positions) -> list[dict]:
         key=lambda position: position.exit_time or position.last_update,
         reverse=True,
     )
-    return [
-        {
-            "Ticker": position.ticker,
-            "Direction": position.direction,
-            "Contract": position.option_symbol,
-            "Entry": _money(position.entry_mid),
-            "Exit": _money(position.exit_mid),
-            "Return": _percent(position.exit_return_percent),
-            "Reason": position.exit_reason or "—",
-            "Duration": _duration(
-                position.entry_time,
-                position.exit_time or position.last_update,
-            ),
-            "Status": position.status,
-        }
-        for position in closed
-    ]
+    return [{
+        "Trade ID": p.trade_id, "Ticker": p.ticker, "Direction": p.direction,
+        "Beacon Score": p.scanner_score, "Contract": p.option_symbol,
+        "Expiration": p.expiration, "Strike": p.strike, "Quantity": p.quantity,
+        "Trade Entered": _et_time(p.entry_time), "Trade Exited": _et_time(p.exit_time),
+        "Holding Duration": _duration(p.entry_time, p.exit_time or p.last_update),
+        "Entry Premium": _money(p.entry_mid), "Exit Premium": _money(p.exit_mid),
+        "Entry Cost": _money(p.total_entry_cost),
+        "Exit Value": _money((p.exit_mid or 0) * 100 * p.quantity),
+        "Dollar P&L": _money(((p.exit_mid or p.entry_mid) - p.entry_mid) * 100 * p.quantity),
+        "Return %": _percent(p.exit_return_percent),
+        "Return": _percent(p.exit_return_percent),
+        "MFE %": _percent(p.max_favorable_excursion_percent),
+        "MAE %": _percent(p.max_adverse_excursion_percent),
+        "Exit Reason": p.exit_reason or "—", "Reason": p.exit_reason or "—",
+        "Duration": _duration(p.entry_time, p.exit_time or p.last_update),
+        "Execution Mode": p.execution_mode,
+    } for p in closed]
 
 
 def _close_position(position, *, current_time, reason, status):
@@ -391,7 +447,27 @@ def _deserialize(values):
     values = dict(values)
     for field in ("entry_time", "last_update", "last_option_quote_time", "exit_time"):
         values[field] = _datetime(values.get(field)) if values.get(field) else None
+    values.setdefault("quantity", 1)
+    values.setdefault("signal_quote_bid", values.get("entry_bid"))
+    values.setdefault("signal_quote_ask", values.get("entry_ask"))
+    values.setdefault("signal_quote_mid", values.get("entry_mid"))
+    values.setdefault("paper_fill_price", values.get("entry_mid"))
+    values.setdefault(
+        "total_entry_cost",
+        float(values.get("entry_mid", 0)) * 100 * int(values["quantity"]),
+    )
+    values.setdefault("scanner_score", None)
+    values.setdefault("execution_mode", "PAPER")
     return PaperOptionPosition(**values)
+
+
+def _et_time(value):
+    if value is None:
+        return "—"
+    from zoneinfo import ZoneInfo
+    local = value.astimezone(ZoneInfo("America/New_York"))
+    hour = local.strftime("%I").lstrip("0") or "12"
+    return f"{local.strftime('%b')} {local.day}, {local.year} {hour}:{local.strftime('%M %p')} ET"
 
 
 def _datetime(value):

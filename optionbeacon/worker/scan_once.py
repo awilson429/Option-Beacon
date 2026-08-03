@@ -19,6 +19,9 @@ from optionbeacon_live import (
 )
 from optionbeacon_snapshot import save_latest_results
 from optionbeacon.worker.logging_config import configure_worker_logging
+from execution_config import ExecutionConfig
+from paper_execution import refresh_paper_positions, run_paper_execution
+from paper_execution_repository import PaperExecutionRepository
 from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable
 from trade_state_service import (
     list_trade_outcomes,
@@ -47,6 +50,8 @@ def run_scan_once(
     eod_exit_time=None,
     sleep=time.sleep,
     clock=lambda: datetime.now(timezone.utc),
+    run_number=None,
+    paper_executor=run_paper_execution,
 ) -> int:
     repository = repository or repository_for_runtime()
     scanner_id = scanner_id or os.getenv(
@@ -77,6 +82,17 @@ def run_scan_once(
         )
     )
     try:
+        paper_repository = PaperExecutionRepository(repository)
+        paper_config = ExecutionConfig.from_environment()
+        refreshed_paper_positions = refresh_paper_positions(
+            config=paper_config,
+            now=clock(),
+            trade_ledger=paper_repository,
+            position_store=paper_repository,
+            journal=paper_repository,
+            scanner_id=scanner_id,
+            run_number=run_number,
+        )
         groups, source, universe_error = symbol_groups_loader()
         open_records = [
             record
@@ -179,6 +195,18 @@ def run_scan_once(
                 )
             )
         snapshot_writer(results)
+        paper_executor(
+            results,
+            config=paper_config,
+            now=clock(),
+            market_open=True,
+            trade_ledger=paper_repository,
+            position_store=paper_repository,
+            journal=paper_repository,
+            scanner_id=scanner_id,
+            run_number=run_number,
+            refreshed_positions=refreshed_paper_positions,
+        )
         completed = clock()
         repository.record_scan_heartbeat(
             scanner_id,

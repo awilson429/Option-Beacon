@@ -124,7 +124,11 @@ def run(
     signal.signal(signal.SIGTERM, stop)
     LOGGER.info(json.dumps(startup_record(repository, interval_seconds, scanner_id), sort_keys=True))
     while not stopping.is_set() and (max_runs is None or completed < max_runs):
-        result = scan_once(repository=repository, scanner_id=scanner_id)
+        result = scan_once(
+            repository=repository,
+            scanner_id=scanner_id,
+            run_number=completed + 1,
+        )
         completed += 1
         failures = failures + 1 if result == 1 else 0
         LOGGER.info(
