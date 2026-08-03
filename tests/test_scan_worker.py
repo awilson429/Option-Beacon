@@ -51,3 +51,29 @@ def test_overlapping_scan_is_rejected(tmp_path):
     repo.release_scan_lock("optionbeacon-scanner", owner)
 
     assert result == 2
+
+
+def test_worker_owns_paper_execution_cycle(tmp_path):
+    repo = TradeRepository(tmp_path / "state.db", database_url="")
+    calls = []
+    result = run_scan_once(
+        repository=repo,
+        scanner_id="railway-worker",
+        run_number=7,
+        symbol_groups_loader=lambda: ({"Core": ["SPY"]}, "test", ""),
+        signal_generator=lambda symbol: {"symbol": symbol, "signal": "WAIT", "price": 500},
+        snapshot_writer=lambda results: None,
+        paper_executor=lambda results, **kwargs: calls.append((results, kwargs)),
+    )
+    assert result == 0
+    assert calls[0][1]["scanner_id"] == "railway-worker"
+    assert calls[0][1]["run_number"] == 7
+    assert calls[0][1]["position_store"] is calls[0][1]["trade_ledger"]
+
+
+def test_github_actions_is_manual_and_cannot_execute_paper():
+    from pathlib import Path
+    workflow = Path(".github/workflows/scheduled-scan.yml").read_text(encoding="utf-8")
+    assert "schedule:" not in workflow
+    assert "paper_option_positions.json" not in workflow
+    assert "paper_execution" not in workflow

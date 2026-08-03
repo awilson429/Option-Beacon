@@ -79,12 +79,13 @@ from trade_journal import (
 )
 from optionbeacon_live import generate_signal
 from optionbeacon_snapshot import load_latest_results
-from option_trade_engine import capture_qualified_signals
+from execution_config import ExecutionConfig
+from paper_execution import paper_account_summary
+from paper_execution_repository import PaperExecutionRepository
+from trade_repository import TradeRepository
 from option_position_tracker import (
-    OptionPositionStore,
     completed_position_rows,
     open_position_rows,
-    refresh_option_positions_safely,
 )
 from reliability_dashboard import reliability_status_model
 from open_trade_quotes import enrich_open_trade_prices
@@ -3259,7 +3260,41 @@ def render_outcome_trade_journal(
                 f"{format_metric(active_edge['average_target_1_progress'], percentage=True)}"
             )
 
-    option_positions = OptionPositionStore().load()
+    database_url = dashboard_database_url()
+    if database_url:
+        paper_repository = PaperExecutionRepository(
+            TradeRepository(database_url=database_url, require_durable=True)
+        )
+        option_positions = paper_repository.load()
+        execution_journal = paper_repository.journal_rows()
+    else:
+        option_positions = []
+        execution_journal = []
+    config = ExecutionConfig.from_environment()
+    paper_summary = paper_account_summary(option_positions, config=config, now=now)
+    st.markdown("## PAPER TRADING")
+    st.caption(
+        f"Mode: {paper_summary['mode']} · Kill switch: "
+        f"{'ENABLED' if paper_summary['trading_enabled'] else 'DISABLED — no new entries'}"
+    )
+    paper_metrics = (
+        ("Paper Account", f"${paper_summary['account_size']:,.0f}"),
+        ("Today's P&L", f"${paper_summary['today_pnl']:+,.2f}"),
+        ("Open P&L", f"${paper_summary['open_pnl']:+,.2f}"),
+        ("Realized P&L", f"${paper_summary['realized_pnl']:+,.2f}"),
+        ("Trades Today", paper_summary["trades_today"]),
+        ("Open Positions", paper_summary["open_positions"]),
+        ("Daily Loss Remaining", f"${paper_summary['daily_loss_remaining']:,.2f}"),
+        ("Deployed Capital", f"${paper_summary['deployed_capital']:,.2f}"),
+        ("Wins / Losses", f"{paper_summary['wins']} / {paper_summary['losses']}"),
+        ("Win Rate", f"{paper_summary['win_rate']:.1f}%"),
+        ("Average Winner", f"${paper_summary['average_winner']:+,.2f}"),
+        ("Average Loser", f"${paper_summary['average_loser']:+,.2f}"),
+    )
+    columns = st.columns(4)
+    for index, (label, value) in enumerate(paper_metrics):
+        columns[index % 4].metric(label, value)
+
     st.markdown("### Open Option Positions")
     open_option_rows = open_position_rows(option_positions, now)
     if open_option_rows:
@@ -3297,6 +3332,12 @@ def render_outcome_trade_journal(
         )
     else:
         render_empty_state("No paper option positions have completed yet.")
+
+    st.markdown("### Execution Journal")
+    if execution_journal:
+        st.dataframe(pd.DataFrame(execution_journal), use_container_width=True, hide_index=True)
+    else:
+        render_empty_state("No PAPER execution decisions have been recorded yet.")
 
     with st.expander("Performance Details"):
         performance_row = (
@@ -3629,11 +3670,6 @@ def main():
         database_url=dashboard_database_url(),
     )
     trade_evidence_history = load_trade_evidence_history(trade_state)
-    capture_qualified_signals(
-        latest_results.values(),
-        history=trade_evidence_history,
-    )
-    refresh_option_positions_safely()
     open_trade_prices, open_trade_quote_status = enrich_open_trade_prices(
         trade_evidence_history,
         latest_results,
