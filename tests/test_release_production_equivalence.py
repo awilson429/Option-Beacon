@@ -15,12 +15,13 @@ def test_production_score_thresholds_remain_90():
     assert DEFAULT_PUT_SCORE_THRESHOLD == 90
 
 
-def test_default_navigation_remains_trade_desk_with_six_approved_cards():
+def test_default_navigation_remains_trade_desk_with_paper_workspace():
     state = {}
     assert active_card_workspace(state) == "Trade Desk"
     assert CARD_NAVIGATION == (
         "Trade Desk",
         "Opportunities",
+        "Paper Trading",
         "After Hours",
         "History",
         "Tools",

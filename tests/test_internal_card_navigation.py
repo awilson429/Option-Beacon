@@ -69,13 +69,13 @@ def test_selected_workspace_is_highlighted():
     assert "color: var(--ob-accent-gold) !important" in css
 
 
-def test_desktop_navigation_is_one_row_of_six_columns_in_order():
+def test_desktop_navigation_is_one_row_of_seven_columns_in_order():
     fake = FakeStreamlit()
 
     render_card_navigation(st_module=fake)
 
-    assert DESKTOP_NAVIGATION_COLUMNS == 6
-    assert fake.column_counts == [6]
+    assert DESKTOP_NAVIGATION_COLUMNS == 7
+    assert fake.column_counts == [7]
     assert tuple(fake.rendered) == CARD_NAVIGATION
 
 
@@ -151,6 +151,7 @@ def test_app_routes_only_the_selected_workspace_and_keeps_navigation_above_it():
         for workspace in (
             "Trade Desk",
             "Opportunities",
+            "Paper Trading",
             "After Hours",
             "History",
             "Tools",
@@ -160,5 +161,5 @@ def test_app_routes_only_the_selected_workspace_and_keeps_navigation_above_it():
 
     assert navigation_index < min(route_indexes)
     assert main_source.count("\n    if active_page ==") == 1
-    assert main_source.count("\n    elif active_page ==") == 5
+    assert main_source.count("\n    elif active_page ==") == 6
     assert main_source.count("scan_symbols()") == 1
