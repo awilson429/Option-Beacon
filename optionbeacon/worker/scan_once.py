@@ -52,16 +52,35 @@ def run_scan_once(
     clock=lambda: datetime.now(timezone.utc),
     run_number=None,
     paper_executor=run_paper_execution,
+    lock_owner_id=None,
 ) -> int:
     repository = repository or repository_for_runtime()
     scanner_id = scanner_id or os.getenv(
         "OPTIONBEACON_SCANNER_ID", DEFAULT_SCANNER_ID
     )
     eod_exit_time = configured_eod_exit_time(eod_exit_time)
-    owner = repository.acquire_scan_lock(scanner_id)
+    LOGGER.info(json.dumps({
+        "event": "scanner_lock_acquisition_attempt",
+        "scanner_id": scanner_id,
+        "requested_owner_id": lock_owner_id,
+    }, sort_keys=True))
+    owner = repository.acquire_scan_lock(scanner_id, owner_id=lock_owner_id)
     if owner is None:
-        LOGGER.warning("Scanner invocation skipped because another scan owns the lock")
+        lock = repository.get_scan_lock(scanner_id) or {}
+        LOGGER.warning(json.dumps({
+            "event": "scanner_lock_contention",
+            "scanner_id": scanner_id,
+            "requested_owner_id": lock_owner_id,
+            "lock_owner_id": lock.get("owner_id"),
+            "lock_acquired_at": lock.get("acquired_at"),
+            "lock_expires_at": lock.get("expires_at"),
+        }, sort_keys=True))
         return 2
+    LOGGER.info(json.dumps({
+        "event": "scanner_lock_acquired",
+        "scanner_id": scanner_id,
+        "owner_id": owner,
+    }, sort_keys=True))
     started = clock()
     build = build_information(streamlit_version="not-applicable")
     repository.record_scan_heartbeat(
@@ -235,7 +254,21 @@ def run_scan_once(
     finally:
         if provider_summary is None:
             end_market_data_scan_cycle()
-        repository.release_scan_lock(scanner_id, owner)
+        try:
+            released = repository.release_scan_lock(scanner_id, owner)
+            LOGGER.info(json.dumps({
+                "event": "scanner_lock_released" if released else "scanner_lock_release_mismatch",
+                "scanner_id": scanner_id,
+                "owner_id": owner,
+            }, sort_keys=True))
+        except RepositoryUnavailable as exc:
+            LOGGER.error(json.dumps({
+                "event": "scanner_lock_release_failed",
+                "scanner_id": scanner_id,
+                "owner_id": owner,
+                "error": type(exc).__name__,
+                "stale_recovery": "lease_expiry",
+            }, sort_keys=True))
 
 
 def main() -> int:
