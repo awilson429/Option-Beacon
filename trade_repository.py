@@ -909,7 +909,7 @@ class TradeRepository:
             )
 
     def acquire_scan_lock(
-        self, scanner_id=DEFAULT_SCANNER_ID, *, owner_id=None, ttl_seconds=900
+        self, scanner_id=DEFAULT_SCANNER_ID, *, owner_id=None, ttl_seconds=120
     ) -> str | None:
         owner = owner_id or uuid4().hex
         now = utc_now()
@@ -931,7 +931,6 @@ class TradeRepository:
                         acquired_at=EXCLUDED.acquired_at,
                         expires_at=EXCLUDED.expires_at
                     WHERE scanner_locks.expires_at <= ?
-                       OR scanner_locks.owner_id = EXCLUDED.owner_id
                     RETURNING owner_id
                     """,
                     (
@@ -956,20 +955,39 @@ class TradeRepository:
                         expires_at=(row or {}).get("expires_at"),
                     )
                     return None
-                self._diagnostic(
-                    "scanner_lock_acquired",
-                    scanner_id=scanner_id,
-                    owner_id=owner,
-                    expires_at=utc_iso(expires),
+                current = self._fetchone(
+                    connection,
+                    "SELECT * FROM scanner_locks WHERE scanner_id=?",
+                    (scanner_id,),
                 )
                 if previous and parse_utc(previous["expires_at"]) <= now:
                     self._diagnostic(
-                        "scanner_stale_lock_recovered",
+                        "scanner_lock_expired",
                         scanner_id=scanner_id,
-                        previous_owner_id=previous["owner_id"],
-                        owner_id=owner,
+                        persisted_owner_id=previous["owner_id"],
                         previous_expires_at=previous["expires_at"],
+                        observed_at=utc_iso(now),
                     )
+                    self._diagnostic(
+                        "scanner_lock_takeover",
+                        scanner_id=scanner_id,
+                        requested_owner_id=owner,
+                        persisted_owner_id=previous["owner_id"],
+                        previous_expires_at=previous["expires_at"],
+                        new_expires_at=current["expires_at"],
+                        lease_duration_seconds=ttl_seconds,
+                        reason="expired_lease",
+                    )
+                self._diagnostic(
+                    "scanner_lock_acquired",
+                    scanner_id=scanner_id,
+                    requested_owner_id=owner,
+                    persisted_owner_id=current["owner_id"],
+                    acquired_at=current["acquired_at"],
+                    expires_at=current["expires_at"],
+                    lease_duration_seconds=ttl_seconds,
+                    reason="expired_lease_takeover" if previous else "new_lease",
+                )
                 return owner
 
             if self.backend == "sqlite":
@@ -982,7 +1000,6 @@ class TradeRepository:
             if (
                 row
                 and parse_utc(row["expires_at"]) > now
-                and row["owner_id"] != owner
             ):
                 self._diagnostic(
                     "scanner_lock_contention",
@@ -995,6 +1012,7 @@ class TradeRepository:
                 return None
             if row:
                 previous_owner = row["owner_id"]
+                previous_expires = row["expires_at"]
                 self._execute(
                     connection,
                     """
@@ -1003,12 +1021,22 @@ class TradeRepository:
                     """,
                     (owner, utc_iso(now), utc_iso(expires), scanner_id),
                 ).close()
-                self._diagnostic(
-                    "scanner_stale_lock_recovered",
-                    scanner_id=scanner_id,
-                    previous_owner_id=previous_owner,
-                    owner_id=owner,
-                )
+                if parse_utc(previous_expires) <= now:
+                    self._diagnostic(
+                        "scanner_lock_expired", scanner_id=scanner_id,
+                        persisted_owner_id=previous_owner,
+                        previous_expires_at=previous_expires,
+                        observed_at=utc_iso(now),
+                    )
+                    self._diagnostic(
+                        "scanner_lock_takeover", scanner_id=scanner_id,
+                        requested_owner_id=owner,
+                        persisted_owner_id=previous_owner,
+                        previous_expires_at=previous_expires,
+                        new_expires_at=utc_iso(expires),
+                        lease_duration_seconds=ttl_seconds,
+                        reason="expired_lease",
+                    )
             else:
                 self._execute(
                     connection,
@@ -1021,12 +1049,74 @@ class TradeRepository:
             self._diagnostic(
                 "scanner_lock_acquired",
                 scanner_id=scanner_id,
-                owner_id=owner,
+                requested_owner_id=owner,
+                persisted_owner_id=owner,
+                acquired_at=utc_iso(now),
                 expires_at=utc_iso(expires),
+                lease_duration_seconds=ttl_seconds,
+                reason="expired_lease_takeover" if row else "new_lease",
             )
         return owner
 
+    def renew_scan_lock(
+        self, scanner_id, owner_id, *, ttl_seconds=120
+    ) -> bool:
+        """Extend only an unexpired lease owned by the exact process identity."""
+        now = utc_now()
+        expires = now + timedelta(seconds=ttl_seconds)
+        with self.connection() as connection:
+            previous = self._fetchone(
+                connection,
+                "SELECT * FROM scanner_locks WHERE scanner_id=?",
+                (scanner_id,),
+            )
+            cursor = self._execute(
+                connection,
+                """
+                UPDATE scanner_locks SET expires_at=?
+                WHERE scanner_id=? AND owner_id=? AND expires_at>?
+                """,
+                (utc_iso(expires), scanner_id, owner_id, utc_iso(now)),
+            )
+            renewed = cursor.rowcount > 0
+            cursor.close()
+            current = self._fetchone(
+                connection,
+                "SELECT * FROM scanner_locks WHERE scanner_id=?",
+                (scanner_id,),
+            )
+        if renewed:
+            self._diagnostic(
+                "scanner_lock_renewed", scanner_id=scanner_id,
+                requested_owner_id=owner_id,
+                persisted_owner_id=(current or {}).get("owner_id"),
+                previous_expires_at=(previous or {}).get("expires_at"),
+                new_expires_at=(current or {}).get("expires_at"),
+                lease_duration_seconds=ttl_seconds,
+            )
+        else:
+            self._diagnostic(
+                "scanner_lock_renewal_rejected", scanner_id=scanner_id,
+                requested_owner_id=owner_id,
+                persisted_owner_id=(current or {}).get("owner_id"),
+                previous_expires_at=(previous or {}).get("expires_at"),
+                current_expires_at=(current or {}).get("expires_at"),
+                reason=(
+                    "missing_lock" if current is None else
+                    "owner_mismatch" if current.get("owner_id") != owner_id else
+                    "lease_expired"
+                ),
+            )
+        return renewed
+
     def release_scan_lock(self, scanner_id, owner_id):
+        current = self.get_scan_lock(scanner_id)
+        self._diagnostic(
+            "scanner_lock_release_attempt", scanner_id=scanner_id,
+            requested_owner_id=owner_id,
+            persisted_owner_id=(current or {}).get("owner_id"),
+            expires_at=(current or {}).get("expires_at"),
+        )
         with self.connection() as connection:
             cursor = self._execute(
                 connection,
@@ -1036,9 +1126,11 @@ class TradeRepository:
             released = cursor.rowcount > 0
             cursor.close()
         self._diagnostic(
-            "scanner_lock_released" if released else "scanner_lock_release_mismatch",
+            "scanner_lock_released" if released else "scanner_lock_release_rejected",
             scanner_id=scanner_id,
-            owner_id=owner_id,
+            requested_owner_id=owner_id,
+            persisted_owner_id=(current or {}).get("owner_id"),
+            reason="exact_owner" if released else "owner_mismatch_or_missing",
         )
         return released
 
