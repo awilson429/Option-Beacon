@@ -3702,22 +3702,22 @@ def render_paper_trading_page():
     )
     now = eastern_now()
     config = ExecutionConfig.from_environment()
-    positions, raw_journal, captures = [], [], []
+    positions, raw_journal, captures, worker_health = [], [], [], None
     database_url = dashboard_database_url()
     if database_url:
         try:
-            repository = PaperExecutionRepository(
-                TradeRepository(database_url=database_url, require_durable=True)
-            )
+            trade_repository = TradeRepository(database_url=database_url, require_durable=True)
+            repository = PaperExecutionRepository(trade_repository)
             positions = repository.load()
             raw_journal = repository.journal_rows(limit=500)
             captures = repository.records()
+            worker_health = trade_repository.get_latest_scan_health()
         except Exception:
             st.error("Authoritative PAPER state is temporarily unavailable.")
     else:
         st.warning("Authoritative PAPER storage is not configured for this dashboard.")
 
-    status = execution_status_model(positions, raw_journal)
+    status = execution_status_model(positions, raw_journal, worker_health)
     st.markdown(
         f'<div class="ob-paper-status ob-paper-status-{status["treatment"]}">'
         f'<span>MODE: {escape(status["mode"])}</span>'

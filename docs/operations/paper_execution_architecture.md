@@ -18,9 +18,13 @@ No existing tables or columns are removed.
 
 ## Worker cycle and restart behavior
 
-The worker lock is the single-writer guarantee across Railway replicas. A lock conflict skips the entire scan and PAPER cycle. Once locked, a normal cycle loads open positions from PostgreSQL, refreshes option quotes, persists exits, processes the scanned opportunities, captures contracts, evaluates risk, persists entries and journals decisions. Candidate failures are isolated; repository failures fail the cycle so the worker backoff and database reconnect behavior apply.
+The worker lock is the single-writer guarantee across Railway replicas. A lock conflict skips the entire scan and PAPER cycle. Once locked, a normal cycle loads open positions from PostgreSQL, refreshes option quotes, persists exits, and advances the authoritative trade lifecycle. PAPER then reads durable `TRADE_ENTERED` events that do not yet have a PAPER disposition. It does not recreate scanner qualification. Each candidate retains the authoritative opportunity ID, captures a contract, evaluates the unchanged execution/risk gates, and persists either an accepted position or a rejected decision. Candidate failures are isolated; repository failures fail the cycle so the worker backoff and database reconnect behavior apply.
 
-On restart, open positions, MFE/MAE, daily realized losses, consecutive losses, and cooldown time are derived from PostgreSQL. Unique trade/source-signal keys and conditional close updates prevent duplicate entries and exits.
+On restart, pending authoritative entries, open positions, MFE/MAE, daily realized losses, consecutive losses, and cooldown time are derived from PostgreSQL. Unique authoritative source-signal keys, journal dispositions, and conditional close updates prevent duplicate entries and exits. Multiple rapid entry events remain separate even when they share a symbol.
+
+The structured `paper_authoritative_handoff` event reports authoritative entries generated in the cycle, pending PAPER candidates, and compact source IDs. `paper_cycle_completed` reports candidates received, evaluated, rejected, accepted, opened, and total open positions. Individual rejections continue to emit `paper_entry_rejected` with the reason code; full market payloads are never logged.
+
+An undispositioned entry recovered within 60 minutes remains eligible for normal evaluation after a worker restart. Older backlog is audited as `STALE_AUTHORITATIVE_ENTRY` and cannot open a new position. Candidate-ID diagnostics are capped at 20 IDs per cycle and include a truncated count.
 
 If Tradier cannot supply a valid quote, the existing position object is retained unchanged and retried next cycle. No price or fill is invented. Entry fills are deterministic estimates between midpoint and ask only after a valid contract snapshot exists.
 
@@ -52,11 +56,13 @@ The command reads `paper_option_trades.jsonl`, `paper_option_positions.json`, an
 2. Deploy the additive schema code with PAPER entries disabled.
 3. Run the migration dry-run and reconcile counts.
 4. Run the migration once, then rerun it to verify only duplicates are reported.
-5. Confirm the Railway worker logs `paper_state_restored` and `paper_cycle_completed`.
+5. Confirm the Railway worker logs `paper_state_restored`, `paper_authoritative_handoff`, and `paper_cycle_completed`.
 6. Confirm GitHub Actions has no scheduled trigger.
 7. Confirm Streamlit shows the SQL-backed positions, history, metrics, and journal.
 8. Set `OPTIONBEACON_EXECUTION_MODE=PAPER` and `OPTIONBEACON_TRADING_ENABLED=true` only after verification.
-9. Monitor entry rejections, quote failures, database health, and scanner-lock conflicts for the first session.
+9. For one authoritative `TRADE_ENTERED`, confirm the same opportunity ID appears in `paper_authoritative_handoff` and that exactly one `paper_entry_opened` or `paper_entry_rejected` follows.
+10. Verify `paper_cycle_completed` candidate counts reconcile and the read-only Paper Trading page reports `ENABLED — WORKER ACTIVE`, even in a zero-candidate cycle.
+11. Monitor entry rejections, quote failures, database health, and scanner-lock conflicts for the first session.
 
 Recovery consists of disabling `OPTIONBEACON_TRADING_ENABLED`, leaving Railway running so existing positions remain managed, correcting the provider or database issue, and allowing the next locked cycle to resume from PostgreSQL.
 

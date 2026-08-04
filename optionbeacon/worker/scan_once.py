@@ -20,7 +20,11 @@ from optionbeacon_live import (
 from optionbeacon_snapshot import save_latest_results
 from optionbeacon.worker.logging_config import configure_worker_logging
 from execution_config import ExecutionConfig
-from paper_execution import refresh_paper_positions, run_paper_execution
+from paper_execution import (
+    pending_authoritative_entries,
+    refresh_paper_positions,
+    run_paper_execution,
+)
 from paper_execution_repository import PaperExecutionRepository
 from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable
 from trade_state_service import (
@@ -214,8 +218,25 @@ def run_scan_once(
                 )
             )
         snapshot_writer(results)
+        paper_candidates = pending_authoritative_entries(
+            repository, results, paper_repository
+        )
+        LOGGER.info(json.dumps({
+            "event": "paper_authoritative_handoff", "scanner_id": scanner_id,
+            "run_number": run_number,
+            "authoritative_entries_generated": len([
+                event for event in repository.list_trade_events(limit=5000)
+                if event.get("event_type") == "TRADE_ENTERED"
+                and event.get("event_timestamp") >= started.isoformat()
+            ]),
+            "paper_candidates_received": len(paper_candidates),
+            "candidate_ids": [
+                item.get("_authoritative_entry_id") for item in paper_candidates[:20]
+            ],
+            "candidate_ids_truncated": max(0, len(paper_candidates) - 20),
+        }, sort_keys=True))
         paper_executor(
-            results,
+            paper_candidates,
             config=paper_config,
             now=clock(),
             market_open=True,

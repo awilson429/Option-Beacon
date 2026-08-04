@@ -91,10 +91,11 @@ class PaperExecutionRepository:
         with self.repository.connection() as connection:
             try:
                 self.repository._execute(connection, """INSERT INTO paper_execution_trades
-                    (trade_id,source_signal_id,symbol,option_symbol,option_type,strike,expiration,
+                    (trade_id,source_signal_id,opportunity_id,symbol,option_symbol,option_type,strike,expiration,
                      status,execution_mode,contract_metadata_json,created_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?)""", (
-                    record.trade_id, record.source_signal_id, record.ticker, record.option_symbol,
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""", (
+                    record.trade_id, record.source_signal_id, record.source_signal_id,
+                    record.ticker, record.option_symbol,
                     record.option_type, record.strike, record.expiration, "CAPTURED", "PAPER",
                     json.dumps({"capture": capture}, sort_keys=True), utc_iso(record.created_timestamp),
                 )).close()
@@ -195,6 +196,20 @@ class PaperExecutionRepository:
     def journal_rows(self, limit=200):
         with self.repository.connection() as connection:
             return self.repository._fetchall(connection, "SELECT * FROM paper_execution_journal ORDER BY created_at DESC LIMIT ?", (limit,))
+
+    def has_disposition(self, opportunity_id):
+        """Return whether an authoritative entry already has an audited PAPER decision."""
+        return opportunity_id in self.dispositioned_source_signal_ids()
+
+    def dispositioned_source_signal_ids(self):
+        """Return authoritative IDs that have an accepted or rejected PAPER decision."""
+        with self.repository.connection() as connection:
+            rows = self.repository._fetchall(connection, """
+                SELECT DISTINCT t.source_signal_id
+                FROM paper_execution_trades t
+                JOIN paper_execution_journal j ON j.trade_id = t.trade_id
+            """)
+        return {row["source_signal_id"] for row in rows}
 
     def append_refresh_failure(self, *, position, reason, checked_at, scanner_id=None, run_number=None):
         from types import SimpleNamespace

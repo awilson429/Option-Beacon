@@ -11,6 +11,7 @@ from execution_config import ExecutionConfig
 
 
 EASTERN = ZoneInfo("America/New_York")
+MAX_AUTHORITATIVE_ENTRY_AGE_MINUTES = 60
 
 
 @dataclass(frozen=True)
@@ -81,6 +82,14 @@ def evaluate_execution(result, trade, positions, config, *, now=None, market_ope
         return ExecutionDecision(False, "TRADING_DISABLED")
     if not market_open or current_et.weekday() >= 5:
         return ExecutionDecision(False, "MARKET_CLOSED")
+    if (result or {}).get("_authoritative_entry_id"):
+        try:
+            entered_at = _aware((result or {}).get("timestamp"))
+        except (TypeError, ValueError):
+            return ExecutionDecision(False, "AUTHORITATIVE_ENTRY_TIME_UNAVAILABLE")
+        age_minutes = max(0.0, (checked - entered_at).total_seconds() / 60)
+        if age_minutes > MAX_AUTHORITATIVE_ENTRY_AGE_MINUTES:
+            return ExecutionDecision(False, "STALE_AUTHORITATIVE_ENTRY")
     if not config.earliest_entry_time <= current_et.time().replace(tzinfo=None) <= config.latest_entry_time:
         return ExecutionDecision(False, "OUTSIDE_ENTRY_WINDOW")
     score = _number(result.get("score") or result.get("confidence"))

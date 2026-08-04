@@ -16,10 +16,64 @@ from option_position_tracker import (
     refresh_option_positions,
 )
 from option_trade_engine import OptionTradeLedger, capture_qualified_signal
+from signal_history import deserialize_trade_outcome
 
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_EXECUTION_JOURNAL = "paper_execution_journal.jsonl"
+
+
+def pending_authoritative_entries(repository, latest_results, paper_repository, *, limit=5000):
+    """Project durable TRADE_ENTERED events into PAPER candidates exactly once."""
+    by_symbol = {
+        str((result or {}).get("symbol") or symbol).upper(): result
+        for symbol, result in (latest_results or {}).items()
+    } if isinstance(latest_results, dict) else {
+        str((result or {}).get("symbol") or "").upper(): result
+        for result in latest_results or []
+    }
+    candidates = []
+    dispositioned = paper_repository.dispositioned_source_signal_ids()
+    events = [
+        event for event in repository.list_trade_events(limit=limit)
+        if event.get("event_type") == "TRADE_ENTERED"
+    ]
+    for event in reversed(events):
+        opportunity_id = event.get("opportunity_id") or event.get("trade_id")
+        if not opportunity_id or opportunity_id in dispositioned:
+            continue
+        opportunity = repository.get_opportunity(opportunity_id=opportunity_id) or {}
+        payload = (opportunity.get("metadata") or {}).get("trade_outcome")
+        if not payload:
+            continue
+        try:
+            record = deserialize_trade_outcome(payload)
+        except Exception:
+            LOGGER.exception("Could not decode authoritative PAPER candidate %s", opportunity_id)
+            continue
+        result = dict(by_symbol.get(record.symbol.upper()) or {})
+        result.update({
+            "_authoritative_entry_id": opportunity_id,
+            "_authoritative_event_id": event.get("id"),
+            "symbol": record.symbol,
+            "price": result.get("price") or event.get("underlying_price") or record.entry,
+            "timestamp": record.entry_time or record.timestamp,
+            "confidence": record.confidence,
+            "score": event.get("rule_score") if event.get("rule_score") is not None else result.get("score"),
+            "bias": record.direction,
+            "trade_plan": {
+                "direction": record.direction,
+                "setup_type": record.setup,
+                "trigger_price": record.entry,
+                "technical_stop": record.stop,
+                "target_1": record.target_1,
+                "target_2": record.target_2,
+                "target_3": record.target_3,
+            },
+            "entry_timing_reason": "Authoritative TRADE_ENTERED lifecycle transition.",
+        })
+        candidates.append(result)
+    return candidates
 
 
 class ExecutionJournal:
@@ -82,7 +136,11 @@ def run_paper_execution(
     trade_ledger = trade_ledger or OptionTradeLedger()
     position_store = position_store or OptionPositionStore()
     journal = journal or ExecutionJournal()
-    LOGGER.info(json.dumps({"event": "paper_cycle_started", "scanner_id": scanner_id, "run_number": run_number}, sort_keys=True))
+    values = list(latest_results.values()) if isinstance(latest_results, dict) else list(latest_results or [])
+    LOGGER.info(json.dumps({
+        "event": "paper_cycle_started", "scanner_id": scanner_id,
+        "run_number": run_number, "candidates_received": len(values),
+    }, sort_keys=True))
     positions = refreshed_positions
     if positions is None:
         positions = refresh_paper_positions(
@@ -93,8 +151,8 @@ def run_paper_execution(
 
     opened = []
     decisions = []
-    values = latest_results.values() if isinstance(latest_results, dict) else latest_results
-    for result in values or []:
+    rejected = 0
+    for result in values:
         try:
             trade = capture_qualified_signal(
                 result,
@@ -103,6 +161,12 @@ def run_paper_execution(
                 now=checked_at,
             )
             if trade is None:
+                LOGGER.info(json.dumps({
+                    "event": "paper_candidate_skipped", "scanner_id": scanner_id,
+                    "run_number": run_number,
+                    "symbol": str((result or {}).get("symbol") or "").upper(),
+                    "decision_reason": "NOT_AUTHORITATIVE_OR_NOT_QUALIFIED",
+                }, sort_keys=True))
                 continue
             decision = evaluate_execution(
                 result, trade, positions, config, now=checked_at, market_open=market_open
@@ -117,6 +181,7 @@ def run_paper_execution(
             )
             decisions.append(decision)
             if not decision.eligible:
+                rejected += 1
                 LOGGER.info(json.dumps({
                     "event": "paper_entry_rejected", "scanner_id": scanner_id,
                     "run_number": run_number, "symbol": trade.ticker,
@@ -146,6 +211,8 @@ def run_paper_execution(
     LOGGER.info(json.dumps({
         "event": "paper_cycle_completed", "scanner_id": scanner_id,
         "run_number": run_number, "opened": len(opened),
+        "candidates_received": len(values), "candidates_evaluated": len(decisions),
+        "candidates_rejected": rejected, "candidates_accepted": len(opened),
         "open_positions": sum(p.status == "OPEN" for p in positions),
     }, sort_keys=True))
     return {"positions": positions, "opened": opened, "decisions": decisions}
