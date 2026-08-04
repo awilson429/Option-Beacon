@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 EASTERN = ZoneInfo("America/New_York")
 
 
-def execution_status_model(positions, journal_rows):
+def execution_status_model(positions, journal_rows, worker_health=None):
     latest = journal_rows[0] if journal_rows else None
     reason = str((latest or {}).get("reason_code") or "")
     if reason == "TRADING_DISABLED":
@@ -21,6 +21,9 @@ def execution_status_model(positions, journal_rows):
         treatment = "warning"
     elif latest:
         trading = "ENABLED AT LAST DECISION"
+        treatment = "active"
+    elif (worker_health or {}).get("last_success_at"):
+        trading = "ENABLED — WORKER ACTIVE"
         treatment = "active"
     else:
         trading = "AWAITING WORKER STATE"

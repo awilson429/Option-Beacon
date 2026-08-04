@@ -85,6 +85,8 @@ def test_execution_status_and_journal_are_shared_state_models():
     assert row["Duplicate"] == "BLOCKED"
     assert row["Score"] == 95
     assert "trades_entered" in row["Daily Risk"]
+    active = execution_status_model([], [], {"last_success_at": NOW.isoformat()})
+    assert active["trading"] == "ENABLED — WORKER ACTIVE"
 
 
 def test_page_is_sql_backed_read_only_and_trade_desk_links_without_duplication():

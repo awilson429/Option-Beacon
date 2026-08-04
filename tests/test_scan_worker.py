@@ -69,6 +69,7 @@ def test_worker_owns_paper_execution_cycle(tmp_path):
     assert calls[0][1]["scanner_id"] == "railway-worker"
     assert calls[0][1]["run_number"] == 7
     assert calls[0][1]["position_store"] is calls[0][1]["trade_ledger"]
+    assert calls[0][0] == []
 
 
 def test_github_actions_is_manual_and_cannot_execute_paper():

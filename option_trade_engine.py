@@ -116,6 +116,9 @@ class TradierOptionChainProvider:
 
 def source_signal_id(result: dict) -> str:
     """Reuse the existing stable signal identity with a deterministic fallback."""
+    authoritative_id = str((result or {}).get("_authoritative_entry_id") or "").strip()
+    if authoritative_id:
+        return authoritative_id
     outcome = scanner_result_to_trade_outcome(result)
     if outcome is not None and outcome.trade_id:
         return outcome.trade_id
@@ -266,9 +269,10 @@ def capture_qualified_signal(
     now: datetime | None = None,
 ) -> PaperOptionTrade | None:
     """Capture one immutable contract snapshot for a qualified scanner signal."""
-    eligibility = scanner_entry_eligibility(result)
-    if not eligibility["eligible"]:
-        return None
+    if not (result or {}).get("_authoritative_entry_id"):
+        eligibility = scanner_entry_eligibility(result)
+        if not eligibility["eligible"]:
+            return None
 
     repository = repository or OptionTradeLedger()
     provider = provider or TradierOptionChainProvider()
