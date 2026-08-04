@@ -24,6 +24,10 @@ On restart, pending authoritative entries, open positions, MFE/MAE, daily realiz
 
 The structured `paper_authoritative_handoff` event reports authoritative entries generated in the cycle, pending PAPER candidates, and compact source IDs. `paper_cycle_completed` reports candidates received, evaluated, rejected, accepted, opened, and total open positions. Individual rejections continue to emit `paper_entry_rejected` with the reason code; full market payloads are never logged.
 
+After `paper_positions_refreshed`, `paper_handoff_waiting_for_scan` marks that PAPER is healthy but waiting for the serial universe scan. `scanner_universe_ready` reports its bounded symbol count and `scanner_progress` reports every ten attempts. Per-symbol HTTP 429 failures are counted and skipped; they do not bypass PAPER. If universe loading, authoritative-open loading, provider finalization, or snapshot writing fails, `scanner_phase_failed` names the stage and PAPER still runs from durable Neon entries. A pending-entry query or execution failure emits `paper_cycle_failed` with its stage before the scan returns a failure code.
+
+A durable `TRADE_ENTERED` event with missing or malformed authoritative metadata is never skipped. The pending query fails explicitly with `AuthoritativeEntryProjectionError`, leaves the entry pending for repair/retry, and produces `paper_cycle_failed` rather than inventing contract inputs.
+
 An undispositioned entry recovered within 60 minutes remains eligible for normal evaluation after a worker restart. Older backlog is audited as `STALE_AUTHORITATIVE_ENTRY` and cannot open a new position. Candidate-ID diagnostics are capped at 20 IDs per cycle and include a truncated count.
 
 If Tradier cannot supply a valid quote, the existing position object is retained unchanged and retried next cycle. No price or fill is invented. Entry fills are deterministic estimates between midpoint and ask only after a valid contract snapshot exists.
