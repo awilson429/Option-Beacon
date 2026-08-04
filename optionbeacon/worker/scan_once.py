@@ -230,7 +230,10 @@ def run_scan_once(
                 and event.get("event_timestamp") >= started.isoformat()
             ]),
             "paper_candidates_received": len(paper_candidates),
-            "candidate_ids": [item.get("_authoritative_entry_id") for item in paper_candidates],
+            "candidate_ids": [
+                item.get("_authoritative_entry_id") for item in paper_candidates[:20]
+            ],
+            "candidate_ids_truncated": max(0, len(paper_candidates) - 20),
         }, sort_keys=True))
         paper_executor(
             paper_candidates,

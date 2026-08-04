@@ -140,6 +140,25 @@ def test_ineligible_authoritative_enter_has_explicit_rejection(tmp_path):
     assert pending_authoritative_entries(repository, {"ABNB": scan_result(score=44)}, paper) == []
 
 
+def test_historical_undispositioned_entry_is_rejected_not_opened(tmp_path):
+    repository = entered_repository(tmp_path)
+    paper = PaperExecutionRepository(repository)
+    candidates = pending_authoritative_entries(repository, {"ABNB": scan_result()}, paper)
+    result = run_paper_execution(
+        candidates,
+        config=enabled_config(min_beacon_score=90),
+        now=NOW + timedelta(hours=2),
+        chain_provider=Contracts(),
+        trade_ledger=paper,
+        position_store=paper,
+        journal=paper,
+        refreshed_positions=[],
+    )
+    assert not result["opened"]
+    assert result["decisions"][0].reason == "STALE_AUTHORITATIVE_ENTRY"
+    assert paper.journal_rows()[0]["reason_code"] == "STALE_AUTHORITATIVE_ENTRY"
+
+
 def test_rapid_entries_are_not_lost_and_restart_preserves_dispositions(tmp_path):
     records = [authoritative_record("rapid-1"), authoritative_record("rapid-2", 99.95)]
     repository = entered_repository(tmp_path, records=records)

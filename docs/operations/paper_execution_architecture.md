@@ -24,6 +24,8 @@ On restart, pending authoritative entries, open positions, MFE/MAE, daily realiz
 
 The structured `paper_authoritative_handoff` event reports authoritative entries generated in the cycle, pending PAPER candidates, and compact source IDs. `paper_cycle_completed` reports candidates received, evaluated, rejected, accepted, opened, and total open positions. Individual rejections continue to emit `paper_entry_rejected` with the reason code; full market payloads are never logged.
 
+An undispositioned entry recovered within 60 minutes remains eligible for normal evaluation after a worker restart. Older backlog is audited as `STALE_AUTHORITATIVE_ENTRY` and cannot open a new position. Candidate-ID diagnostics are capped at 20 IDs per cycle and include a truncated count.
+
 If Tradier cannot supply a valid quote, the existing position object is retained unchanged and retried next cycle. No price or fill is invented. Entry fills are deterministic estimates between midpoint and ask only after a valid contract snapshot exists.
 
 ## Risk and execution modes
