@@ -104,6 +104,9 @@ class ExecutionJournal:
             "scanner_id": context.get("scanner_id"),
             "run_number": context.get("run_number"),
             "risk_state": context.get("risk_state") or {},
+            "simulation_profile": getattr(context.get("execution_config"), "simulation_profile", None),
+            "effective_min_score": getattr(context.get("execution_config"), "min_beacon_score", None),
+            "journal_type": context.get("journal_type", "ENTRY_DECISION"),
         }
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(row, sort_keys=True) + "\n")
@@ -186,6 +189,7 @@ def run_paper_execution(
             journal.append(
                 checked_at=checked_at, result=result, trade=trade, decision=decision,
                 scanner_id=scanner_id, run_number=run_number, risk_state=risk_state,
+                execution_config=config,
             )
             decisions.append(decision)
             if not decision.eligible:

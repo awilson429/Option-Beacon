@@ -8,11 +8,12 @@ Neon PostgreSQL is the authoritative PAPER store in production. Streamlit reads 
 
 ## Durable schema
 
-The repository creates three additive tables with `CREATE TABLE IF NOT EXISTS`:
+The repository creates four additive tables with `CREATE TABLE IF NOT EXISTS`:
 
 - `paper_execution_positions` holds restartable current and completed position state, exposure, current valuation, MFE/MAE, timestamps, thresholds, and a version-tolerant metadata projection.
 - `paper_execution_trades` deduplicates contract captures by source signal and becomes immutable closed-trade history after the idempotent close transition.
 - `paper_execution_journal` holds accepted and rejected decisions, reason codes, risk snapshots, allocations, scanner identity, run number, and timestamps.
+- `paper_execution_runtime_state` holds each Railway scanner's latest resolved non-secret profile and effective configuration for read-only consumers.
 
 No existing tables or columns are removed.
 
@@ -67,6 +68,12 @@ OPTIONBEACON_LOSS_COOLDOWN_MINUTES=0
 ```
 
 The last nine values are explicit deployment assertions; BROAD supplies the same defaults when they are absent. Existing conflicting overrides must be changed or removed. No reset or deletion is performed when profiles change.
+
+Profile parsing trims surrounding whitespace and uppercases the value. Only `SAFE` and `BROAD` are accepted. The selected profile supplies defaults; explicitly configured per-setting variables take precedence. At the start of each PAPER cycle Railway emits `paper_execution_config_resolved` and upserts the complete resolved non-secret configuration into `paper_execution_runtime_state` before refreshing positions.
+
+Streamlit never derives the displayed worker profile from its own environment. It reads the latest runtime-state row from Neon and reconstructs display-only limits from `resolved_config_json`. Until Railway has persisted a row, the page displays `AWAITING WORKER STATE` rather than a local profile default.
+
+Future entry-decision journal metadata records `simulation_profile`, `effective_min_score`, and `journal_type=ENTRY_DECISION`. Today's funnel groups decisions by this stamped profile. Pre-stamping historical rows remain `LEGACY_UNLABELED`; they are not relabeled as BROAD. Position-refresh failures use a distinct journal type and are excluded from entry-disposition counts.
 
 Execution decisions distinguish `SPREAD_TOO_WIDE`, `INSUFFICIENT_OPEN_INTEREST`, `INSUFFICIENT_VOLUME`, `INSUFFICIENT_BUYING_POWER`, `NO_VALID_CONTRACT`, and `CONTRACT_QUOTE_UNAVAILABLE`. The Paper Trading page reconciles today's authoritative entries to evaluated, opened, rejected, and pending dispositions and derives account equity, realized/unrealized/total P&L, return, profit factor, intraday drawdown, and peak deployment from durable history.
 

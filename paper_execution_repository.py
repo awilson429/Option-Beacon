@@ -14,9 +14,10 @@ from trade_repository import parse_utc, utc_iso
 class PaperExecutionRepository:
     """Adapts TradeRepository into ledger, position-store, and journal interfaces."""
 
-    def __init__(self, repository):
+    def __init__(self, repository, *, initialize=True):
         self.repository = repository
-        self.initialize()
+        if initialize:
+            self.initialize()
 
     def initialize(self):
         with self.repository.connection() as connection:
@@ -54,10 +55,66 @@ class PaperExecutionRepository:
                     allocation_dollars REAL, quantity INTEGER, created_at TEXT NOT NULL,
                     metadata_json TEXT NOT NULL
                 )""",
+                """CREATE TABLE IF NOT EXISTS paper_execution_runtime_state (
+                    scanner_id TEXT PRIMARY KEY, simulation_profile TEXT NOT NULL,
+                    effective_min_score REAL NOT NULL,
+                    resolved_config_json TEXT NOT NULL, updated_at TEXT NOT NULL
+                )""",
             ):
                 self.repository._execute(connection, ddl).close()
             self.repository._execute(connection, "CREATE INDEX IF NOT EXISTS idx_paper_positions_status ON paper_execution_positions(status)").close()
             self.repository._execute(connection, "CREATE INDEX IF NOT EXISTS idx_paper_journal_created ON paper_execution_journal(created_at)").close()
+
+    def save_runtime_config(self, scanner_id, config):
+        """Persist the Railway worker's effective non-secret execution policy."""
+        from execution_config import resolved_execution_config
+
+        scanner_id = str(scanner_id or "optionbeacon-scanner")
+        state = resolved_execution_config(config)
+        now = utc_iso()
+        with self.repository.connection() as connection:
+            existing = self.repository._fetchone(
+                connection,
+                "SELECT scanner_id FROM paper_execution_runtime_state WHERE scanner_id=?",
+                (scanner_id,),
+            )
+            if existing:
+                self.repository._execute(connection, """
+                    UPDATE paper_execution_runtime_state SET simulation_profile=?,
+                    effective_min_score=?,resolved_config_json=?,updated_at=?
+                    WHERE scanner_id=?
+                """, (
+                    config.simulation_profile, config.min_beacon_score,
+                    json.dumps(state, sort_keys=True), now, scanner_id,
+                )).close()
+            else:
+                self.repository._execute(connection, """
+                    INSERT INTO paper_execution_runtime_state
+                    (scanner_id,simulation_profile,effective_min_score,
+                     resolved_config_json,updated_at) VALUES (?,?,?,?,?)
+                """, (
+                    scanner_id, config.simulation_profile, config.min_beacon_score,
+                    json.dumps(state, sort_keys=True), now,
+                )).close()
+        return self.get_runtime_config(scanner_id)
+
+    def get_runtime_config(self, scanner_id=None):
+        with self.repository.connection() as connection:
+            if scanner_id:
+                row = self.repository._fetchone(
+                    connection,
+                    "SELECT * FROM paper_execution_runtime_state WHERE scanner_id=?",
+                    (scanner_id,),
+                )
+            else:
+                row = self.repository._fetchone(
+                    connection,
+                    "SELECT * FROM paper_execution_runtime_state "
+                    "ORDER BY updated_at DESC,scanner_id ASC LIMIT 1",
+                )
+        if row:
+            row["resolved_config"] = json.loads(row["resolved_config_json"])
+        return row
 
     # OptionTradeLedger-compatible API
     def records(self):
@@ -174,11 +231,19 @@ class PaperExecutionRepository:
                     utc_iso(position.exit_time),"CLOSED",position.trade_id,
                 )).close()
 
-    def append(self, *, checked_at, result, trade, decision, scanner_id=None, run_number=None, risk_state=None):
+    def append(self, *, checked_at, result, trade, decision, scanner_id=None, run_number=None, risk_state=None, execution_config=None, journal_type="ENTRY_DECISION"):
         import hashlib
         identity = f"{getattr(trade, 'trade_id', '')}|{decision.reason}|{utc_iso(checked_at)}"
         dedup = hashlib.sha256(identity.encode()).hexdigest()
-        metadata = {"paper_fill_price": decision.paper_fill_price}
+        metadata = {
+            "paper_fill_price": decision.paper_fill_price,
+            "journal_type": journal_type,
+        }
+        if execution_config is not None:
+            metadata.update(
+                simulation_profile=execution_config.simulation_profile,
+                effective_min_score=execution_config.min_beacon_score,
+            )
         with self.repository.connection() as connection:
             if self.repository._fetchone(connection, "SELECT journal_id FROM paper_execution_journal WHERE dedup_key=?", (dedup,)):
                 return
@@ -222,6 +287,7 @@ class PaperExecutionRepository:
             ),
             scanner_id=scanner_id, run_number=run_number,
             risk_state={"position_preserved": True},
+            journal_type="POSITION_REFRESH_FAILURE",
         )
 
     def get_open_positions(self):

@@ -3282,7 +3282,8 @@ def _render_legacy_trade_desk_details(
     database_url = dashboard_database_url()
     if database_url:
         paper_repository = PaperExecutionRepository(
-            TradeRepository(database_url=database_url, require_durable=True)
+            TradeRepository(database_url=database_url, require_durable=True),
+            initialize=False,
         )
         option_positions = paper_repository.load()
         execution_journal = paper_repository.journal_rows()
@@ -3437,7 +3438,8 @@ def render_outcome_trade_journal(
     if database_url:
         try:
             paper_repository = PaperExecutionRepository(
-                TradeRepository(database_url=database_url, require_durable=True)
+                TradeRepository(database_url=database_url, require_durable=True),
+                initialize=False,
             )
             option_positions = paper_repository.load()
             execution_journal = paper_repository.journal_rows(limit=50)
@@ -3703,18 +3705,25 @@ def render_paper_trading_page():
         "Authoritative simulated account, positions, trade history, and execution decisions.",
     )
     now = eastern_now()
-    config = ExecutionConfig.from_environment()
-    positions, raw_journal, captures, authoritative_events, worker_health = [], [], [], [], None
+    local_config = ExecutionConfig()
+    config = local_config
+    positions, raw_journal, captures, authoritative_events = [], [], [], []
+    worker_health, worker_config_state = None, None
     database_url = dashboard_database_url()
     if database_url:
         try:
             trade_repository = TradeRepository(database_url=database_url, require_durable=True)
-            repository = PaperExecutionRepository(trade_repository)
+            repository = PaperExecutionRepository(trade_repository, initialize=False)
             positions = repository.load()
             raw_journal = repository.journal_rows(limit=500)
             captures = repository.records()
             authoritative_events = trade_repository.list_trade_events(limit=5000)
             worker_health = trade_repository.get_latest_scan_health()
+            worker_config_state = repository.get_runtime_config()
+            if worker_config_state:
+                config = ExecutionConfig.from_resolved_state(
+                    worker_config_state.get("resolved_config"), fallback=local_config
+                )
         except Exception:
             st.error("Authoritative PAPER state is temporarily unavailable.")
     else:
@@ -3729,7 +3738,11 @@ def render_paper_trading_page():
         f'<span>UI: {escape(status["ui_role"])}</span></div>',
         unsafe_allow_html=True,
     )
-    st.caption(f"SIMULATION PROFILE: {config.simulation_profile}")
+    worker_profile = (
+        worker_config_state.get("simulation_profile")
+        if worker_config_state else "AWAITING WORKER STATE"
+    )
+    st.caption(f"CURRENT WORKER PROFILE: {worker_profile}")
 
     funnel = paper_execution_funnel(
         authoritative_events, raw_journal, captures, now
@@ -3744,6 +3757,13 @@ def render_paper_trading_page():
         ("Participation Rate", f'{funnel["participation_rate"]:.1f}%'),
     )):
         column.metric(label, value)
+    if funnel["decisions_by_profile"]:
+        st.caption(
+            "Today's decisions: " + " · ".join(
+                f"{profile}: {count}"
+                for profile, count in funnel["decisions_by_profile"].items()
+            )
+        )
     with st.expander("Why trades were rejected", expanded=False):
         if funnel["rejection_counts"]:
             st.dataframe(

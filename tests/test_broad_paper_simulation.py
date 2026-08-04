@@ -209,5 +209,6 @@ def test_performance_metrics_and_daily_funnel_reconcile():
     assert funnel == {
         "authoritative_entries": 3, "evaluated": 2, "opened": 1,
         "rejected": 1, "pending": 1, "participation_rate": pytest.approx(100 / 3),
-        "rejection_counts": {"SPREAD_TOO_WIDE": 1}, "reconciled": True,
+        "rejection_counts": {"SPREAD_TOO_WIDE": 1},
+        "decisions_by_profile": {"LEGACY_UNLABELED": 2}, "reconciled": True,
     }

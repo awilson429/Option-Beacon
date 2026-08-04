@@ -22,12 +22,18 @@ def paper_execution_funnel(authoritative_events, journal_rows, captures, now):
     }
     source_by_trade = {capture.trade_id: capture.source_signal_id for capture in captures}
     dispositions = {}
+    decision_profiles = Counter()
     for row in journal_rows:
         if not _same_eastern_date(row.get("created_at"), today):
+            continue
+        metadata = _json(row.get("metadata_json"))
+        if metadata.get("journal_type") not in (None, "ENTRY_DECISION"):
             continue
         source_id = source_by_trade.get(row.get("trade_id"))
         if source_id in entries and source_id not in dispositions:
             dispositions[source_id] = row
+            profile = str(metadata.get("simulation_profile") or "LEGACY_UNLABELED")
+            decision_profiles[profile] += 1
     opened = sum(bool(row.get("accepted")) for row in dispositions.values())
     rejected = len(dispositions) - opened
     reasons = Counter(
@@ -44,6 +50,7 @@ def paper_execution_funnel(authoritative_events, journal_rows, captures, now):
         "pending": max(0, authoritative - len(dispositions)),
         "participation_rate": opened / authoritative * 100 if authoritative else 0.0,
         "rejection_counts": dict(sorted(reasons.items())),
+        "decisions_by_profile": dict(sorted(decision_profiles.items())),
         "reconciled": len(dispositions) + max(0, authoritative - len(dispositions)) == authoritative,
     }
 
@@ -146,12 +153,15 @@ def execution_journal_rows(rows, captures=()):
         reason = str(row.get("reason_code") or "—")
         accepted = bool(row.get("accepted"))
         risk = _json(row.get("risk_state_json"))
+        metadata = _json(row.get("metadata_json"))
         result.append({
             "Timestamp": _et(row.get("created_at")),
             "Symbol": row.get("symbol") or "—",
             "Contract": row.get("option_symbol") or "—",
             "Decision": "ACCEPTED" if accepted else "REJECTED",
             "Reason": reason,
+            "Profile": metadata.get("simulation_profile") or "LEGACY_UNLABELED",
+            "Effective Min Score": metadata.get("effective_min_score") or "—",
             "Score": scores.get(row.get("trade_id")) or "—",
             "Allocation": f"${float(row.get('allocation_dollars') or 0):,.2f}",
             "Quantity": int(row.get("quantity") or 0),
