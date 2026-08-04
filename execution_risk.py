@@ -106,23 +106,52 @@ def evaluate_execution(result, trade, positions, config, *, now=None, market_ope
         return ExecutionDecision(False, "DAILY_TRADE_LIMIT")
     if state.realized_pnl <= -abs(config.max_daily_loss_dollars):
         return ExecutionDecision(False, "DAILY_LOSS_LIMIT")
-    if state.consecutive_losses >= config.max_consecutive_losses:
+    if (
+        config.max_consecutive_losses > 0
+        and state.consecutive_losses >= config.max_consecutive_losses
+    ):
         return ExecutionDecision(False, "CONSECUTIVE_LOSS_LIMIT")
-    if state.last_loss_time and checked < state.last_loss_time + timedelta(minutes=config.loss_cooldown_minutes):
+    if (
+        config.loss_cooldown_minutes > 0
+        and state.last_loss_time
+        and checked < state.last_loss_time + timedelta(minutes=config.loss_cooldown_minutes)
+    ):
         return ExecutionDecision(False, "LOSS_COOLDOWN")
     if trade.status != "QUALIFIED" or not trade.entry_snapshot_complete:
-        return ExecutionDecision(False, "CONTRACT_UNAVAILABLE")
-    if trade.spread_percent is None or trade.spread_percent > config.max_spread_percent:
-        return ExecutionDecision(False, "LIQUIDITY_REJECTED")
-    if (trade.open_interest or 0) < config.min_open_interest or (trade.volume or 0) < config.min_volume:
-        return ExecutionDecision(False, "LIQUIDITY_REJECTED")
+        reason = str(getattr(trade, "data_unavailable_reason", "") or "").lower()
+        if "no valid option contract" in reason or "no listed expiration" in reason:
+            return ExecutionDecision(False, "NO_VALID_CONTRACT")
+        return ExecutionDecision(False, "CONTRACT_QUOTE_UNAVAILABLE")
+    if trade.spread_percent is None:
+        return ExecutionDecision(False, "CONTRACT_QUOTE_UNAVAILABLE")
+    if trade.spread_percent > config.max_spread_percent:
+        return ExecutionDecision(False, "SPREAD_TOO_WIDE")
+    if (trade.open_interest or 0) < config.min_open_interest:
+        return ExecutionDecision(False, "INSUFFICIENT_OPEN_INTEREST")
+    if (trade.volume or 0) < config.min_volume:
+        return ExecutionDecision(False, "INSUFFICIENT_VOLUME")
     fill = paper_fill_price(trade, config)
     if fill is None:
-        return ExecutionDecision(False, "CONTRACT_UNAVAILABLE")
+        return ExecutionDecision(False, "CONTRACT_QUOTE_UNAVAILABLE")
     cost = fill * 100
-    quantity = math.floor(config.max_dollars_per_trade / cost)
+    if cost > config.max_dollars_per_trade:
+        return ExecutionDecision(
+            False, "CONTRACT_TOO_EXPENSIVE",
+            maximum_cost=config.max_dollars_per_trade, paper_fill_price=fill,
+        )
+    available_cash = max(0.0, config.account_size + state.realized_pnl - state.open_exposure)
+    deployment_remaining = max(
+        0.0, config.max_total_deployed_capital - state.open_exposure
+    )
+    maximum_cost = min(
+        config.max_dollars_per_trade, available_cash, deployment_remaining
+    )
+    quantity = math.floor(maximum_cost / cost)
     if quantity < 1:
-        return ExecutionDecision(False, "CONTRACT_TOO_EXPENSIVE", maximum_cost=config.max_dollars_per_trade, paper_fill_price=fill)
+        return ExecutionDecision(
+            False, "INSUFFICIENT_BUYING_POWER",
+            maximum_cost=maximum_cost, paper_fill_price=fill,
+        )
     return ExecutionDecision(True, "ELIGIBLE", quantity, round(quantity * cost, 2), fill)
 
 

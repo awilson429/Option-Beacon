@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -282,25 +283,69 @@ def paper_account_summary(positions, *, config=None, now=None):
         if position.exit_time is not None
         and position.exit_time.astimezone(EASTERN).date() == state.trading_date
     ]
+    closed_positions = [position for position in positions if position.exit_time is not None]
     closed_pnl = [position_dollar_pnl(position) or 0.0 for position in closed_today]
+    all_closed_pnl = [position_dollar_pnl(position) or 0.0 for position in closed_positions]
     open_pnl = sum(
         (position.current_mid - position.entry_mid) * 100 * position.quantity
         for position in open_positions
     )
+    total_realized = sum(all_closed_pnl)
+    total_pnl = total_realized + open_pnl
+    winners = [value for value in all_closed_pnl if value > 0]
+    losers = [value for value in all_closed_pnl if value < 0]
+    peak_deployed = _peak_deployed_capital(positions)
+    intraday_drawdown = _intraday_drawdown(closed_today, open_pnl)
     return {
         "mode": config.mode,
+        "simulation_profile": config.simulation_profile,
         "trading_enabled": config.trading_enabled,
         "account_size": config.account_size,
+        "starting_balance": config.account_size,
+        "current_equity": config.account_size + total_pnl,
+        "total_pnl": total_pnl,
+        "total_return_percent": total_pnl / config.account_size * 100 if config.account_size else 0.0,
         "today_pnl": state.realized_pnl + open_pnl,
         "open_pnl": open_pnl,
         "realized_pnl": state.realized_pnl,
+        "total_realized_pnl": total_realized,
         "trades_today": state.trades_entered,
+        "trades_closed_today": len(closed_today),
+        "trades_closed_total": len(closed_positions),
         "open_positions": len(open_positions),
         "daily_loss_remaining": max(0.0, config.max_daily_loss_dollars + state.realized_pnl),
         "deployed_capital": sum(position.total_entry_cost for position in open_positions),
-        "wins": sum(value > 0 for value in closed_pnl),
-        "losses": sum(value < 0 for value in closed_pnl),
-        "win_rate": (sum(value > 0 for value in closed_pnl) / len(closed_pnl) * 100) if closed_pnl else 0.0,
-        "average_winner": (sum(value for value in closed_pnl if value > 0) / sum(value > 0 for value in closed_pnl)) if any(value > 0 for value in closed_pnl) else 0.0,
-        "average_loser": (sum(value for value in closed_pnl if value < 0) / sum(value < 0 for value in closed_pnl)) if any(value < 0 for value in closed_pnl) else 0.0,
+        "peak_deployed_capital": peak_deployed,
+        "max_intraday_drawdown": intraday_drawdown,
+        "wins": len(winners),
+        "losses": len(losers),
+        "win_rate": len(winners) / len(all_closed_pnl) * 100 if all_closed_pnl else 0.0,
+        "average_winner": sum(winners) / len(winners) if winners else 0.0,
+        "average_loser": sum(losers) / len(losers) if losers else 0.0,
+        "profit_factor": sum(winners) / abs(sum(losers)) if losers else math.inf if winners else 0.0,
     }
+
+
+def _peak_deployed_capital(positions):
+    events = []
+    for position in positions:
+        cost = float(position.total_entry_cost or 0.0)
+        events.append((position.entry_time, 1, cost))
+        if position.exit_time is not None:
+            events.append((position.exit_time, 0, -cost))
+    deployed = peak = 0.0
+    for _, _, change in sorted(events, key=lambda item: (item[0], item[1])):
+        deployed += change
+        peak = max(peak, deployed)
+    return peak
+
+
+def _intraday_drawdown(closed_today, open_pnl):
+    running = peak = drawdown = 0.0
+    for position in sorted(closed_today, key=lambda item: item.exit_time):
+        running += position_dollar_pnl(position) or 0.0
+        peak = max(peak, running)
+        drawdown = max(drawdown, peak - running)
+    running += open_pnl
+    peak = max(peak, running)
+    return max(drawdown, peak - running)
