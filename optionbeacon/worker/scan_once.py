@@ -19,6 +19,11 @@ from optionbeacon_live import (
 )
 from optionbeacon_snapshot import save_latest_results
 from optionbeacon.worker.logging_config import configure_worker_logging
+from optionbeacon.worker.lock_lease import (
+    DEFAULT_LOCK_RENEWAL_SECONDS,
+    DEFAULT_LOCK_TTL_SECONDS,
+    ScannerLockLease,
+)
 from execution_config import ExecutionConfig, execution_config_log_record
 from paper_execution import (
     pending_authoritative_entries,
@@ -57,6 +62,9 @@ def run_scan_once(
     run_number=None,
     paper_executor=run_paper_execution,
     lock_owner_id=None,
+    lock_ttl_seconds=DEFAULT_LOCK_TTL_SECONDS,
+    lock_renewal_seconds=DEFAULT_LOCK_RENEWAL_SECONDS,
+    lease_factory=ScannerLockLease,
 ) -> int:
     repository = repository or repository_for_runtime()
     scanner_id = scanner_id or os.getenv(
@@ -67,8 +75,12 @@ def run_scan_once(
         "event": "scanner_lock_acquisition_attempt",
         "scanner_id": scanner_id,
         "requested_owner_id": lock_owner_id,
+        "lease_duration_seconds": lock_ttl_seconds,
+        "process_run_identifier": lock_owner_id,
     }, sort_keys=True))
-    owner = repository.acquire_scan_lock(scanner_id, owner_id=lock_owner_id)
+    owner = repository.acquire_scan_lock(
+        scanner_id, owner_id=lock_owner_id, ttl_seconds=lock_ttl_seconds
+    )
     if owner is None:
         lock = repository.get_scan_lock(scanner_id) or {}
         LOGGER.warning(json.dumps({
@@ -76,6 +88,7 @@ def run_scan_once(
             "scanner_id": scanner_id,
             "requested_owner_id": lock_owner_id,
             "lock_owner_id": lock.get("owner_id"),
+            "persisted_owner_id": lock.get("owner_id"),
             "lock_acquired_at": lock.get("acquired_at"),
             "lock_expires_at": lock.get("expires_at"),
         }, sort_keys=True))
@@ -83,8 +96,19 @@ def run_scan_once(
     LOGGER.info(json.dumps({
         "event": "scanner_lock_acquired",
         "scanner_id": scanner_id,
-        "owner_id": owner,
+        "requested_owner_id": owner,
+        "persisted_owner_id": owner,
+        "acquired_at": (repository.get_scan_lock(scanner_id) or {}).get("acquired_at"),
+        "expires_at": (repository.get_scan_lock(scanner_id) or {}).get("expires_at"),
+        "lease_duration_seconds": lock_ttl_seconds,
+        "process_run_identifier": owner,
     }, sort_keys=True))
+    lease = lease_factory(
+        repository, scanner_id, owner,
+        ttl_seconds=lock_ttl_seconds,
+        renewal_seconds=lock_renewal_seconds,
+        logger=LOGGER,
+    ).start()
     started = clock()
     build = build_information(streamlit_version="not-applicable")
     repository.record_scan_heartbeat(
@@ -204,6 +228,7 @@ def run_scan_once(
                     log_scan_progress(symbol_index)
                     continue
                 results[symbol] = result
+                lease.ensure_owned()
                 process_scanner_result(
                     repository, result, source_version=build["commit"],
                     current_timestamp=clock(), eod_exit_time=eod_exit_time,
@@ -243,6 +268,7 @@ def run_scan_once(
                     }, sort_keys=True))
 
         stage = "authoritative_entry_query"
+        lease.ensure_owned()
         paper_candidates = pending_authoritative_entries(
             repository, results, paper_repository
         )
@@ -261,6 +287,7 @@ def run_scan_once(
             "candidate_ids_truncated": max(0, len(paper_candidates) - 20),
         }, sort_keys=True))
         stage = "paper_execution"
+        lease.ensure_owned()
         paper_executor(
             paper_candidates,
             config=paper_config,
@@ -281,6 +308,7 @@ def run_scan_once(
             )
             return 1
         completed = clock()
+        lease.ensure_owned()
         repository.record_scan_heartbeat(
             scanner_id,
             completed_at=completed,
@@ -321,6 +349,7 @@ def run_scan_once(
         )
         return 1
     finally:
+        lease.stop()
         if provider_summary is None:
             try:
                 end_market_data_scan_cycle()
@@ -330,11 +359,22 @@ def run_scan_once(
                     "run_number": run_number, "error": type(exc).__name__,
                 }, sort_keys=True))
         try:
+            current = repository.get_scan_lock(scanner_id) or {}
+            LOGGER.info(json.dumps({
+                "event": "scanner_lock_release_attempt",
+                "scanner_id": scanner_id,
+                "requested_owner_id": owner,
+                "persisted_owner_id": current.get("owner_id"),
+                "expires_at": current.get("expires_at"),
+                "process_run_identifier": owner,
+            }, sort_keys=True))
             released = repository.release_scan_lock(scanner_id, owner)
             LOGGER.info(json.dumps({
-                "event": "scanner_lock_released" if released else "scanner_lock_release_mismatch",
+                "event": "scanner_lock_released" if released else "scanner_lock_release_rejected",
                 "scanner_id": scanner_id,
-                "owner_id": owner,
+                "requested_owner_id": owner,
+                "persisted_owner_id": current.get("owner_id"),
+                "reason": "exact_owner" if released else "owner_mismatch_or_missing",
             }, sort_keys=True))
         except RepositoryUnavailable as exc:
             LOGGER.error(json.dumps({
