@@ -43,6 +43,33 @@ Trading is disabled by default. `CONFIRM`, `AUTO`, `LIVE`, and every other unsup
 
 The existing score, Eastern entry window, allocation, concurrent-position, daily-trade, daily-loss, consecutive-loss, cooldown, duplicate, liquidity, contract-validity, expiration, stop, target, max-hold, and EOD rules remain in force. Daily state uses `America/New_York`, including DST-aware timestamps.
 
+## PAPER simulation profiles
+
+`PAPER_SIMULATION_PROFILE` is explicit and accepts `SAFE` or `BROAD`. The default remains `SAFE`. Both profiles require `OPTIONBEACON_EXECUTION_MODE=PAPER`; neither introduces a brokerage-order path.
+
+The approved `BROAD` data-collection profile uses a minimum PAPER participation score of 40, five simultaneous positions, twenty entries per day, $250 maximum per position, $1,250 maximum aggregate deployed capital, a $5,000 starting balance, and a $100 daily realized-loss limit. Consecutive-loss and loss-cooldown gates are disabled only for BROAD. The 9:45 AM–3:00 PM ET entry window, 60-minute authoritative-entry age, 20% spread, 50 open-interest minimum, valid quote/contract requirements, -30% stop, +50% target, 120-minute maximum hold, EOD close, and durable duplicate protection remain unchanged.
+
+Railway configuration for the profile is:
+
+```text
+PAPER_SIMULATION_PROFILE=BROAD
+OPTIONBEACON_EXECUTION_MODE=PAPER
+OPTIONBEACON_TRADING_ENABLED=true
+OPTIONBEACON_PAPER_ACCOUNT_SIZE=5000
+OPTIONBEACON_MIN_BEACON_SCORE=40
+OPTIONBEACON_MAX_OPEN_POSITIONS=5
+OPTIONBEACON_MAX_TRADES_PER_DAY=20
+OPTIONBEACON_MAX_DOLLARS_PER_TRADE=250
+OPTIONBEACON_MAX_TOTAL_DEPLOYED_CAPITAL=1250
+OPTIONBEACON_MAX_DAILY_LOSS_DOLLARS=100
+OPTIONBEACON_MAX_CONSECUTIVE_LOSSES=0
+OPTIONBEACON_LOSS_COOLDOWN_MINUTES=0
+```
+
+The last nine values are explicit deployment assertions; BROAD supplies the same defaults when they are absent. Existing conflicting overrides must be changed or removed. No reset or deletion is performed when profiles change.
+
+Execution decisions distinguish `SPREAD_TOO_WIDE`, `INSUFFICIENT_OPEN_INTEREST`, `INSUFFICIENT_VOLUME`, `INSUFFICIENT_BUYING_POWER`, `NO_VALID_CONTRACT`, and `CONTRACT_QUOTE_UNAVAILABLE`. The Paper Trading page reconciles today's authoritative entries to evaluated, opened, rejected, and pending dispositions and derives account equity, realized/unrealized/total P&L, return, profit factor, intraday drawdown, and peak deployment from durable history.
+
 ## Legacy migration
 
 Legacy JSON files are import-only backup artifacts:

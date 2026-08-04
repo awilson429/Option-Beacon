@@ -1,5 +1,6 @@
 import base64
 import json
+import math
 import os
 from datetime import time
 from html import escape
@@ -135,6 +136,7 @@ from paper_trading_page import (
     execution_journal_rows,
     execution_status_model,
     open_paper_position_rows,
+    paper_execution_funnel,
 )
 from setup_intelligence import setup_intelligence
 from selectivity_dashboard import render_selectivity_analysis
@@ -3702,7 +3704,7 @@ def render_paper_trading_page():
     )
     now = eastern_now()
     config = ExecutionConfig.from_environment()
-    positions, raw_journal, captures, worker_health = [], [], [], None
+    positions, raw_journal, captures, authoritative_events, worker_health = [], [], [], [], None
     database_url = dashboard_database_url()
     if database_url:
         try:
@@ -3711,6 +3713,7 @@ def render_paper_trading_page():
             positions = repository.load()
             raw_journal = repository.journal_rows(limit=500)
             captures = repository.records()
+            authoritative_events = trade_repository.list_trade_events(limit=5000)
             worker_health = trade_repository.get_latest_scan_health()
         except Exception:
             st.error("Authoritative PAPER state is temporarily unavailable.")
@@ -3726,26 +3729,61 @@ def render_paper_trading_page():
         f'<span>UI: {escape(status["ui_role"])}</span></div>',
         unsafe_allow_html=True,
     )
+    st.caption(f"SIMULATION PROFILE: {config.simulation_profile}")
+
+    funnel = paper_execution_funnel(
+        authoritative_events, raw_journal, captures, now
+    )
+    st.markdown("### Today's PAPER Participation")
+    funnel_columns = st.columns(5)
+    for column, (label, value) in zip(funnel_columns, (
+        ("Authoritative Entries", funnel["authoritative_entries"]),
+        ("Evaluated", funnel["evaluated"]),
+        ("Opened", funnel["opened"]),
+        ("Rejected", funnel["rejected"]),
+        ("Participation Rate", f'{funnel["participation_rate"]:.1f}%'),
+    )):
+        column.metric(label, value)
+    with st.expander("Why trades were rejected", expanded=False):
+        if funnel["rejection_counts"]:
+            st.dataframe(
+                pd.DataFrame([
+                    {"Reason": reason, "Count": count}
+                    for reason, count in funnel["rejection_counts"].items()
+                ]),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.caption("No rejected authoritative entries today.")
+        if funnel["pending"]:
+            st.caption(f'{funnel["pending"]} authoritative entries await a PAPER disposition.')
 
     summary = paper_account_summary(positions, config=config, now=now)
     account_rows = (
         (
-            ("Paper Account", f"${summary['account_size']:,.2f}"),
-            ("Today's P&L", f"${summary['today_pnl']:+,.2f}"),
-            ("Open P&L", f"${summary['open_pnl']:+,.2f}"),
-            ("Realized P&L", f"${summary['realized_pnl']:+,.2f}"),
+            ("Starting Balance", f"${summary['starting_balance']:,.2f}"),
+            ("Current Equity", f"${summary['current_equity']:,.2f}"),
+            ("Total P&L", f"${summary['total_pnl']:+,.2f}"),
+            ("Return", f"{summary['total_return_percent']:+.2f}%"),
         ),
         (
-            ("Trades Today", summary["trades_today"]),
-            ("Open Positions", summary["open_positions"]),
-            ("Daily Loss Remaining", f"${summary['daily_loss_remaining']:,.2f}"),
+            ("Realized P&L Today", f"${summary['realized_pnl']:+,.2f}"),
+            ("Unrealized P&L", f"${summary['open_pnl']:+,.2f}"),
             ("Deployed Capital", f"${summary['deployed_capital']:,.2f}"),
+            ("Peak Deployed", f"${summary['peak_deployed_capital']:,.2f}"),
         ),
         (
+            ("Trades Opened Today", summary["trades_today"]),
+            ("Trades Closed Today", summary["trades_closed_today"]),
             ("Wins / Losses", f"{summary['wins']} / {summary['losses']}"),
+            ("Profit Factor", "∞" if math.isinf(summary["profit_factor"]) else f'{summary["profit_factor"]:.2f}'),
+        ),
+        (
             ("Win Rate", f"{summary['win_rate']:.1f}%"),
             ("Average Winner", f"${summary['average_winner']:+,.2f}"),
             ("Average Loser", f"${summary['average_loser']:+,.2f}"),
+            ("Max Intraday Drawdown", f"${summary['max_intraday_drawdown']:,.2f}"),
         ),
     )
     for metric_row in account_rows:

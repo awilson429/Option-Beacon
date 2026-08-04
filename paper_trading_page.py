@@ -3,11 +3,49 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 
 EASTERN = ZoneInfo("America/New_York")
+
+
+def paper_execution_funnel(authoritative_events, journal_rows, captures, now):
+    """Reconcile today's durable authoritative entries with PAPER dispositions."""
+    today = _aware(now).astimezone(EASTERN).date()
+    entries = {
+        event.get("opportunity_id") or event.get("trade_id")
+        for event in authoritative_events
+        if event.get("event_type") == "TRADE_ENTERED"
+        and _same_eastern_date(event.get("event_timestamp"), today)
+    }
+    source_by_trade = {capture.trade_id: capture.source_signal_id for capture in captures}
+    dispositions = {}
+    for row in journal_rows:
+        if not _same_eastern_date(row.get("created_at"), today):
+            continue
+        source_id = source_by_trade.get(row.get("trade_id"))
+        if source_id in entries and source_id not in dispositions:
+            dispositions[source_id] = row
+    opened = sum(bool(row.get("accepted")) for row in dispositions.values())
+    rejected = len(dispositions) - opened
+    reasons = Counter(
+        str(row.get("reason_code") or "OTHER")
+        for row in dispositions.values()
+        if not bool(row.get("accepted"))
+    )
+    authoritative = len(entries)
+    return {
+        "authoritative_entries": authoritative,
+        "evaluated": len(dispositions),
+        "opened": opened,
+        "rejected": rejected,
+        "pending": max(0, authoritative - len(dispositions)),
+        "participation_rate": opened / authoritative * 100 if authoritative else 0.0,
+        "rejection_counts": dict(sorted(reasons.items())),
+        "reconciled": len(dispositions) + max(0, authoritative - len(dispositions)) == authoritative,
+    }
 
 
 def execution_status_model(positions, journal_rows, worker_health=None):
@@ -117,7 +155,10 @@ def execution_journal_rows(rows, captures=()):
             "Score": scores.get(row.get("trade_id")) or "—",
             "Allocation": f"${float(row.get('allocation_dollars') or 0):,.2f}",
             "Quantity": int(row.get("quantity") or 0),
-            "Liquidity": "REJECTED" if reason == "LIQUIDITY_REJECTED" else "PASSED" if accepted else "NOT RECORDED",
+            "Liquidity": "REJECTED" if reason in {
+                "LIQUIDITY_REJECTED", "SPREAD_TOO_WIDE",
+                "INSUFFICIENT_OPEN_INTEREST", "INSUFFICIENT_VOLUME",
+            } else "PASSED" if accepted else "NOT RECORDED",
             "Cooldown": "BLOCKED" if reason == "LOSS_COOLDOWN" else "PASSED" if accepted else "NOT RECORDED",
             "Duplicate": "BLOCKED" if reason == "DUPLICATE_SIGNAL" else "PASSED" if accepted else "NOT RECORDED",
             "Daily Risk": json.dumps(risk, sort_keys=True) if risk else "—",
@@ -140,6 +181,13 @@ def _aware(value):
     else:
         parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
+
+
+def _same_eastern_date(value, expected):
+    try:
+        return _aware(value).astimezone(EASTERN).date() == expected
+    except (TypeError, ValueError):
+        return False
 
 
 def _et(value):

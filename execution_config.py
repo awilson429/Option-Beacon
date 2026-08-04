@@ -9,10 +9,12 @@ from datetime import time
 
 @dataclass(frozen=True)
 class ExecutionConfig:
+    simulation_profile: str = "SAFE"
     mode: str = "PAPER"
     trading_enabled: bool = False
     account_size: float = 5000.0
     max_dollars_per_trade: float = 250.0
+    max_total_deployed_capital: float = 1250.0
     max_trades_per_day: int = 3
     max_open_positions: int = 1
     max_daily_loss_dollars: float = 100.0
@@ -35,22 +37,36 @@ class ExecutionConfig:
     @classmethod
     def from_environment(cls, environ=None):
         env = os.environ if environ is None else environ
+        profile = env.get("PAPER_SIMULATION_PROFILE", "SAFE").strip().upper()
+        if profile not in {"SAFE", "BROAD"}:
+            raise ValueError("PAPER_SIMULATION_PROFILE must be SAFE or BROAD.")
+        broad = profile == "BROAD"
         symbols = tuple(
             item.strip().upper()
             for item in env.get("OPTIONBEACON_ALLOWED_TRADE_SYMBOLS", "").split(",")
             if item.strip()
         )
         return cls(
+            simulation_profile=profile,
             mode=env.get("OPTIONBEACON_EXECUTION_MODE", "PAPER").strip().upper(),
             trading_enabled=_boolean(env.get("OPTIONBEACON_TRADING_ENABLED"), False),
             account_size=_float(env, "OPTIONBEACON_PAPER_ACCOUNT_SIZE", 5000),
             max_dollars_per_trade=_float(env, "OPTIONBEACON_MAX_DOLLARS_PER_TRADE", 250),
-            max_trades_per_day=_int(env, "OPTIONBEACON_MAX_TRADES_PER_DAY", 3),
-            max_open_positions=_int(env, "OPTIONBEACON_MAX_OPEN_POSITIONS", 1),
+            max_total_deployed_capital=_float(
+                env, "OPTIONBEACON_MAX_TOTAL_DEPLOYED_CAPITAL", 1250
+            ),
+            max_trades_per_day=_int(env, "OPTIONBEACON_MAX_TRADES_PER_DAY", 20 if broad else 3),
+            max_open_positions=_int(env, "OPTIONBEACON_MAX_OPEN_POSITIONS", 5 if broad else 1),
             max_daily_loss_dollars=_float(env, "OPTIONBEACON_MAX_DAILY_LOSS_DOLLARS", 100),
-            max_consecutive_losses=_int(env, "OPTIONBEACON_MAX_CONSECUTIVE_LOSSES", 2),
-            loss_cooldown_minutes=_int(env, "OPTIONBEACON_LOSS_COOLDOWN_MINUTES", 30),
-            min_beacon_score=_float(env, "OPTIONBEACON_MIN_BEACON_SCORE", 92),
+            max_consecutive_losses=_int(
+                env, "OPTIONBEACON_MAX_CONSECUTIVE_LOSSES", 0 if broad else 2
+            ),
+            loss_cooldown_minutes=_int(
+                env, "OPTIONBEACON_LOSS_COOLDOWN_MINUTES", 0 if broad else 30
+            ),
+            min_beacon_score=_float(
+                env, "OPTIONBEACON_MIN_BEACON_SCORE", 40 if broad else 92
+            ),
             earliest_entry_time=_time(env.get("OPTIONBEACON_EARLIEST_ENTRY_TIME"), time(9, 45)),
             latest_entry_time=_time(env.get("OPTIONBEACON_LATEST_ENTRY_TIME"), time(15, 0)),
             allowed_symbols=symbols,
