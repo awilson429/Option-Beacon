@@ -19,7 +19,7 @@ from optionbeacon_live import (
 )
 from optionbeacon_snapshot import save_latest_results
 from optionbeacon.worker.logging_config import configure_worker_logging
-from execution_config import ExecutionConfig
+from execution_config import ExecutionConfig, execution_config_log_record
 from paper_execution import (
     pending_authoritative_entries,
     refresh_paper_positions,
@@ -111,6 +111,11 @@ def run_scan_once(
         stage = "paper_repository_initialization"
         paper_repository = PaperExecutionRepository(repository)
         paper_config = ExecutionConfig.from_environment()
+        config_record = execution_config_log_record(paper_config)
+        config_record.update(scanner_id=scanner_id, run_number=run_number)
+        LOGGER.info(json.dumps(config_record, sort_keys=True))
+        stage = "paper_runtime_config_persistence"
+        paper_repository.save_runtime_config(scanner_id, paper_config)
         stage = "paper_state_refresh"
         refreshed_paper_positions = refresh_paper_positions(
             config=paper_config,
@@ -294,7 +299,8 @@ def run_scan_once(
         return 0 if results else 1
     except Exception as exc:
         if stage in {
-            "paper_repository_initialization", "paper_state_refresh",
+            "paper_repository_initialization", "paper_runtime_config_persistence",
+            "paper_state_refresh",
             "authoritative_entry_query", "paper_execution",
         }:
             LOGGER.exception(json.dumps({

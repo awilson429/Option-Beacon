@@ -102,7 +102,7 @@ def test_page_is_sql_backed_read_only_and_trade_desk_links_without_duplication()
     assert "Open Option Positions" in page
     assert "Closed PAPER Trades" in page
     assert "Execution Journal" in page
-    assert "SIMULATION PROFILE" in page
+    assert "CURRENT WORKER PROFILE" in page
     assert "Today's PAPER Participation" in page
     assert "Why trades were rejected" in page
     for forbidden in (".save(", ".append(", "close_position(", "update_position("):
