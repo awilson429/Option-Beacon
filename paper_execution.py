@@ -23,6 +23,10 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_EXECUTION_JOURNAL = "paper_execution_journal.jsonl"
 
 
+class AuthoritativeEntryProjectionError(RuntimeError):
+    """Raised when a durable entry cannot be projected without inventing data."""
+
+
 def pending_authoritative_entries(repository, latest_results, paper_repository, *, limit=5000):
     """Project durable TRADE_ENTERED events into PAPER candidates exactly once."""
     by_symbol = {
@@ -45,12 +49,15 @@ def pending_authoritative_entries(repository, latest_results, paper_repository, 
         opportunity = repository.get_opportunity(opportunity_id=opportunity_id) or {}
         payload = (opportunity.get("metadata") or {}).get("trade_outcome")
         if not payload:
-            continue
+            raise AuthoritativeEntryProjectionError(
+                f"Authoritative entry {opportunity_id} has no outcome payload."
+            )
         try:
             record = deserialize_trade_outcome(payload)
-        except Exception:
-            LOGGER.exception("Could not decode authoritative PAPER candidate %s", opportunity_id)
-            continue
+        except Exception as exc:
+            raise AuthoritativeEntryProjectionError(
+                f"Authoritative entry {opportunity_id} has an invalid outcome payload."
+            ) from exc
         result = dict(by_symbol.get(record.symbol.upper()) or {})
         result.update({
             "_authoritative_entry_id": opportunity_id,
@@ -213,6 +220,7 @@ def run_paper_execution(
         "run_number": run_number, "opened": len(opened),
         "candidates_received": len(values), "candidates_evaluated": len(decisions),
         "candidates_rejected": rejected, "candidates_accepted": len(opened),
+        "candidates_opened": len(opened),
         "open_positions": sum(p.status == "OPEN" for p in positions),
     }, sort_keys=True))
     return {"positions": positions, "opened": opened, "decisions": decisions}

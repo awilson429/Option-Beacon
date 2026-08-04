@@ -97,7 +97,8 @@ def run_scan_once(
     failures = 0
     failed_symbols = []
     provider_summary = None
-    begin_market_data_scan_cycle()
+    scan_phase_error = None
+    stage = "market_data_cycle_start"
     LOGGER.info(
         json.dumps(
             {"event": "scan_started", "scanner_id": scanner_id},
@@ -105,8 +106,12 @@ def run_scan_once(
         )
     )
     try:
+        stage = "market_data_cycle_start"
+        begin_market_data_scan_cycle()
+        stage = "paper_repository_initialization"
         paper_repository = PaperExecutionRepository(repository)
         paper_config = ExecutionConfig.from_environment()
+        stage = "paper_state_refresh"
         refreshed_paper_positions = refresh_paper_positions(
             config=paper_config,
             now=clock(),
@@ -116,108 +121,123 @@ def run_scan_once(
             scanner_id=scanner_id,
             run_number=run_number,
         )
-        groups, source, universe_error = symbol_groups_loader()
-        open_records = [
-            record
-            for record in list_trade_outcomes(repository)
-            if record.entry_time is not None and record.exit_time is None
-        ]
-        open_symbols = {
-            record.symbol.upper()
-            for record in open_records
-        }
-        eod_due_symbols = {
-            record.symbol.upper()
-            for record in open_records
-            if intraday_trade_exit_due(
-                record.entry_time,
-                clock(),
-                eod_exit_time,
+        LOGGER.info(json.dumps({
+            "event": "paper_handoff_waiting_for_scan", "scanner_id": scanner_id,
+            "run_number": run_number, "open_positions": len(refreshed_paper_positions),
+        }, sort_keys=True))
+        try:
+            stage = "universe_loading"
+            groups, source, universe_error = symbol_groups_loader()
+            stage = "authoritative_open_trade_loading"
+            open_records = [
+                record
+                for record in list_trade_outcomes(repository)
+                if record.entry_time is not None and record.exit_time is None
+            ]
+            open_symbols = {record.symbol.upper() for record in open_records}
+            eod_due_symbols = {
+                record.symbol.upper()
+                for record in open_records
+                if intraday_trade_exit_due(record.entry_time, clock(), eod_exit_time)
+            }
+            symbols = list(
+                dict.fromkeys([*flatten_symbol_groups(groups), *sorted(open_symbols)])
             )
-        }
-        symbols = list(
-            dict.fromkeys([*flatten_symbol_groups(groups), *sorted(open_symbols)])
-        )
-        if universe_error:
-            LOGGER.warning("Scanner universe warning: %s", universe_error)
-        for symbol in symbols:
-            result = None
-            failure = None
-            attempts = (
-                EOD_QUOTE_ATTEMPTS
-                if symbol in eod_due_symbols
-                else 1
-            )
-            for attempt in range(attempts):
-                try:
-                    result = signal_generator(symbol)
-                    price = float((result or {}).get("price"))
-                    if price > 0:
-                        failure = None
-                        break
-                    failure = ValueError("latest quote was unavailable")
-                except Exception as exc:
-                    failure = exc
-                if attempt < attempts - 1:
-                    delay = EOD_QUOTE_BACKOFF_SECONDS[attempt]
-                    LOGGER.warning(
-                        "EOD quote unavailable; retrying: %s",
-                        json.dumps(
-                            {
-                                "symbol": symbol,
-                                "attempt": attempt + 1,
+            LOGGER.info(json.dumps({
+                "event": "scanner_universe_ready", "scanner_id": scanner_id,
+                "run_number": run_number, "symbol_count": len(symbols), "source": source,
+            }, sort_keys=True))
+            if universe_error:
+                LOGGER.warning("Scanner universe warning: %s", universe_error)
+            stage = "symbol_scan"
+
+            def log_scan_progress(symbol_index):
+                if symbol_index % 10 == 0 or symbol_index == len(symbols):
+                    LOGGER.info(json.dumps({
+                        "event": "scanner_progress", "scanner_id": scanner_id,
+                        "run_number": run_number, "symbols_attempted": symbol_index,
+                        "symbol_count": len(symbols), "results": len(results),
+                        "failures": failures,
+                    }, sort_keys=True))
+
+            for symbol_index, symbol in enumerate(symbols, 1):
+                result = None
+                failure = None
+                attempts = EOD_QUOTE_ATTEMPTS if symbol in eod_due_symbols else 1
+                for attempt in range(attempts):
+                    try:
+                        result = signal_generator(symbol)
+                        price = float((result or {}).get("price"))
+                        if price > 0:
+                            failure = None
+                            break
+                        failure = ValueError("latest quote was unavailable")
+                    except Exception as exc:
+                        failure = exc
+                    if attempt < attempts - 1:
+                        delay = EOD_QUOTE_BACKOFF_SECONDS[attempt]
+                        LOGGER.warning(
+                            "EOD quote unavailable; retrying: %s",
+                            json.dumps({
+                                "symbol": symbol, "attempt": attempt + 1,
                                 "delay_seconds": delay,
-                            },
-                            sort_keys=True,
-                        ),
-                    )
-                    sleep(delay)
-            if failure is not None:
-                failures += 1
-                failed_symbols.append(symbol)
-                if symbol in eod_due_symbols:
-                    LOGGER.error(
-                        "EOD exit quote unavailable: %s",
-                        json.dumps(
-                            {
-                                "event": "eod_exit_quote_unavailable",
-                                "symbol": symbol,
-                                "error": type(failure).__name__,
-                                "eod_exit_pending": True,
-                            },
-                            sort_keys=True,
-                        ),
-                    )
+                            }, sort_keys=True),
+                        )
+                        sleep(delay)
+                if failure is not None:
+                    failures += 1
+                    failed_symbols.append(symbol)
+                    if symbol in eod_due_symbols:
+                        LOGGER.error("EOD exit quote unavailable: %s", json.dumps({
+                            "event": "eod_exit_quote_unavailable", "symbol": symbol,
+                            "error": type(failure).__name__, "eod_exit_pending": True,
+                        }, sort_keys=True))
+                    if result is None:
+                        log_scan_progress(symbol_index)
+                        continue
                 if result is None:
+                    log_scan_progress(symbol_index)
                     continue
-            if result is None:
-                continue
-            results[symbol] = result
-            process_scanner_result(
-                repository,
-                result,
-                source_version=build["commit"],
-                current_timestamp=clock(),
-                eod_exit_time=eod_exit_time,
-            )
-        provider_summary = end_market_data_scan_cycle()
-        if failed_symbols or provider_summary["rate_limited_symbols"]:
-            LOGGER.warning(
-                json.dumps(
-                    {
-                        "event": "provider_warning_summary",
-                        "provider": provider_summary["provider"],
-                        "failed_symbols": sorted(set(failed_symbols)),
-                        "rate_limited_symbols": provider_summary[
-                            "rate_limited_symbols"
-                        ],
-                        "request_count": provider_summary["requests"],
-                        "cache_hits": provider_summary["cache_hits"],
-                    },
-                    sort_keys=True,
+                results[symbol] = result
+                process_scanner_result(
+                    repository, result, source_version=build["commit"],
+                    current_timestamp=clock(), eod_exit_time=eod_exit_time,
                 )
-            )
-        snapshot_writer(results)
+                log_scan_progress(symbol_index)
+            stage = "provider_summary"
+            provider_summary = end_market_data_scan_cycle()
+            if failed_symbols or provider_summary["rate_limited_symbols"]:
+                LOGGER.warning(json.dumps({
+                    "event": "provider_warning_summary",
+                    "provider": provider_summary["provider"],
+                    "failed_symbols": sorted(set(failed_symbols)),
+                    "rate_limited_symbols": provider_summary["rate_limited_symbols"],
+                    "request_count": provider_summary["requests"],
+                    "cache_hits": provider_summary["cache_hits"],
+                }, sort_keys=True))
+            stage = "snapshot_write"
+            snapshot_writer(results)
+        except Exception as exc:
+            scan_phase_error = exc
+            LOGGER.exception(json.dumps({
+                "event": "scanner_phase_failed", "scanner_id": scanner_id,
+                "run_number": run_number, "stage": stage,
+                "error": type(exc).__name__, "paper_handoff_will_run": True,
+            }, sort_keys=True))
+        finally:
+            if provider_summary is None:
+                try:
+                    provider_summary = end_market_data_scan_cycle()
+                except Exception as exc:
+                    if scan_phase_error is None:
+                        scan_phase_error = exc
+                    LOGGER.exception(json.dumps({
+                        "event": "provider_summary_failed", "scanner_id": scanner_id,
+                        "run_number": run_number, "error": type(exc).__name__,
+                        "paper_handoff_will_run": True,
+                    }, sort_keys=True))
+
+        stage = "authoritative_entry_query"
         paper_candidates = pending_authoritative_entries(
             repository, results, paper_repository
         )
@@ -235,6 +255,7 @@ def run_scan_once(
             ],
             "candidate_ids_truncated": max(0, len(paper_candidates) - 20),
         }, sort_keys=True))
+        stage = "paper_execution"
         paper_executor(
             paper_candidates,
             config=paper_config,
@@ -247,6 +268,13 @@ def run_scan_once(
             run_number=run_number,
             refreshed_positions=refreshed_paper_positions,
         )
+        if scan_phase_error is not None:
+            repository.record_scan_error(
+                f"{type(scan_phase_error).__name__}: scanner phase failed",
+                scanner_id,
+                code_version=build["commit"],
+            )
+            return 1
         completed = clock()
         repository.record_scan_heartbeat(
             scanner_id,
@@ -265,7 +293,21 @@ def run_scan_once(
         )
         return 0 if results else 1
     except Exception as exc:
-        LOGGER.exception("Fatal scanner failure")
+        if stage in {
+            "paper_repository_initialization", "paper_state_refresh",
+            "authoritative_entry_query", "paper_execution",
+        }:
+            LOGGER.exception(json.dumps({
+                "event": "paper_cycle_failed", "scanner_id": scanner_id,
+                "run_number": run_number, "stage": stage,
+                "error": type(exc).__name__,
+            }, sort_keys=True))
+        else:
+            LOGGER.exception(json.dumps({
+                "event": "scanner_cycle_failed", "scanner_id": scanner_id,
+                "run_number": run_number, "stage": stage,
+                "error": type(exc).__name__,
+            }, sort_keys=True))
         repository.record_scan_error(
             f"{type(exc).__name__}: scanner failed",
             scanner_id,
@@ -274,7 +316,13 @@ def run_scan_once(
         return 1
     finally:
         if provider_summary is None:
-            end_market_data_scan_cycle()
+            try:
+                end_market_data_scan_cycle()
+            except Exception as exc:
+                LOGGER.exception(json.dumps({
+                    "event": "provider_cleanup_failed", "scanner_id": scanner_id,
+                    "run_number": run_number, "error": type(exc).__name__,
+                }, sort_keys=True))
         try:
             released = repository.release_scan_lock(scanner_id, owner)
             LOGGER.info(json.dumps({
