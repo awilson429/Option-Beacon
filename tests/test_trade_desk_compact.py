@@ -6,6 +6,7 @@ from option_trade_engine import PaperOptionTrade
 from execution_config import ExecutionConfig
 from trade_desk_compact import (
     dashboard_kpi_model,
+    dashboard_shell_markup,
     filtered_activity_rows,
     kpi_row_markup,
     paper_active_row,
@@ -124,9 +125,9 @@ def test_recent_activity_production_default_is_five_and_controls_are_integrated(
     desk = source[start:end]
     assert "limit=5" in desk
     assert "st.toggle(" not in desk
-    assert 'activity_title.markdown("### Recent Activity")' in desk
-    assert 'key="trade_desk_activity_all"' in desk
-    assert 'key="trade_desk_activity_panel"' in desk
+    assert 'st.query_params.get(' in desk
+    assert '"trade_desk_activity_filter"' in desk
+    assert '"trade_desk_activity_expanded"' in desk
     assert "activity_rows_markup(activity)" in desk
 
 
@@ -177,16 +178,16 @@ def test_compact_trade_desk_uses_progressive_disclosure_and_responsive_css():
     end = source.index("def render_live_session_opportunity(", start)
     compact = source[start:end]
     assert "dashboard_kpi_model(" in compact
-    assert "st.columns([0.64, 0.36]" in compact
+    assert "st.columns(" not in compact
     assert "positions_table_markup(" in compact
     assert "risk_status_model(" in compact
     assert "activity_rows_markup(" in compact
     assert "render_recently_closed(repository)" not in compact
     assert "### Opened Alerts" not in compact
-    assert "@media (max-width: 700px)" in theme
+    assert "@media (max-width: 759px)" in theme
     css = theme.replace(" ", "")
     assert "grid-template-columns:repeat(5,minmax(0,1fr))" in css
-    mobile = css.split("@media(max-width:700px)", 1)[1]
+    mobile = css.split("@media(max-width:759px)", 1)[1]
     assert "grid-template-columns:repeat(2,minmax(0,1fr))" in mobile
     assert ".ob-position-scroll{overscroll-behavior-inline:contain}" in mobile
 
@@ -200,11 +201,11 @@ def test_polish_geometry_empty_states_encoding_and_segmented_controls():
     desk = source[start:end]
     assert "height:4.1rem" in theme.replace(" ", "")
     assert ".ob-best-trade-empty" in theme
-    assert ".st-key-trade_desk_activity_filter" in theme
-    assert '[role="radiogroup"]' in theme
+    assert ".ob-activity-filters" in theme
+    assert ".ob-activity-filter.is-active" in theme
     assert ".ob-disclaimer" in theme
     assert "notice notice-warning\">Decision-support" not in source
-    assert "compact_panel=True" in desk
+    assert "trade_desk_best_trade_markup(" in desk
     assert "No setup currently meets entry requirements." in desk
     assert "Â·" not in desk
     assert "Ã" not in desk
@@ -217,14 +218,50 @@ def test_approved_dashboard_shell_and_exact_grid_geometry_exist():
     start = source.index("def render_outcome_trade_journal(")
     end = source.index("def render_live_session_opportunity(", start)
     desk = source[start:end]
-    assert 'st.container(key="trade_desk_dashboard_shell")' in desk
-    assert "st.columns([0.64, 0.36]" in desk
-    assert "[0.40, 0.32, 0.28]" in desk
-    assert desk.index("primary_left, primary_right") < desk.index("positions_table_markup(")
-    assert desk.index("positions_table_markup(") < desk.index("activity_column, summary_column, stats_column")
-    assert 'key="trade_desk_best_trade_panel"' in desk
-    assert '.st-key-trade_desk_dashboard_shell' in theme
+    assert "dashboard_shell_markup(" in desk
+    assert "st.columns(" not in desk
+    assert ".ob-trade-dashboard" in theme
+    compact_css = theme.replace(" ", "").replace("\n", "")
+    assert "grid-template-columns:minmax(0,2fr)minmax(320px,1fr)" in compact_css
+    for area in ("header", "kpis", "performance", "risk", "positions", "activity", "summary", "stats"):
+        assert f"ob-grid-{area}" in theme or f'"{area}' in theme
+    assert '"activitysummary"' in compact_css
+    assert '"activitystats"' in compact_css
+    assert "trade_desk_best_trade_markup(" in desk
     assert "max-width:100%" in theme.replace(" ", "")
+    assert "min-height:13.2rem" not in theme
+    assert "min-height:12.5rem" not in theme
+
+
+def test_semantic_shell_contains_all_panels_and_inline_activity_controls():
+    markup = dashboard_shell_markup(
+        status="STATUS", kpis="KPIS", performance="PERFORMANCE",
+        risk="RISK", best_trade="BEST", positions="POSITIONS",
+        activity_rows="ACTIVITY ROWS", activity_filter="ENTRIES",
+        view_all=False, performance_summary="SUMMARY", trade_stats="STATS",
+    )
+    assert markup.count('class="ob-trade-dashboard"') == 1
+    for css_class in (
+        "ob-grid-header", "ob-grid-kpis", "ob-grid-performance",
+        "ob-grid-risk", "ob-grid-positions", "ob-grid-activity",
+        "ob-grid-summary", "ob-grid-stats",
+    ):
+        assert css_class in markup
+    assert markup.index("PERFORMANCE") < markup.index("POSITIONS")
+    assert markup.index("RISK") < markup.index("POSITIONS")
+    assert 'class="ob-activity-filter is-active"' in markup
+    assert markup.index("Recent Activity") < markup.index("ACTIVITY ROWS")
+
+
+def test_trade_desk_sources_contain_no_malformed_utf8_artifacts():
+    from pathlib import Path
+    source = (
+        Path("app.py").read_text(encoding="utf-8")
+        + Path("trade_desk_compact.py").read_text(encoding="utf-8")
+    )
+    assert "Ã¢â‚¬â€" not in source
+    assert "Ã‚" not in source
+    assert "Â" not in source
 
 
 def test_bottom_panels_use_existing_metrics_without_trading_mutation():

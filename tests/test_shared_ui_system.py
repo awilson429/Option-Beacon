@@ -71,8 +71,8 @@ def test_daily_alert_and_diagnostics_controls_use_stable_keys():
         "outcome_journal_status",
     )
     assert all(f'key="{key}"' not in journal for key in removed_keys)
-    assert 'key="trade_desk_activity_filter"' in journal
-    assert 'key="trade_desk_activity_all"' in journal
+    assert '"trade_desk_activity_filter"' in journal
+    assert '"trade_desk_activity_expanded"' in journal
     for key in (
         "developer_verify_tradier",
         "developer_verify_finnhub",

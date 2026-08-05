@@ -111,36 +111,40 @@ def configure_page():
         .ob-activity-enter,.ob-activity-target {color:var(--ob-positive)}.ob-activity-exit,.ob-activity-stop {color:var(--ob-negative)}.ob-activity-result {font-weight:700;text-align:right;white-space:nowrap}
         .ob-activity-invalid {color:var(--ob-text-muted)}
         .ob-best-trade-empty {background:var(--ob-bg-card);border:1px solid var(--ob-border-default);border-radius:8px;margin:0 0 .45rem;padding:.58rem .7rem}
-        .st-key-trade_desk_activity_filter [data-testid="stRadio"] {margin:0}
-        .st-key-trade_desk_activity_filter [role="radiogroup"] {background:var(--ob-bg-control);border:1px solid var(--ob-border-default);border-radius:6px;display:flex;gap:0;min-height:1.75rem;overflow:hidden;padding:0}
-        .st-key-trade_desk_activity_filter [role="radiogroup"] label {border-right:1px solid var(--ob-border-default);margin:0;padding:.28rem .5rem}
-        .st-key-trade_desk_activity_filter [role="radiogroup"] label:last-child {border-right:0}
-        .st-key-trade_desk_activity_filter [role="radiogroup"] label:has(input:checked) {background:color-mix(in srgb,var(--ob-accent-gold) 8%,var(--ob-bg-control));box-shadow:inset 0 -2px var(--ob-accent-gold);color:var(--ob-gold)}
-        .st-key-trade_desk_activity_filter [role="radiogroup"] label > div:first-child {display:none}
-        .st-key-trade_desk_activity_filter [role="radiogroup"] p {font-size:.61rem;font-weight:800;letter-spacing:.035em}
-        .st-key-trade_desk_activity_all button {min-height:1.75rem;padding:.25rem .55rem}.st-key-trade_desk_activity_all button p {font-size:.65rem}
         .ob-disclaimer {color:var(--ob-text-muted);font-size:.62rem;margin:.25rem 0;text-align:center}
-        .st-key-trade_desk_dashboard_shell {
+        .ob-trade-dashboard {
             background:var(--ob-bg-header);border:1px solid var(--ob-border-strong);
-            border-radius:11px;box-sizing:border-box;margin:.2rem 0 .65rem;
-            max-width:100%;overflow:hidden;padding:.72rem .78rem;
+            border-radius:11px;box-sizing:border-box;display:grid;gap:12px;
+            grid-template-areas:
+                "header header"
+                "kpis kpis"
+                "performance risk"
+                "positions positions"
+                "activity summary"
+                "activity stats";
+            grid-template-columns:minmax(0,2fr) minmax(320px,1fr);
+            margin:.2rem 0 .65rem;max-width:100%;overflow:hidden;padding:12px;
         }
-        .st-key-trade_desk_dashboard_shell > div[data-testid="stVerticalBlock"] {gap:.68rem}
-        .st-key-trade_desk_dashboard_shell .content-section {margin:0;padding:0}
-        .st-key-trade_desk_dashboard_shell .content-title {font-size:1.55rem;line-height:1.1}
-        .st-key-trade_desk_dashboard_shell .content-kicker {font-size:.72rem;margin-top:.18rem}
-        .st-key-trade_desk_dashboard_shell .ob-desk-status {margin:0}
-        .ob-performance-panel {min-height:13.2rem}
+        .ob-grid-header {align-items:center;display:flex;gap:1rem;grid-area:header;justify-content:space-between;min-width:0}
+        .ob-grid-header h2 {font-size:1.55rem;line-height:1.1;margin:0}.ob-grid-header p {color:var(--ob-text-muted);font-size:.72rem;margin:.18rem 0 0}
+        .ob-grid-header .ob-desk-status {flex:0 1 auto;margin:0}
+        .ob-grid-kpis {grid-area:kpis;min-width:0}.ob-grid-kpis .ob-desk-kpis {margin:0}
+        .ob-grid-performance {grid-area:performance;min-width:0}.ob-grid-risk {grid-area:risk;min-width:0}
+        .ob-grid-positions {grid-area:positions;min-width:0}.ob-grid-activity {grid-area:activity;min-width:0}
+        .ob-grid-summary {grid-area:summary;min-width:0}.ob-grid-stats {grid-area:stats;min-width:0}
+        .ob-grid-performance > .ob-desk-panel,.ob-grid-risk .ob-desk-panel,.ob-grid-positions > .ob-desk-panel,.ob-grid-summary > .ob-desk-panel,.ob-grid-stats > .ob-desk-panel {margin:0}
+        .ob-risk-stack {display:grid;gap:12px}.ob-paper-link {background:var(--ob-bg-control);border:1px solid var(--ob-border-default);border-radius:6px;color:var(--ob-gold);font-size:.68rem;padding:.4rem .55rem;text-align:center;text-decoration:none}
         .ob-performance-anchor {align-items:flex-start;display:flex;flex-direction:column;gap:.12rem;padding:.15rem .35rem .6rem}
         .ob-performance-anchor span {color:var(--ob-text-muted);font-size:.62rem;font-weight:800;letter-spacing:.055em}
         .ob-performance-anchor strong {font-size:1.65rem;line-height:1.1}
         .ob-performance-rule {background:linear-gradient(90deg,var(--ob-positive),color-mix(in srgb,var(--ob-positive) 12%,transparent));border-radius:3px;height:3px;margin-top:.35rem;width:100%}
-        .st-key-trade_desk_best_trade_panel {background:var(--ob-bg-card);border:1px solid var(--ob-border-default);border-radius:8px;margin:.55rem 0;padding:.58rem .68rem}
-        .st-key-trade_desk_best_trade_panel h3 {font-size:.86rem;margin:0 0 .35rem}
-        .st-key-trade_desk_best_trade_panel .ob-best-trade-empty {background:transparent;border:0;margin:0;padding:.15rem 0}
-        .st-key-trade_desk_activity_panel {background:var(--ob-bg-card);border:1px solid var(--ob-border-default);border-radius:8px;box-sizing:border-box;height:100%;min-height:12.5rem;padding:.62rem .68rem}
-        .st-key-trade_desk_activity_panel > div[data-testid="stVerticalBlock"] {gap:.35rem}
-        .st-key-trade_desk_activity_panel h3 {font-size:.82rem;margin:.2rem 0 0;white-space:nowrap}
+        .ob-best-trade-panel {margin:0}.ob-best-heading {align-items:center;display:flex;gap:.5rem;justify-content:space-between}.ob-best-heading h3 {margin:0}.ob-best-heading strong {font-size:.72rem;white-space:nowrap}
+        .ob-best-grid {display:grid;gap:.3rem;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:.45rem}.ob-best-metric {display:flex;flex-direction:column;gap:.12rem;min-width:0}.ob-best-metric span {color:var(--ob-text-muted);font-size:.55rem}.ob-best-metric strong {font-size:.68rem;overflow-wrap:anywhere}
+        .ob-best-details {color:var(--ob-text-muted);font-size:.62rem;margin-top:.4rem}.ob-best-details summary {color:var(--ob-gold);cursor:pointer}.ob-best-details p {margin:.25rem 0 0}
+        .ob-activity-header {align-items:center;display:grid;gap:.45rem;grid-template-columns:auto minmax(0,1fr) auto;margin-bottom:.35rem}.ob-activity-header h3 {margin:0;white-space:nowrap}
+        .ob-activity-filters {background:var(--ob-bg-control);border:1px solid var(--ob-border-default);border-radius:6px;display:flex;min-width:0;overflow-x:auto;white-space:nowrap}
+        .ob-activity-filter {border-right:1px solid var(--ob-border-default);color:var(--ob-text-muted);font-size:.56rem;font-weight:800;padding:.28rem .4rem;text-decoration:none}.ob-activity-filter:last-child {border-right:0}.ob-activity-filter.is-active {box-shadow:inset 0 -2px var(--ob-accent-gold);color:var(--ob-gold)}
+        .ob-activity-view {color:var(--ob-gold);font-size:.62rem;text-decoration:none;white-space:nowrap}
         .ob-summary-row,.ob-stat-row {align-items:center;border-bottom:1px solid var(--ob-border-default);display:flex;gap:.5rem;justify-content:space-between;padding:.3rem 0}
         .ob-summary-row:last-child,.ob-stat-row:last-child {border-bottom:0}
         .ob-summary-row span,.ob-stat-row span {color:var(--ob-text-muted);font-size:.68rem}
@@ -162,11 +166,9 @@ def configure_page():
         .ob-paper-status-active {border-color:var(--ob-positive)}
         .ob-paper-status-warning {border-color:var(--ob-warning)}
 
-        @media (max-width: 700px) {
-            .st-key-trade_desk_dashboard_shell {border-radius:9px;padding:.55rem}
-            .st-key-trade_desk_dashboard_shell > div[data-testid="stVerticalBlock"] {gap:.5rem}
-            .ob-performance-panel {min-height:0}
-            .st-key-trade_desk_activity_panel {min-height:0}
+        @media (max-width: 759px) {
+            .ob-trade-dashboard {border-radius:9px;gap:9px;grid-template-areas:"header" "kpis" "performance" "risk" "positions" "activity" "summary" "stats";grid-template-columns:minmax(0,1fr);padding:9px}
+            .ob-grid-header {align-items:flex-start;flex-direction:column}.ob-grid-header .ob-desk-status {width:100%}
             .ob-desk-status {align-items:flex-start;flex-direction:column;gap:.38rem}
             .ob-desk-status-pill + .ob-desk-status-pill::before {content:"";margin:0}
             .ob-desk-kpis {grid-template-columns:repeat(2,minmax(0,1fr))}.ob-desk-kpi {height:3.95rem;min-height:3.95rem;padding:.42rem .5rem}.ob-desk-kpi-label {white-space:normal}
@@ -177,10 +179,11 @@ def configure_page():
             .ob-paper-status {align-items:flex-start;flex-direction:column;gap:.35rem;overflow:visible}
         }
 
-        @media (min-width: 701px) and (max-width: 1050px) {
+        @media (min-width: 760px) and (max-width: 1099px) {
+            .ob-trade-dashboard {grid-template-areas:"header header" "kpis kpis" "performance performance" "risk risk" "positions positions" "activity activity" "summary stats";grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+            .ob-risk-stack {grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.ob-risk-stack .ob-paper-link {grid-column:1/-1}
             .ob-desk-kpis {grid-template-columns:repeat(3,minmax(0,1fr))}
             .ob-performance-grid {grid-template-columns:repeat(3,minmax(0,1fr))}
-            .st-key-trade_desk_activity_panel {min-height:0}
         }
 
         .brand-row {

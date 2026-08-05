@@ -338,6 +338,69 @@ def activity_rows_markup(rows):
     )
 
 
+def dashboard_shell_markup(
+    *, status, kpis, performance, risk, best_trade, positions,
+    activity_rows, activity_filter, view_all, performance_summary, trade_stats,
+):
+    """Compose the complete deterministic Trade Desk CSS-grid body."""
+    filters = "".join(
+        f'<a class="ob-activity-filter {"is-active" if value == activity_filter else ""}" '
+        f'href="?page=trade-desk&amp;desk_activity={value}&amp;desk_all={1 if view_all else 0}">{value}</a>'
+        for value in ACTIVITY_FILTERS
+    )
+    view_href = (
+        f'?page=trade-desk&amp;desk_activity={activity_filter}&amp;desk_all={0 if view_all else 1}'
+    )
+    activity = (
+        '<section class="ob-desk-panel ob-grid-activity">'
+        '<div class="ob-activity-header"><h3>Recent Activity</h3>'
+        f'<nav class="ob-activity-filters" aria-label="Activity filter">{filters}</nav>'
+        f'<a class="ob-activity-view" href="{view_href}">{"Latest" if view_all else "View all"}</a>'
+        f'</div>{activity_rows}</section>'
+    )
+    return (
+        '<div class="ob-trade-dashboard">'
+        '<header class="ob-grid-header"><div><h2>Trade Desk</h2>'
+        '<p>Monitor positions, manage risk, and track performance in real time.</p>'
+        f'</div>{status}</header>'
+        f'<div class="ob-grid-kpis">{kpis}</div>'
+        f'<div class="ob-grid-performance">{performance}</div>'
+        f'<aside class="ob-grid-risk"><div class="ob-risk-stack">{risk}{best_trade}'
+        '<a class="ob-paper-link" href="?page=paper-trading">View Paper Trading →</a>'
+        '</div></aside>'
+        f'<div class="ob-grid-positions">{positions}</div>'
+        f'{activity}'
+        f'<div class="ob-grid-summary">{performance_summary}</div>'
+        f'<div class="ob-grid-stats">{trade_stats}</div>'
+        '</div>'
+    )
+
+
+def authoritative_positions_markup(rows):
+    if not rows:
+        return panel_markup(
+            "Open Positions", '<div class="ob-desk-empty">No open positions.</div>'
+        )
+    headers = ("SYMBOL", "TYPE", "ENTRY", "CURRENT", "P&L %", "STATUS")
+    head = "".join(f'<th>{value}</th>' for value in headers)
+    body = "".join(
+        '<tr>'
+        f'<td><strong>{escape(str(row.get("Symbol") or "—"))}</strong></td>'
+        f'<td>{escape(str(row.get("Direction") or "—"))}</td>'
+        f'<td>{escape(str(row.get("Entry") or "—"))}</td>'
+        f'<td>{escape(str(row.get("Current Price") or "—"))}</td>'
+        f'<td>{escape(str(row.get("Open Return") or "—"))}</td>'
+        f'<td><span class="ob-position-state">{escape(str(row.get("Status") or "OPEN"))}</span></td>'
+        '</tr>'
+        for row in rows
+    )
+    return panel_markup(
+        "Open Positions",
+        f'<div class="ob-position-scroll"><table class="ob-position-table">'
+        f'<thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>',
+    )
+
+
 def panel_markup(title, body, *, extra_class=""):
     heading = f'<h3>{escape(title)}</h3>' if title else ""
     classes = f'ob-desk-panel {extra_class}'.strip()
