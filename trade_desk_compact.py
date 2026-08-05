@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from html import escape
+import math
 
 from live_trade_activity import activity_rows, meaningful_events, relative_age
 
@@ -18,7 +19,8 @@ SIGNAL_EVENTS = {"WATCH_CREATED", "ENTRY_READY"}
 
 
 def status_strip_model(
-    reliability_state, *, market_open, paper_active, configured_symbols=0, now=None
+    reliability_state, *, market_open, paper_active, configured_symbols=0,
+    paper_profile=None, now=None,
 ):
     state = reliability_state or {}
     scanner = str(state.get("scanner_state") or "UNKNOWN").upper()
@@ -29,12 +31,23 @@ def status_strip_model(
     elif scanner in {"STALE", "NEVER RUN"} or market_data in {"PARTIAL", "UNKNOWN"}:
         severity = "warning"
     processed = int(state.get("last_symbols_processed") or 0)
+    if severity == "healthy" and processed == 0:
+        severity = "warning"
+    elif severity == "healthy" and configured_symbols and processed < configured_symbols:
+        severity = "warning"
     scan_time = state.get("last_success_at")
+    scanner_label = (
+        "SCANNER HEALTHY" if severity == "healthy" else
+        "SCANNER AWAITING DATA" if processed == 0 and scanner not in {"ERROR", "FAILED", "UNAVAILABLE"} else
+        "SCANNER PARTIAL" if configured_symbols and 0 < processed < configured_symbols else
+        f"SCANNER {scanner}"
+    )
+    profile = str(paper_profile or "").upper()
     return {
         "severity": severity,
         "market": "MARKET OPEN" if market_open else "MARKET CLOSED",
-        "scanner": "SCANNER HEALTHY" if severity == "healthy" else f"SCANNER {scanner}",
-        "paper": "PAPER ACTIVE" if paper_active else "PAPER DISABLED",
+        "scanner": scanner_label,
+        "paper": f"PAPER {profile} ACTIVE" if paper_active and profile else "PAPER ACTIVE" if paper_active else "PAPER DISABLED",
         "last_scan": f"LAST SCAN {relative_age(scan_time, now).upper()}" if scan_time else "LAST SCAN —",
         "symbols": f"{processed}/{configured_symbols} SYMBOLS" if configured_symbols else f"{processed} SYMBOLS",
     }
@@ -72,6 +85,213 @@ def today_summary_model(scorecard, paper_summary=None, *, paper_available=False)
         "win_rate": score.get("win_rate"),
         "deployed_capital": None,
     }
+
+
+def dashboard_kpi_model(scorecard, paper_summary, config, *, paper_available):
+    """Build the five non-duplicated top-line metrics from authoritative state."""
+    today = today_summary_model(
+        scorecard, paper_summary, paper_available=paper_available
+    )
+    if paper_available:
+        return {
+            "source": "PAPER",
+            "current_equity": paper_summary["current_equity"],
+            "today_pnl": paper_summary["today_pnl"],
+            "open_positions": paper_summary["open_positions"],
+            "max_open_positions": config.max_open_positions,
+            "daily_loss_remaining": paper_summary["daily_loss_remaining"],
+            "deployed_capital": paper_summary["deployed_capital"],
+            "max_deployed_capital": config.max_total_deployed_capital,
+        }
+    return {
+        "source": "AUTHORITATIVE",
+        "current_equity": None,
+        "today_pnl": None,
+        "open_positions": today["open_positions"],
+        "max_open_positions": None,
+        "daily_loss_remaining": None,
+        "deployed_capital": None,
+        "max_deployed_capital": None,
+    }
+
+
+def risk_status_model(paper_summary, config, *, paper_available):
+    if not paper_available:
+        return {"available": False, "items": []}
+    limits = (
+        ("Daily Loss", max(0, -paper_summary["realized_pnl"]), config.max_daily_loss_dollars,
+         f'${paper_summary["daily_loss_remaining"]:,.2f} remaining'),
+        ("Capital Deployed", paper_summary["deployed_capital"], config.max_total_deployed_capital,
+         f'${paper_summary["deployed_capital"]:,.2f} / ${config.max_total_deployed_capital:,.0f}'),
+        ("Daily Trades", paper_summary["trades_today"], config.max_trades_per_day,
+         f'{paper_summary["trades_today"]} / {config.max_trades_per_day}'),
+        ("Open Positions", paper_summary["open_positions"], config.max_open_positions,
+         f'{paper_summary["open_positions"]} / {config.max_open_positions}'),
+    )
+    items = []
+    for label, used, maximum, display in limits:
+        percent = min(100.0, max(0.0, used / maximum * 100)) if maximum else 0.0
+        treatment = "danger" if percent >= 100 else "warning" if percent >= 80 else "healthy"
+        items.append({
+            "label": label, "used": used, "maximum": maximum,
+            "display": display, "percent": percent, "treatment": treatment,
+        })
+    return {"available": True, "items": items}
+
+
+def kpi_row_markup(model):
+    def money(value, *, signed=False):
+        if value is None:
+            return "â€”"
+        return f'${value:+,.2f}' if signed else f'${value:,.2f}'
+
+    pnl = model["today_pnl"]
+    pnl_treatment = "positive" if (pnl or 0) > 0 else "negative" if (pnl or 0) < 0 else "neutral"
+    positions_detail = (
+        f'of {model["max_open_positions"]} max'
+        if model["max_open_positions"] is not None else model["source"]
+    )
+    deployed_detail = (
+        f'of ${model["max_deployed_capital"]:,.0f} max'
+        if model["max_deployed_capital"] is not None else model["source"]
+    )
+    cards = (
+        ("CURRENT EQUITY", money(model["current_equity"]), model["source"], "neutral"),
+        ("OPEN POSITIONS", str(model["open_positions"]), positions_detail, "neutral"),
+        ("TODAY'S P&L", money(pnl, signed=True), "Realized + unrealized", pnl_treatment),
+        ("DAILY LOSS LEFT", money(model["daily_loss_remaining"]), "Remaining", "neutral"),
+        ("DEPLOYED CAPITAL", money(model["deployed_capital"]), deployed_detail, "neutral"),
+    )
+    body = "".join(
+        f'<div class="ob-desk-kpi ob-value-{treatment}">'
+        f'<div class="ob-desk-kpi-label">{escape(label)}</div>'
+        f'<div class="ob-desk-kpi-value">{escape(value)}</div>'
+        f'<div class="ob-desk-kpi-detail">{escape(detail)}</div></div>'
+        for label, value, detail, treatment in cards
+    )
+    return f'<div class="ob-desk-kpis">{body}</div>'
+
+
+def risk_panel_markup(model):
+    if not model["available"]:
+        return panel_markup("Risk Status", '<div class="ob-desk-empty">PAPER risk state unavailable.</div>')
+    rows = "".join(
+        f'<div class="ob-risk-row"><div class="ob-risk-line"><span>{escape(item["label"])}</span>'
+        f'<span>{escape(item["display"])} Â· {item["percent"]:.0f}%</span></div>'
+        f'<div class="ob-risk-track"><span class="ob-risk-fill ob-risk-{item["treatment"]}" '
+        f'style="width:{item["percent"]:.1f}%"></span></div></div>'
+        for item in model["items"]
+    )
+    return panel_markup("Risk Status", rows)
+
+
+def performance_panel_markup(summary, paper_summary, *, paper_available):
+    if paper_available:
+        factor = paper_summary["profit_factor"]
+        values = (
+            ("Realized P&L", f'${paper_summary["realized_pnl"]:+,.2f}'),
+            ("Unrealized P&L", f'${paper_summary["open_pnl"]:+,.2f}'),
+            ("Win Rate", f'{paper_summary["win_rate"]:.1f}%'),
+            ("Trades Closed", str(paper_summary["trades_closed_today"])),
+            ("Profit Factor", "âˆž" if math.isinf(factor) else f'{factor:.2f}'),
+        )
+        note = "Persisted PAPER account performance; no synthetic equity curve."
+    else:
+        score = summary or {}
+        values = (
+            ("Closed Trades", str(score.get("closed_trades", 0))),
+            ("Win Rate", _percent_or_dash(score.get("win_rate"))),
+            ("Average Return", _percent_or_dash(score.get("average_return"), signed=True)),
+            ("Best Trade", _percent_or_dash(score.get("best_trade"), signed=True)),
+            ("Profit Factor", _number_or_dash(score.get("profit_factor"))),
+        )
+        note = "Authoritative lifecycle fallback; PAPER account state unavailable."
+    stats = "".join(
+        f'<div class="ob-performance-stat"><span>{escape(label)}</span><strong>{escape(value)}</strong></div>'
+        for label, value in values
+    )
+    return panel_markup(
+        "Today Performance",
+        f'<div class="ob-performance-grid">{stats}</div><div class="ob-panel-note">{escape(note)}</div>',
+    )
+
+
+def paper_position_rows(positions, config, now):
+    rows = []
+    for position in sorted(
+        (item for item in positions if item.status == "OPEN"),
+        key=lambda item: item.entry_time, reverse=True,
+    ):
+        row = paper_active_row(position, now)
+        rows.append({
+            **row,
+            "type": str(position.option_type or position.direction).upper(),
+            "strike_exp": f'{position.strike:g} {position.expiration}',
+            "stop": position.entry_mid * (1 + config.stop_loss_percent / 100),
+            "target": position.entry_mid * (1 + config.profit_target_percent / 100),
+            "score": position.scanner_score,
+            "status": position.status,
+        })
+    return rows
+
+
+def positions_table_markup(rows):
+    if not rows:
+        return panel_markup("Open Positions", '<div class="ob-desk-empty">No open positions.</div>')
+    headers = ("SYMBOL", "TYPE", "STRIKE / EXP", "ENTRY", "CURRENT", "P&L $", "P&L %", "HOLD", "STATUS", "DETAILS")
+    head = "".join(f"<th>{escape(value)}</th>" for value in headers)
+    body = []
+    for row in rows:
+        treatment = "positive" if row["pnl_dollars"] >= 0 else "negative"
+        detail = (
+            f'Qty {row["quantity"]} Â· Stop ${row["stop"]:.2f} Â· Target ${row["target"]:.2f} Â· '
+            f'MFE {row["mfe"]:+.2f}% Â· MAE {row["mae"]:+.2f}% Â· Score {row["score"] if row["score"] is not None else "â€”"}'
+        )
+        body.append(
+            '<tr>'
+            f'<td><strong>{escape(row["symbol"])}</strong></td><td>{escape(row["type"])}</td>'
+            f'<td>{escape(row["strike_exp"])}</td><td>${row["entry"]:.2f}</td><td>${row["current"]:.2f}</td>'
+            f'<td class="ob-value-{treatment}">${row["pnl_dollars"]:+,.2f}</td>'
+            f'<td class="ob-value-{treatment}">{row["pnl_percent"]:+.2f}%</td>'
+            f'<td>{escape(row["duration"])}</td><td><span class="ob-position-state">OPEN</span></td>'
+            f'<td><details><summary>View</summary><div>{escape(detail)}</div></details></td></tr>'
+        )
+    table = f'<div class="ob-position-scroll"><table class="ob-position-table"><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table></div>'
+    return panel_markup("Open Positions", table)
+
+
+def activity_panel_markup(rows):
+    if not rows:
+        return panel_markup("Recent Activity", '<div class="ob-desk-empty">No meaningful activity recorded.</div>')
+    items = "".join(
+        f'<div class="ob-activity-row"><span class="ob-activity-time">{escape(str(row["Time"]))}</span>'
+        f'<span class="ob-activity-tag ob-activity-{escape(str(row["Event"]).lower().replace(" ", "-"))}">{escape(str(row["Event"]))}</span>'
+        f'<strong>{escape(str(row.get("Symbol") or "â€”"))}</strong>'
+        f'<span>{escape(str(row.get("Contract") or "â€”"))}</span>'
+        f'<span class="ob-activity-result">{escape(str(row.get("Price / Result") or "â€”"))}</span></div>'
+        for row in rows
+    )
+    return panel_markup("Recent Activity", items)
+
+
+def panel_markup(title, body):
+    return f'<section class="ob-desk-panel"><h3>{escape(title)}</h3>{body}</section>'
+
+
+def _percent_or_dash(value, *, signed=False):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return "â€”"
+    return f'{value:+.2f}%' if signed else f'{value:.1f}%'
+
+
+def _number_or_dash(value):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return "â€”"
+    return "âˆž" if math.isinf(value) else f'{value:.2f}'
 
 
 def paper_active_row(position, now):

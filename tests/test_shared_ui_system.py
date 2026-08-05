@@ -99,8 +99,8 @@ def test_approved_default_uses_header_and_compact_today_metrics():
     journal = source.split("def render_outcome_trade_journal", 1)[1].split("\ndef ", 1)[0]
     main = source.split("def main", 1)[1]
     assert main.count("render_header()") == 1
-    assert "today_summary_model(" in journal
-    assert ".metric(" in journal
+    assert "dashboard_kpi_model(" in journal
+    assert "kpi_row_markup(" in journal
     assert "render_journal_metric(" not in journal
 
 

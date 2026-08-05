@@ -190,9 +190,7 @@ def test_trade_desk_layout_and_removed_live_guide_labels():
 
 
 def test_trade_desk_labels_are_current():
-    assert TRADE_DESK_SUBTITLE == (
-        "Focused live setup, entry, risk, and target decisions."
-    )
+    assert TRADE_DESK_SUBTITLE == "Monitor positions, risk, and live performance."
     assert RECORDED_CANDIDATES_LABEL == "Recorded Candidates"
 
 

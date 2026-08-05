@@ -59,7 +59,7 @@ def test_compact_trade_desk_has_no_demo_or_empty_history_fork():
     assert "modern_style_active" not in empty_branch
     assert "demo_scorecard" not in empty_branch
     assert "if not records:" not in empty_branch
-    assert "today_summary_model(" in empty_branch
+    assert "dashboard_kpi_model(" in empty_branch
 
 
 def test_demo_fixture_is_presentation_only():

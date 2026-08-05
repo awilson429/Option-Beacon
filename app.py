@@ -124,9 +124,17 @@ from trade_desk_view_models import (
 )
 from trade_desk_compact import (
     ACTIVITY_FILTERS,
+    activity_panel_markup,
+    dashboard_kpi_model,
     filtered_activity_rows,
+    kpi_row_markup,
     paper_active_row,
+    paper_position_rows,
     paper_position_events,
+    performance_panel_markup,
+    positions_table_markup,
+    risk_panel_markup,
+    risk_status_model,
     status_strip_markup,
     status_strip_model,
     today_summary_model,
@@ -3401,7 +3409,7 @@ def _render_legacy_trade_desk_details(
             render_empty_state("No trade history has been recorded yet.")
 
 
-def render_outcome_trade_journal(
+def _render_pre_unified_trade_desk(
     records=None,
     latest_results=None,
     current_prices=None,
@@ -3579,6 +3587,161 @@ def render_outcome_trade_journal(
             st.caption("Latest 8 meaningful events shown · use View all activity for full results.")
     else:
         st.caption("No meaningful activity has been recorded yet.")
+
+
+def render_outcome_trade_journal(
+    records=None,
+    latest_results=None,
+    current_prices=None,
+    quote_status=None,
+    reliability_state=None,
+):
+    """Unified read-only Trade Desk assembled from authoritative shared state."""
+    render_section_header("Trade Desk", "Monitor positions, risk, and live performance.")
+    records = list(records) if records is not None else load_trade_outcomes()
+    latest_results = latest_results or {}
+    trade_repository = (reliability_state or {}).get("repository")
+    now = eastern_now()
+    market_open = is_market_open_now()
+    local_config = ExecutionConfig()
+    config = local_config
+    option_positions, execution_journal = [], []
+    paper_available = False
+    worker_config_state = None
+
+    database_url = dashboard_database_url()
+    if database_url:
+        try:
+            trade_repository = trade_repository or TradeRepository(
+                database_url=database_url, require_durable=True
+            )
+            paper_repository = PaperExecutionRepository(
+                trade_repository, initialize=False
+            )
+            option_positions = paper_repository.load()
+            execution_journal = paper_repository.journal_rows(limit=50)
+            worker_config_state = paper_repository.get_runtime_config()
+            if worker_config_state:
+                config = ExecutionConfig.from_resolved_state(
+                    worker_config_state.get("resolved_config"), fallback=local_config
+                )
+            paper_available = True
+        except Exception:
+            st.warning(
+                "PAPER account state is temporarily unavailable; authoritative "
+                "trade metrics remain visible."
+            )
+
+    paper_profile = (
+        worker_config_state.get("simulation_profile")
+        if worker_config_state else None
+    )
+    status = status_strip_model(
+        reliability_state,
+        market_open=market_open,
+        paper_active=paper_available and config.mode == "PAPER",
+        paper_profile=paper_profile,
+        configured_symbols=len(latest_results),
+        now=now,
+    )
+    st.markdown(status_strip_markup(status), unsafe_allow_html=True)
+    if status["severity"] != "healthy":
+        message = (reliability_state or {}).get("message")
+        if message:
+            (st.error if status["severity"] == "error" else st.warning)(message)
+
+    render_critical_trade_event(trade_repository)
+
+    scorecard = daily_scorecard(records, now.date())
+    open_records = [
+        record for record in records
+        if record.entry_time is not None and record.exit_time is None
+    ]
+    scorecard["open_positions"] = len(open_records)
+    paper_summary = paper_account_summary(option_positions, config=config, now=now)
+    kpis = dashboard_kpi_model(
+        scorecard, paper_summary, config, paper_available=paper_available
+    )
+    st.markdown(kpi_row_markup(kpis), unsafe_allow_html=True)
+
+    current_prices = current_prices or {
+        record.symbol: latest_symbol_price(latest_results, record.symbol)
+        for record in open_records
+    }
+    authoritative = opened_alerts_analytics(
+        records, current_prices, now, quote_status
+    ) if records else {"rows": []}
+    authoritative_open = [
+        row for row in authoritative["rows"] if row["Status"] == "OPEN"
+    ]
+    paper_rows = paper_position_rows(option_positions, config, now)
+    summary = journal_summary_metrics(records) if records else None
+
+    left, right = st.columns([0.64, 0.36], gap="medium")
+    with left:
+        st.markdown(
+            performance_panel_markup(
+                summary, paper_summary, paper_available=paper_available
+            ),
+            unsafe_allow_html=True,
+        )
+        if paper_available:
+            st.markdown(positions_table_markup(paper_rows), unsafe_allow_html=True)
+        else:
+            st.markdown("### Open Positions")
+            if authoritative_open:
+                primary = [
+                    "Symbol", "Direction", "Entry", "Current Price",
+                    "Open Return", "Stop", "Target 1", "Status",
+                ]
+                st.dataframe(
+                    pd.DataFrame(authoritative_open)[primary],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                with st.expander("Position details", expanded=False):
+                    st.dataframe(
+                        pd.DataFrame(authoritative_open),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+            else:
+                st.caption("No open positions.")
+    with right:
+        st.markdown(
+            risk_panel_markup(
+                risk_status_model(
+                    paper_summary, config, paper_available=paper_available
+                )
+            ),
+            unsafe_allow_html=True,
+        )
+        render_live_session_opportunity(latest_results, records)
+        st.button(
+            "View Paper Trading →",
+            key="trade_desk_view_paper",
+            on_click=set_active_workspace,
+            args=("Paper Trading", st.session_state),
+        )
+
+    event_filter = st.radio(
+        "Activity filter", ACTIVITY_FILTERS, horizontal=True,
+        label_visibility="collapsed", key="trade_desk_activity_filter",
+    )
+    view_all = st.toggle(
+        "View all activity", value=False, key="trade_desk_activity_all"
+    )
+    authoritative_events = (
+        trade_repository.list_trade_events(limit=200)
+        if trade_repository else []
+    )
+    events = [*authoritative_events, *paper_position_events(option_positions)]
+    activity = filtered_activity_rows(
+        events, selected=event_filter, now=now, view_all=view_all, limit=8
+    )
+    st.markdown(activity_panel_markup(activity), unsafe_allow_html=True)
+    if not view_all and len(events) > 8:
+        st.caption("Latest 8 meaningful events shown · full history remains in History.")
 
 
 def render_live_session_opportunity(latest_results, trade_history):
