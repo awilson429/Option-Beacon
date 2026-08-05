@@ -188,6 +188,7 @@ def risk_panel_markup(model):
 def performance_panel_markup(summary, paper_summary, *, paper_available):
     if paper_available:
         factor = paper_summary["profit_factor"]
+        total = paper_summary["today_pnl"]
         values = (
             ("Realized P&L", f'${paper_summary["realized_pnl"]:+,.2f}'),
             ("Unrealized P&L", f'${paper_summary["open_pnl"]:+,.2f}'),
@@ -197,6 +198,7 @@ def performance_panel_markup(summary, paper_summary, *, paper_available):
         )
     else:
         score = summary or {}
+        total = None
         values = (
             ("Closed Trades", str(score.get("closed_trades", 0))),
             ("Win Rate", _percent_or_dash(score.get("win_rate"))),
@@ -208,7 +210,58 @@ def performance_panel_markup(summary, paper_summary, *, paper_available):
         f'<div class="ob-performance-stat"><span>{escape(label)}</span><strong>{escape(value)}</strong></div>'
         for label, value in values
     )
-    return panel_markup("Today Performance", f'<div class="ob-performance-grid">{stats}</div>')
+    total_value = f'${total:+,.2f}' if total is not None else "—"
+    treatment = "positive" if (total or 0) > 0 else "negative" if (total or 0) < 0 else "neutral"
+    anchor = (
+        '<div class="ob-performance-anchor"><span>TOTAL P&amp;L</span>'
+        f'<strong class="ob-value-{treatment}">{escape(total_value)}</strong>'
+        '<div class="ob-performance-rule"></div></div>'
+    )
+    return panel_markup(
+        "Today Performance",
+        f'{anchor}<div class="ob-performance-grid">{stats}</div>',
+        extra_class="ob-performance-panel",
+    )
+
+
+def performance_summary_markup(paper_summary, *, paper_available):
+    if not paper_available:
+        return panel_markup(
+            "Today's Performance Summary",
+            '<div class="ob-desk-empty">PAPER account breakdown unavailable.</div>',
+        )
+    values = (
+        ("Realized", paper_summary["realized_pnl"]),
+        ("Unrealized", paper_summary["open_pnl"]),
+        ("Current Total", paper_summary["today_pnl"]),
+    )
+    rows = "".join(
+        f'<div class="ob-summary-row"><span>{escape(label)}</span>'
+        f'<strong class="ob-value-{"positive" if value > 0 else "negative" if value < 0 else "neutral"}">'
+        f'${value:+,.2f}</strong></div>'
+        for label, value in values
+    )
+    return panel_markup("Today's Performance Summary", rows)
+
+
+def trade_stats_markup(scorecard, paper_summary, *, paper_available):
+    score = scorecard or {}
+    trades = paper_summary["trades_today"] if paper_available else score.get("opened_alerts", 0)
+    win_rate = paper_summary["win_rate"] if paper_available else score.get("win_rate")
+    values = (
+        ("Total Trades", str(trades)),
+        ("Win Rate", _percent_or_dash(win_rate)),
+        ("Best Trade", _percent_or_dash(score.get("best_trade"), signed=True)),
+        ("Worst Trade", _percent_or_dash(score.get("worst_trade"), signed=True)),
+        ("Average Win", f'${paper_summary["average_winner"]:+,.2f}' if paper_available else "—"),
+        ("Average Loss", f'${paper_summary["average_loser"]:+,.2f}' if paper_available else "—"),
+        ("Average Hold", f'{score["average_hold_minutes"]:.0f}m' if score.get("average_hold_minutes") is not None else "—"),
+    )
+    rows = "".join(
+        f'<div class="ob-stat-row"><span>{escape(label)}</span><strong>{escape(value)}</strong></div>'
+        for label, value in values
+    )
+    return panel_markup("Trade Stats", rows)
 
 
 def paper_position_rows(positions, config, now):
@@ -271,9 +324,24 @@ def activity_panel_markup(rows, *, show_title=True):
     return panel_markup(title, items)
 
 
-def panel_markup(title, body):
+def activity_rows_markup(rows):
+    """Rows-only markup for controls contained by the keyed activity panel."""
+    if not rows:
+        return '<div class="ob-desk-empty">No meaningful activity recorded.</div>'
+    return "".join(
+        f'<div class="ob-activity-row"><span class="ob-activity-time">{escape(str(row["Time"]))}</span>'
+        f'<span class="ob-activity-tag ob-activity-{escape(str(row["Event"]).lower().replace(" ", "-"))}">{escape(str(row["Event"]))}</span>'
+        f'<strong>{escape(str(row.get("Symbol") or "—"))}</strong>'
+        f'<span>{escape(str(row.get("Contract") or "—"))}</span>'
+        f'<span class="ob-activity-result">{escape(str(row.get("Price / Result") or "—"))}</span></div>'
+        for row in rows
+    )
+
+
+def panel_markup(title, body, *, extra_class=""):
     heading = f'<h3>{escape(title)}</h3>' if title else ""
-    return f'<section class="ob-desk-panel">{heading}{body}</section>'
+    classes = f'ob-desk-panel {extra_class}'.strip()
+    return f'<section class="{classes}">{heading}{body}</section>'
 
 
 def _percent_or_dash(value, *, signed=False):
