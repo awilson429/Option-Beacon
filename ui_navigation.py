@@ -331,7 +331,7 @@ def render_sidebar_navigation(
 
 
 TOOLS_SECTIONS = ("Scanner Health",)
-TRADE_DESK_SUBTITLE = "Focused live setup, entry, risk, and target decisions."
+TRADE_DESK_SUBTITLE = "Monitor positions, risk, and live performance."
 RECORDED_CANDIDATES_LABEL = "Recorded Candidates"
 
 TRADE_DESK_SECTIONS = (

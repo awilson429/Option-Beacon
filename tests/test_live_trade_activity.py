@@ -130,7 +130,8 @@ def test_notification_expires_after_five_minutes_but_feed_persists():
 
 def test_trade_desk_active_position_is_never_labeled_watch_and_refresh_is_lightweight():
     source = inspect.getsource(render_outcome_trade_journal)
-    assert '"State": "ACTIVE"' in source
+    assert "paper_position_rows(" in source
+    assert "positions_table_markup(" in source
     assert "filtered_activity_rows(" in source
     assert "render_live_activity_tape(repository)" not in source
     app_source = inspect.getsource(__import__("app").render_live_activity_tape)
