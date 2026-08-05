@@ -318,8 +318,8 @@ def activity_rows_markup(rows):
 
 
 def dashboard_shell_markup(
-    *, status, kpis, performance, risk, best_trade, positions,
-    activity_rows, activity_filter, view_all, more_stats,
+    *, status, kpis, risk, best_trade, positions, comparison,
+    authoritative_trades, activity_rows, activity_filter, view_all, more_stats,
 ):
     """Compose the complete deterministic Trade Desk CSS-grid body."""
     filters = "".join(
@@ -347,7 +347,8 @@ def dashboard_shell_markup(
         '<a class="ob-paper-link" href="?page=paper-trading">View Paper Trading →</a>'
         '</div></aside>'
         f'<div class="ob-grid-positions">{positions}</div>'
-        f'<div class="ob-grid-performance">{performance}</div>'
+        f'<div class="ob-grid-comparison">{comparison}</div>'
+        f'<div class="ob-grid-authoritative">{authoritative_trades}</div>'
         f'{activity}'
         f'<div class="ob-grid-more">{more_stats}</div>'
         '</div>'
