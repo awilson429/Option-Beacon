@@ -118,11 +118,11 @@ def configure_page():
             grid-template-areas:
                 "header header"
                 "kpis kpis"
+                "positions risk"
                 "performance risk"
-                "positions positions"
-                "activity summary"
-                "activity stats";
-            grid-template-columns:minmax(0,2fr) minmax(320px,1fr);
+                "activity activity"
+                "more more";
+            grid-template-columns:minmax(0,7fr) minmax(280px,3fr);
             margin:.2rem 0 .65rem;max-width:100%;overflow:hidden;padding:12px;
         }
         .ob-grid-header {align-items:center;display:flex;gap:1rem;grid-area:header;justify-content:space-between;min-width:0}
@@ -131,8 +131,8 @@ def configure_page():
         .ob-grid-kpis {grid-area:kpis;min-width:0}.ob-grid-kpis .ob-desk-kpis {margin:0}
         .ob-grid-performance {grid-area:performance;min-width:0}.ob-grid-risk {grid-area:risk;min-width:0}
         .ob-grid-positions {grid-area:positions;min-width:0}.ob-grid-activity {grid-area:activity;min-width:0}
-        .ob-grid-summary {grid-area:summary;min-width:0}.ob-grid-stats {grid-area:stats;min-width:0}
-        .ob-grid-performance > .ob-desk-panel,.ob-grid-risk .ob-desk-panel,.ob-grid-positions > .ob-desk-panel,.ob-grid-summary > .ob-desk-panel,.ob-grid-stats > .ob-desk-panel {margin:0}
+        .ob-grid-more {grid-area:more;min-width:0}
+        .ob-grid-performance > .ob-desk-panel,.ob-grid-risk .ob-desk-panel,.ob-grid-positions > .ob-desk-panel {margin:0}
         .ob-risk-stack {display:grid;gap:12px}.ob-paper-link {background:var(--ob-bg-control);border:1px solid var(--ob-border-default);border-radius:6px;color:var(--ob-gold);font-size:.68rem;padding:.4rem .55rem;text-align:center;text-decoration:none}
         .ob-performance-anchor {align-items:flex-start;display:flex;flex-direction:column;gap:.12rem;padding:.15rem .35rem .6rem}
         .ob-performance-anchor span {color:var(--ob-text-muted);font-size:.62rem;font-weight:800;letter-spacing:.055em}
@@ -145,10 +145,11 @@ def configure_page():
         .ob-activity-filters {background:var(--ob-bg-control);border:1px solid var(--ob-border-default);border-radius:6px;display:flex;min-width:0;overflow-x:auto;white-space:nowrap}
         .ob-activity-filter {border-right:1px solid var(--ob-border-default);color:var(--ob-text-muted);font-size:.56rem;font-weight:800;padding:.28rem .4rem;text-decoration:none}.ob-activity-filter:last-child {border-right:0}.ob-activity-filter.is-active {box-shadow:inset 0 -2px var(--ob-accent-gold);color:var(--ob-gold)}
         .ob-activity-view {color:var(--ob-gold);font-size:.62rem;text-decoration:none;white-space:nowrap}
-        .ob-summary-row,.ob-stat-row {align-items:center;border-bottom:1px solid var(--ob-border-default);display:flex;gap:.5rem;justify-content:space-between;padding:.3rem 0}
-        .ob-summary-row:last-child,.ob-stat-row:last-child {border-bottom:0}
-        .ob-summary-row span,.ob-stat-row span {color:var(--ob-text-muted);font-size:.68rem}
-        .ob-summary-row strong,.ob-stat-row strong {font-size:.74rem;white-space:nowrap}
+        .ob-more-stats {background:var(--ob-bg-card);border:1px solid var(--ob-border-default);border-radius:8px;color:var(--ob-text-muted);font-size:.68rem;padding:.48rem .65rem}
+        .ob-more-stats summary {color:var(--ob-gold);cursor:pointer;font-size:.64rem;font-weight:800;letter-spacing:.045em;text-transform:uppercase}
+        .ob-more-stats-grid {display:grid;gap:0 .8rem;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:.35rem}
+        .ob-stat-row {align-items:center;border-right:1px solid var(--ob-border-default);display:flex;flex-direction:column;gap:.15rem;padding:.15rem .35rem}.ob-stat-row:last-child {border-right:0}
+        .ob-stat-row span {color:var(--ob-text-muted);font-size:.62rem}.ob-stat-row strong {font-size:.74rem;white-space:nowrap}
         .ob-active-trade {
             background:var(--ob-bg-card); border:1px solid var(--ob-border-default); border-left:3px solid var(--ob-accent-gold);
             border-radius:8px; display:grid; gap:.18rem; margin:.35rem 0; padding:.58rem .72rem;
@@ -167,7 +168,7 @@ def configure_page():
         .ob-paper-status-warning {border-color:var(--ob-warning)}
 
         @media (max-width: 759px) {
-            .ob-trade-dashboard {border-radius:9px;gap:9px;grid-template-areas:"header" "kpis" "performance" "risk" "positions" "activity" "summary" "stats";grid-template-columns:minmax(0,1fr);padding:9px}
+            .ob-trade-dashboard {border-radius:9px;gap:9px;grid-template-areas:"header" "kpis" "positions" "risk" "performance" "activity" "more";grid-template-columns:minmax(0,1fr);padding:9px}
             .ob-grid-header {align-items:flex-start;flex-direction:column}.ob-grid-header .ob-desk-status {width:100%}
             .ob-desk-status {align-items:flex-start;flex-direction:column;gap:.38rem}
             .ob-desk-status-pill + .ob-desk-status-pill::before {content:"";margin:0}
@@ -175,12 +176,13 @@ def configure_page():
             .ob-performance-grid {grid-template-columns:repeat(2,minmax(0,1fr))}.ob-performance-stat {border-bottom:1px solid var(--ob-border-default);border-right:0}
             .ob-activity-row {grid-template-columns:6.6rem 3.6rem minmax(3rem,.5fr) minmax(5rem,1fr)}.ob-activity-result {grid-column:3/-1;text-align:left}
             .ob-position-scroll {overscroll-behavior-inline:contain}
+            .ob-more-stats-grid {grid-template-columns:repeat(2,minmax(0,1fr))}.ob-stat-row {border-bottom:1px solid var(--ob-border-default);border-right:0}
             .ob-active-state {float:none;display:inline-block}.ob-active-result{font-size:.92rem}
             .ob-paper-status {align-items:flex-start;flex-direction:column;gap:.35rem;overflow:visible}
         }
 
         @media (min-width: 760px) and (max-width: 1099px) {
-            .ob-trade-dashboard {grid-template-areas:"header header" "kpis kpis" "performance performance" "risk risk" "positions positions" "activity activity" "summary stats";grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+            .ob-trade-dashboard {grid-template-areas:"header header" "kpis kpis" "positions risk" "performance risk" "activity activity" "more more";grid-template-columns:minmax(0,2fr) minmax(280px,1fr)}
             .ob-risk-stack {grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.ob-risk-stack .ob-paper-link {grid-column:1/-1}
             .ob-desk-kpis {grid-template-columns:repeat(3,minmax(0,1fr))}
             .ob-performance-grid {grid-template-columns:repeat(3,minmax(0,1fr))}

@@ -131,17 +131,16 @@ from trade_desk_compact import (
     dashboard_kpi_model,
     filtered_activity_rows,
     kpi_row_markup,
+    more_stats_markup,
     paper_active_row,
     paper_position_rows,
     paper_position_events,
     performance_panel_markup,
-    performance_summary_markup,
     positions_table_markup,
     risk_panel_markup,
     risk_status_model,
     status_strip_markup,
     status_strip_model,
-    trade_stats_markup,
     today_summary_model,
 )
 from paper_trading_page import (
@@ -3946,10 +3945,7 @@ def render_outcome_trade_journal(
         activity_rows=activity_rows_markup(activity),
         activity_filter=event_filter,
         view_all=view_all,
-        performance_summary=performance_summary_markup(
-            paper_summary, paper_available=paper_available
-        ),
-        trade_stats=trade_stats_markup(
+        more_stats=more_stats_markup(
             scorecard, paper_summary, paper_available=paper_available
         ),
     )

@@ -177,7 +177,7 @@ def risk_panel_markup(model):
         return panel_markup("Risk Status", '<div class="ob-desk-empty">PAPER risk state unavailable.</div>')
     rows = "".join(
         f'<div class="ob-risk-row"><div class="ob-risk-line"><span>{escape(item["label"])}</span>'
-        f'<span>{escape(item["display"])} <small>{item["percent"]:.0f}%</small></span></div>'
+        f'<strong>{item["percent"]:.0f}%</strong></div>'
         f'<div class="ob-risk-track"><span class="ob-risk-fill ob-risk-{item["treatment"]}" '
         f'style="width:{item["percent"]:.1f}%"></span></div></div>'
         for item in model["items"]
@@ -224,33 +224,9 @@ def performance_panel_markup(summary, paper_summary, *, paper_available):
     )
 
 
-def performance_summary_markup(paper_summary, *, paper_available):
-    if not paper_available:
-        return panel_markup(
-            "Today's Performance Summary",
-            '<div class="ob-desk-empty">PAPER account breakdown unavailable.</div>',
-        )
-    values = (
-        ("Realized", paper_summary["realized_pnl"]),
-        ("Unrealized", paper_summary["open_pnl"]),
-        ("Current Total", paper_summary["today_pnl"]),
-    )
-    rows = "".join(
-        f'<div class="ob-summary-row"><span>{escape(label)}</span>'
-        f'<strong class="ob-value-{"positive" if value > 0 else "negative" if value < 0 else "neutral"}">'
-        f'${value:+,.2f}</strong></div>'
-        for label, value in values
-    )
-    return panel_markup("Today's Performance Summary", rows)
-
-
-def trade_stats_markup(scorecard, paper_summary, *, paper_available):
+def more_stats_markup(scorecard, paper_summary, *, paper_available):
     score = scorecard or {}
-    trades = paper_summary["trades_today"] if paper_available else score.get("opened_alerts", 0)
-    win_rate = paper_summary["win_rate"] if paper_available else score.get("win_rate")
     values = (
-        ("Total Trades", str(trades)),
-        ("Win Rate", _percent_or_dash(win_rate)),
         ("Best Trade", _percent_or_dash(score.get("best_trade"), signed=True)),
         ("Worst Trade", _percent_or_dash(score.get("worst_trade"), signed=True)),
         ("Average Win", f'${paper_summary["average_winner"]:+,.2f}' if paper_available else "—"),
@@ -261,7 +237,10 @@ def trade_stats_markup(scorecard, paper_summary, *, paper_available):
         f'<div class="ob-stat-row"><span>{escape(label)}</span><strong>{escape(value)}</strong></div>'
         for label, value in values
     )
-    return panel_markup("Trade Stats", rows)
+    return (
+        '<details class="ob-more-stats"><summary>More Stats</summary>'
+        f'<div class="ob-more-stats-grid">{rows}</div></details>'
+    )
 
 
 def paper_position_rows(positions, config, now):
@@ -332,15 +311,15 @@ def activity_rows_markup(rows):
         f'<div class="ob-activity-row"><span class="ob-activity-time">{escape(str(row["Time"]))}</span>'
         f'<span class="ob-activity-tag ob-activity-{escape(str(row["Event"]).lower().replace(" ", "-"))}">{escape(str(row["Event"]))}</span>'
         f'<strong>{escape(str(row.get("Symbol") or "—"))}</strong>'
-        f'<span>{escape(str(row.get("Contract") or "—"))}</span>'
-        f'<span class="ob-activity-result">{escape(str(row.get("Price / Result") or "—"))}</span></div>'
+        f'<span>{escape(str(row.get("Display Detail") or "—"))}</span>'
+        f'<span class="ob-activity-result">{escape(str(row.get("Display Result") or "—"))}</span></div>'
         for row in rows
     )
 
 
 def dashboard_shell_markup(
     *, status, kpis, performance, risk, best_trade, positions,
-    activity_rows, activity_filter, view_all, performance_summary, trade_stats,
+    activity_rows, activity_filter, view_all, more_stats,
 ):
     """Compose the complete deterministic Trade Desk CSS-grid body."""
     filters = "".join(
@@ -364,14 +343,13 @@ def dashboard_shell_markup(
         '<p>Monitor positions, manage risk, and track performance in real time.</p>'
         f'</div>{status}</header>'
         f'<div class="ob-grid-kpis">{kpis}</div>'
-        f'<div class="ob-grid-performance">{performance}</div>'
         f'<aside class="ob-grid-risk"><div class="ob-risk-stack">{risk}{best_trade}'
         '<a class="ob-paper-link" href="?page=paper-trading">View Paper Trading →</a>'
         '</div></aside>'
         f'<div class="ob-grid-positions">{positions}</div>'
+        f'<div class="ob-grid-performance">{performance}</div>'
         f'{activity}'
-        f'<div class="ob-grid-summary">{performance_summary}</div>'
-        f'<div class="ob-grid-stats">{trade_stats}</div>'
+        f'<div class="ob-grid-more">{more_stats}</div>'
         '</div>'
     )
 
@@ -483,6 +461,11 @@ def filtered_activity_rows(events, *, selected="ALL", now=None, view_all=False, 
         key=lambda event: _timestamp(event.get("event_timestamp")),
         reverse=True,
     )
+    if selected == "ALL":
+        ordered = [
+            event for event in ordered
+            if event.get("event_type") != "INVALIDATED"
+        ]
     if selected != "ALL":
         allowed = {
             "ENTRIES": ENTRY_EVENTS,
@@ -515,7 +498,17 @@ def filtered_activity_rows(events, *, selected="ALL", now=None, view_all=False, 
         limit=1000 if view_all else limit,
     )
     for row, event in zip(rows, selected_events):
-        row["Contract"] = event.get("option_symbol") or "—"
+        contract = event.get("option_symbol") or "—"
+        row["Contract"] = contract
+        row["Display Detail"] = (
+            contract if contract != "—" else row.get("Detail") or "—"
+        )
+        value = str(row.get("Price / Result") or "—")
+        if value != "—" and event.get("event_type") == "TRADE_ENTERED":
+            value = f"{value} entry"
+        elif value != "—" and event.get("event_type") != "TRADE_CLOSED":
+            value = f"{value} underlying"
+        row["Display Result"] = value
     return rows
 
 
