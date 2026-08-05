@@ -23,6 +23,11 @@ def test_scan_worker_records_success_and_releases_lock(tmp_path, monkeypatch):
     health = repo.get_scan_health()
     assert health["last_success_at"] is not None
     assert health["last_symbols_processed"] == 1
+    assert health["current_symbol_count"] == 1
+    assert health["current_symbols_attempted"] == 1
+    assert health["current_results"] == 1
+    assert health["current_failures"] == 0
+    assert health["current_owner_id"] is None
     assert repo.acquire_scan_lock() is not None
 
 

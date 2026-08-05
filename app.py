@@ -3439,7 +3439,6 @@ def _render_pre_unified_trade_desk(
         reliability_state,
         market_open=market_open,
         paper_active=config.mode == "PAPER" and config.trading_enabled,
-        configured_symbols=len(latest_results),
         now=now,
     )
     st.markdown(status_strip_markup(status), unsafe_allow_html=True)
@@ -3493,13 +3492,6 @@ def _render_pre_unified_trade_desk(
         "DEPLOYED",
         f"${today['deployed_capital']:,.2f}" if today["deployed_capital"] is not None else "—",
     )
-    st.button(
-        "View Paper Trading →",
-        key="trade_desk_view_paper",
-        on_click=set_active_workspace,
-        args=("Paper Trading", st.session_state),
-    )
-
     summary = journal_summary_metrics(records) if records else None
     with st.expander("More stats", expanded=False):
         detail_columns = st.columns(5)
@@ -3651,7 +3643,6 @@ def _render_pre_shell_unified_trade_desk(
         market_open=market_open,
         paper_active=paper_available and config.mode == "PAPER",
         paper_profile=paper_profile,
-        configured_symbols=len(latest_results),
         now=now,
     )
     st.markdown(status_strip_markup(status), unsafe_allow_html=True)
@@ -3734,12 +3725,6 @@ def _render_pre_shell_unified_trade_desk(
         render_live_session_opportunity(
             latest_results, records, compact_panel=True
         )
-        st.button(
-            "View Paper Trading →",
-            key="trade_desk_view_paper",
-            on_click=set_active_workspace,
-            args=("Paper Trading", st.session_state),
-        )
 
     activity_title, activity_filters, activity_action = st.columns(
         [0.28, 0.54, 0.18], gap="small"
@@ -3784,9 +3769,9 @@ def trade_desk_best_trade_markup(latest_results, trade_history):
     ]
     if not eligible:
         return (
-            '<section class="ob-desk-panel ob-best-trade-panel">'
-            '<h3>Today&#39;s Best Trade</h3>'
-            '<div class="ob-desk-empty">No setup currently meets entry requirements.</div>'
+            '<section class="ob-compact-empty ob-best-trade-panel">'
+            '<span>Today&#39;s Best Trade</span>'
+            '<strong>No qualifying setup</strong>'
             '</section>'
         )
     selected = max(eligible, key=lambda item: item.get("score") or 0)
@@ -3883,7 +3868,6 @@ def render_outcome_trade_journal(
         market_open=market_open,
         paper_active=paper_available and config.mode == "PAPER",
         paper_profile=paper_profile,
-        configured_symbols=len(latest_results),
         now=now,
     )
     scorecard = daily_scorecard(records, now.date())
@@ -4020,8 +4004,8 @@ def render_live_session_opportunity(
         st.markdown("### Today's Best Trade")
         if compact_panel:
             st.markdown(
-                '<div class="ob-best-trade-empty">'
-                'No setup currently meets entry requirements.</div>',
+                '<div class="ob-compact-empty"><span>Today&#39;s Best Trade</span>'
+                '<strong>No qualifying setup</strong></div>',
                 unsafe_allow_html=True,
             )
             return

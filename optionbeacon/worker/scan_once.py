@@ -111,14 +111,14 @@ def run_scan_once(
     ).start()
     started = clock()
     build = build_information(streamlit_version="not-applicable")
-    repository.record_scan_heartbeat(
-        scanner_id,
-        started_at=started,
-        code_version=build["commit"],
-        market_data_state="SCANNING",
+    repository.start_scan_run(
+        scanner_id, run_number=run_number, owner_id=owner,
+        started_at=started, code_version=build["commit"],
     )
     results = {}
     failures = 0
+    symbols_attempted = 0
+    symbol_count = 0
     failed_symbols = []
     provider_summary = None
     scan_phase_error = None
@@ -172,6 +172,12 @@ def run_scan_once(
             symbols = list(
                 dict.fromkeys([*flatten_symbol_groups(groups), *sorted(open_symbols)])
             )
+            symbol_count = len(symbols)
+            repository.record_scan_progress(
+                scanner_id, run_number=run_number, owner_id=owner,
+                symbols_attempted=0, symbol_count=symbol_count,
+                results=0, failures=0, at=clock(),
+            )
             LOGGER.info(json.dumps({
                 "event": "scanner_universe_ready", "scanner_id": scanner_id,
                 "run_number": run_number, "symbol_count": len(symbols), "source": source,
@@ -182,6 +188,12 @@ def run_scan_once(
 
             def log_scan_progress(symbol_index):
                 if symbol_index % 10 == 0 or symbol_index == len(symbols):
+                    repository.record_scan_progress(
+                        scanner_id, run_number=run_number, owner_id=owner,
+                        symbols_attempted=symbol_index,
+                        symbol_count=len(symbols), results=len(results),
+                        failures=failures, at=clock(),
+                    )
                     LOGGER.info(json.dumps({
                         "event": "scanner_progress", "scanner_id": scanner_id,
                         "run_number": run_number, "symbols_attempted": symbol_index,
@@ -190,6 +202,7 @@ def run_scan_once(
                     }, sort_keys=True))
 
             for symbol_index, symbol in enumerate(symbols, 1):
+                symbols_attempted = symbol_index
                 result = None
                 failure = None
                 attempts = EOD_QUOTE_ATTEMPTS if symbol in eod_due_symbols else 1
@@ -301,19 +314,22 @@ def run_scan_once(
             refreshed_positions=refreshed_paper_positions,
         )
         if scan_phase_error is not None:
-            repository.record_scan_error(
-                f"{type(scan_phase_error).__name__}: scanner phase failed",
-                scanner_id,
-                code_version=build["commit"],
+            completed = clock()
+            repository.finish_scan_run(
+                scanner_id, run_number=run_number, owner_id=owner,
+                completed_at=completed, symbols_attempted=symbols_attempted,
+                symbol_count=symbol_count, results=len(results), failures=failures,
+                scan_duration=(completed - started).total_seconds(),
+                code_version=build["commit"], market_data_state="ERROR",
+                error_message=f"{type(scan_phase_error).__name__}: scanner phase failed",
             )
             return 1
         completed = clock()
         lease.ensure_owned()
-        repository.record_scan_heartbeat(
-            scanner_id,
-            completed_at=completed,
-            success_at=completed,
-            symbols_processed=len(results),
+        repository.finish_scan_run(
+            scanner_id, run_number=run_number, owner_id=owner,
+            completed_at=completed, symbols_attempted=symbols_attempted,
+            symbol_count=symbol_count, results=len(results), failures=failures,
             scan_duration=(completed - started).total_seconds(),
             code_version=build["commit"],
             market_data_state=(
@@ -342,10 +358,14 @@ def run_scan_once(
                 "run_number": run_number, "stage": stage,
                 "error": type(exc).__name__,
             }, sort_keys=True))
-        repository.record_scan_error(
-            f"{type(exc).__name__}: scanner failed",
-            scanner_id,
-            code_version=build["commit"],
+        completed = clock()
+        repository.finish_scan_run(
+            scanner_id, run_number=run_number, owner_id=owner,
+            completed_at=completed, symbols_attempted=symbols_attempted,
+            symbol_count=symbol_count, results=len(results), failures=failures,
+            scan_duration=(completed - started).total_seconds(),
+            code_version=build["commit"], market_data_state="ERROR",
+            error_message=f"{type(exc).__name__}: scanner failed",
         )
         return 1
     finally:

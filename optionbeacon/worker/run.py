@@ -12,7 +12,6 @@ import threading
 from uuid import uuid4
 
 from build_information import build_information
-from finnhub_universe import DEFAULT_SYMBOL_GROUPS, flatten_symbol_groups
 from intraday_session import EndOfDayConfigurationError, configured_eod_exit_time
 from optionbeacon.worker.database_diagnostics import (
     DatabaseProbeError,
@@ -91,7 +90,6 @@ def startup_record(repository, interval_seconds, scanner_id):
         "application_version": build["commit"],
         "storage_backend": repository.backend,
         "scanner_interval_seconds": interval_seconds,
-        "configured_symbols": len(flatten_symbol_groups(DEFAULT_SYMBOL_GROUPS)),
         "environment": os.getenv(
             "OPTIONBEACON_ENVIRONMENT", build["environment"]
         ),

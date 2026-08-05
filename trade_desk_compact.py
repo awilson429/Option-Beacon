@@ -19,7 +19,7 @@ SIGNAL_EVENTS = {"WATCH_CREATED", "ENTRY_READY"}
 
 
 def status_strip_model(
-    reliability_state, *, market_open, paper_active, configured_symbols=0,
+    reliability_state, *, market_open, paper_active,
     paper_profile=None, now=None,
 ):
     state = reliability_state or {}
@@ -28,18 +28,21 @@ def status_strip_model(
     severity = "healthy"
     if scanner in {"ERROR", "FAILED", "UNAVAILABLE"} or market_data == "UNAVAILABLE":
         severity = "error"
-    elif scanner in {"STALE", "NEVER RUN"} or market_data in {"PARTIAL", "UNKNOWN"}:
+    elif scanner in {"STALE", "WAITING", "NEVER RUN"} or market_data in {"PARTIAL", "UNKNOWN"}:
         severity = "warning"
-    processed = int(state.get("last_symbols_processed") or 0)
-    if severity == "healthy" and processed == 0:
-        severity = "warning"
-    elif severity == "healthy" and configured_symbols and processed < configured_symbols:
-        severity = "warning"
-    scan_time = state.get("last_success_at")
+    scanning = scanner == "SCANNING"
+    processed = int(
+        (state.get("current_symbols_attempted") if scanning else None)
+        or (0 if scanning else state.get("last_symbols_processed") or 0)
+    )
+    total = state.get("current_symbol_count")
+    progress = f"{processed}/{int(total)}" if total is not None else str(processed)
+    scan_time = state.get("last_completed_at") or state.get("last_success_at")
     scanner_label = (
-        "SCANNER CURRENT" if severity == "healthy" else
-        "SCANNER AWAITING DATA" if processed == 0 and scanner not in {"ERROR", "FAILED", "UNAVAILABLE"} else
-        "SCANNER PARTIAL" if configured_symbols and 0 < processed < configured_symbols else
+        f"SCANNING · {progress}" if scanning else
+        f"SCANNER CURRENT · {progress}" if scanner == "CURRENT" else
+        f"SCANNER STALE · {progress}" if scanner == "STALE" else
+        "SCANNER WAITING" if scanner in {"WAITING", "NEVER RUN", "UNKNOWN"} else
         f"SCANNER {scanner}"
     )
     profile = str(paper_profile or "").upper()
@@ -48,15 +51,14 @@ def status_strip_model(
         "market": "MARKET OPEN" if market_open else "MARKET CLOSED",
         "scanner": scanner_label,
         "paper": f"PAPER {profile} ACTIVE" if paper_active and profile else "PAPER ACTIVE" if paper_active else "PAPER DISABLED",
-        "last_scan": f"LAST SCAN {relative_age(scan_time, now).upper()}" if scan_time else "LAST SCAN —",
-        "symbols": f"{processed}/{configured_symbols} SYMBOLS" if configured_symbols else f"{processed} SYMBOLS",
+        "last_scan": f"LAST COMPLETE {relative_age(scan_time, now).upper()}" if scan_time else "LAST COMPLETE —",
     }
 
 
 def status_strip_markup(model):
     pills = "".join(
         f'<span class="ob-desk-status-pill">{escape(str(model[key]))}</span>'
-        for key in ("market", "scanner", "paper", "last_scan", "symbols")
+        for key in ("market", "scanner", "paper", "last_scan")
     )
     return f'<div class="ob-desk-status ob-desk-status-{model["severity"]}">{pills}</div>'
 
@@ -264,7 +266,7 @@ def paper_position_rows(positions, config, now):
 
 def positions_table_markup(rows):
     if not rows:
-        return panel_markup("Open Positions", '<div class="ob-desk-empty">No open positions.</div>')
+        return compact_empty_markup("Open Positions", "0")
     headers = ("SYMBOL", "TYPE", "CONTRACT", "ENTRY", "CURRENT", "P&L $", "P&L %", "HOLD", "STATUS", "DETAILS")
     head = "".join(f"<th>{escape(value)}</th>" for value in headers)
     body = []
@@ -344,7 +346,6 @@ def dashboard_shell_markup(
         f'</div>{status}</header>'
         f'<div class="ob-grid-kpis">{kpis}</div>'
         f'<aside class="ob-grid-risk"><div class="ob-risk-stack">{risk}{best_trade}'
-        '<a class="ob-paper-link" href="?page=paper-trading">View Paper Trading →</a>'
         '</div></aside>'
         f'<div class="ob-grid-positions">{positions}</div>'
         f'<div class="ob-grid-comparison">{comparison}</div>'
@@ -357,9 +358,7 @@ def dashboard_shell_markup(
 
 def authoritative_positions_markup(rows):
     if not rows:
-        return panel_markup(
-            "Open Positions", '<div class="ob-desk-empty">No open positions.</div>'
-        )
+        return compact_empty_markup("Open Positions", "0")
     headers = ("SYMBOL", "TYPE", "ENTRY", "CURRENT", "P&L %", "STATUS")
     head = "".join(f'<th>{value}</th>' for value in headers)
     body = "".join(
@@ -384,6 +383,14 @@ def panel_markup(title, body, *, extra_class=""):
     heading = f'<h3>{escape(title)}</h3>' if title else ""
     classes = f'ob-desk-panel {extra_class}'.strip()
     return f'<section class="{classes}">{heading}{body}</section>'
+
+
+def compact_empty_markup(label, value):
+    return (
+        '<section class="ob-compact-empty">'
+        f'<span>{escape(str(label))}</span><strong>{escape(str(value))}</strong>'
+        '</section>'
+    )
 
 
 def _percent_or_dash(value, *, signed=False):

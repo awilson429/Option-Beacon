@@ -5,6 +5,7 @@ from option_position_tracker import position_from_trade
 from option_trade_engine import PaperOptionTrade
 from execution_config import ExecutionConfig
 from trade_desk_compact import (
+    authoritative_positions_markup,
     dashboard_kpi_model,
     dashboard_shell_markup,
     filtered_activity_rows,
@@ -27,30 +28,44 @@ NOW = datetime(2026, 8, 3, 18, tzinfo=timezone.utc)
 def test_healthy_status_is_compact_and_warning_is_semantic():
     healthy = status_strip_model(
         {"scanner_state": "CURRENT", "market_data_state": "AVAILABLE",
-         "last_success_at": NOW - timedelta(seconds=18), "last_symbols_processed": 8},
-        market_open=True, paper_active=True, configured_symbols=8, now=NOW,
+         "last_success_at": NOW - timedelta(seconds=18),
+         "last_symbols_processed": 68, "current_symbol_count": 68},
+        market_open=True, paper_active=True, now=NOW,
     )
     assert healthy["severity"] == "healthy"
     assert "MARKET OPEN" in status_strip_markup(healthy)
-    assert "8/8 SYMBOLS" in status_strip_markup(healthy)
+    assert "SCANNER CURRENT · 68/68" in status_strip_markup(healthy)
     stale = status_strip_model(
         {"scanner_state": "STALE", "market_data_state": "PARTIAL"},
         market_open=True, paper_active=False,
     )
     assert stale["severity"] == "warning"
+    assert "SCANNER STALE" in status_strip_markup(stale)
     assert "ob-desk-status-warning" in status_strip_markup(stale)
+    error = status_strip_model(
+        {"scanner_state": "ERROR", "market_data_state": "ERROR"},
+        market_open=True, paper_active=False, now=NOW,
+    )
+    assert "SCANNER ERROR" in status_strip_markup(error)
+    assert "ob-desk-status-error" in status_strip_markup(error)
 
 
-def test_profile_status_and_zero_processed_never_claim_scanner_healthy():
+def test_scanning_and_waiting_use_only_authoritative_progress():
     state = status_strip_model(
-        {"scanner_state": "CURRENT", "market_data_state": "AVAILABLE",
-         "last_symbols_processed": 0}, market_open=True, paper_active=True,
-        paper_profile="BROAD", configured_symbols=8, now=NOW,
+        {"scanner_state": "SCANNING", "market_data_state": "SCANNING",
+         "current_symbols_attempted": 30, "current_symbol_count": 68,
+         "last_completed_at": NOW - timedelta(minutes=8)},
+        market_open=True, paper_active=True, paper_profile="BROAD", now=NOW,
     )
     markup = status_strip_markup(state)
     assert "PAPER BROAD ACTIVE" in markup
-    assert "SCANNER CURRENT" not in markup
-    assert "SCANNER AWAITING DATA" in markup
+    assert "SCANNING · 30/68" in markup
+    assert "LAST COMPLETE 8M AGO" in markup
+    waiting = status_strip_model(
+        {"scanner_state": "WAITING", "market_data_state": "UNKNOWN"},
+        market_open=True, paper_active=False, now=NOW,
+    )
+    assert "SCANNER WAITING" in status_strip_markup(waiting)
 
 
 def test_today_summary_prioritizes_paper_and_falls_back_authoritatively():
@@ -172,6 +187,45 @@ def test_unified_position_table_is_newest_first_and_details_are_collapsed():
     assert "<details>" in markup and "MFE" in markup and "MAE" in markup
 
 
+def test_empty_positions_are_compact_and_populated_positions_expand():
+    empty = positions_table_markup([])
+    assert 'class="ob-compact-empty"' in empty
+    assert "Open Positions" in empty and ">0<" in empty
+    assert "ob-position-table" not in empty
+    assert 'class="ob-compact-empty"' in authoritative_positions_markup([])
+
+
+def test_best_trade_empty_is_compact_and_populated_is_expanded(monkeypatch):
+    import app
+
+    monkeypatch.setattr(app, "opportunity_rows", lambda *args, **kwargs: [])
+    empty = app.trade_desk_best_trade_markup({}, [])
+    assert 'class="ob-compact-empty ob-best-trade-panel"' in empty
+    assert "No qualifying setup" in empty
+
+    candidate = {"score": 95, "result": {"trade_plan": {"entry": 100}}}
+    monkeypatch.setattr(
+        app, "opportunity_rows",
+        lambda _results, direction, **kwargs: [candidate] if direction == "Bullish" else [],
+    )
+    monkeypatch.setattr(app, "actionable_trade_plan", lambda result: True)
+    monkeypatch.setattr(app, "historical_evidence", lambda *args: {})
+    monkeypatch.setattr(app, "matching_open_trade", lambda *args: None)
+    monkeypatch.setattr(app, "opportunity_summary", lambda *args: {
+        "confidence": "95", "entry": "$100", "stop": "$97",
+        "target_1": "$105", "symbol": "SPY", "direction": "Bullish",
+    })
+    monkeypatch.setattr(
+        app, "opportunity_entry_presentation",
+        lambda *args, **kwargs: {"entry_status": "READY"},
+    )
+    monkeypatch.setattr(app, "historical_edge_summary", lambda evidence: "Supported")
+    populated = app.trade_desk_best_trade_markup({}, [])
+    assert 'class="ob-desk-panel ob-best-trade-panel"' in populated
+    assert "ob-best-grid" in populated and "SPY" in populated
+    assert "ob-compact-empty" not in populated
+
+
 def test_compact_trade_desk_uses_progressive_disclosure_and_responsive_css():
     from pathlib import Path
     source = Path("app.py").read_text(encoding="utf-8")
@@ -202,13 +256,13 @@ def test_polish_geometry_empty_states_encoding_and_segmented_controls():
     end = source.index("def render_paper_trading_page(", start)
     desk = source[start:end]
     assert "height:4.1rem" in theme.replace(" ", "")
-    assert ".ob-best-trade-empty" in theme
+    assert ".ob-compact-empty" in theme
     assert ".ob-activity-filters" in theme
     assert ".ob-activity-filter.is-active" in theme
     assert ".ob-disclaimer" in theme
     assert "notice notice-warning\">Decision-support" not in source
     assert "trade_desk_best_trade_markup(" in desk
-    assert "No setup currently meets entry requirements." in desk
+    assert "No qualifying setup" in source
     assert "Â·" not in desk
     assert "Ã" not in desk
 
@@ -314,3 +368,5 @@ def test_healthy_status_uses_strip_without_redundant_message_banner():
     desk = source[start:end]
     assert 'if status["severity"] != "healthy"' not in desk
     assert "scanner_alert or provider_alert" in desk
+    assert "configured_symbols=len(latest_results)" not in desk
+    assert "View Paper Trading" not in Path("trade_desk_compact.py").read_text(encoding="utf-8")

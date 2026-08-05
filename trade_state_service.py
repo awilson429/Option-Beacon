@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from signal_history import (
     DEFAULT_MAX_CANDIDATE_AGE_MINUTES,
@@ -36,6 +36,7 @@ from trade_repository import (
 )
 LOGGER = logging.getLogger(__name__)
 DEFAULT_STALE_MINUTES = 15
+SCANNER_PROGRESS_STALE_MINUTES = 5
 
 
 def repository_for_runtime(
@@ -309,8 +310,12 @@ def authoritative_trade_state(
         )
         records = list_trade_outcomes(repository)
         health = repository.get_latest_scan_health()
+        scan_lock = repository.get_scan_lock(
+            health.get("scanner_id") if health else None
+        ) if health else None
         state = scanner_health_state(
             health,
+            scan_lock=scan_lock,
             now=checked_at,
             stale_minutes=stale_minutes,
         )
@@ -324,6 +329,14 @@ def authoritative_trade_state(
             "market_data_state": state["market_data_state"],
             "scanner_id": health.get("scanner_id") if health else None,
             "last_success_at": state["last_success_at"],
+            "last_completed_at": state["last_completed_at"],
+            "last_symbols_processed": state["last_symbols_processed"],
+            "current_run_number": state["current_run_number"],
+            "current_symbols_attempted": state["current_symbols_attempted"],
+            "current_symbol_count": state["current_symbol_count"],
+            "current_results": state["current_results"],
+            "current_failures": state["current_failures"],
+            "progress_updated_at": state["progress_updated_at"],
             "age_minutes": state["age_minutes"],
             "message": state["message"],
             "error": None,
@@ -338,6 +351,14 @@ def authoritative_trade_state(
             "market_data_state": "UNKNOWN",
             "scanner_id": None,
             "last_success_at": None,
+            "last_completed_at": None,
+            "last_symbols_processed": None,
+            "current_run_number": None,
+            "current_symbols_attempted": None,
+            "current_symbol_count": None,
+            "current_results": None,
+            "current_failures": None,
+            "progress_updated_at": None,
             "age_minutes": None,
             "message": (
                 "Trade storage is unavailable. Open-trade information may be "
@@ -350,13 +371,54 @@ def authoritative_trade_state(
 def scanner_health_state(
     health,
     *,
+    scan_lock=None,
     now=None,
     stale_minutes=DEFAULT_STALE_MINUTES,
 ) -> dict:
     checked_at = now or utc_now()
-    if not health or not health.get("last_success_at"):
+    health = health or {}
+    current_owner = health.get("current_owner_id")
+    lock_owner = (scan_lock or {}).get("owner_id")
+    lock_expires = parse_utc((scan_lock or {}).get("expires_at"))
+    progress_updated = parse_utc(health.get("progress_updated_at"))
+    progress_fresh = (
+        progress_updated is not None
+        and checked_at.astimezone(timezone.utc) - progress_updated
+        < timedelta(minutes=SCANNER_PROGRESS_STALE_MINUTES)
+    )
+    scanning = (
+        str(health.get("market_data_state") or "").upper() == "SCANNING"
+        and bool(current_owner)
+        and current_owner == lock_owner
+        and lock_expires is not None
+        and lock_expires > checked_at.astimezone(timezone.utc)
+        and progress_fresh
+    )
+    common = {
+        "last_completed_at": parse_utc(health.get("last_completed_at")),
+        "last_symbols_processed": health.get("last_symbols_processed"),
+        "current_run_number": health.get("current_run_number"),
+        "current_symbols_attempted": health.get("current_symbols_attempted"),
+        "current_symbol_count": health.get("current_symbol_count"),
+        "current_results": health.get("current_results"),
+        "current_failures": health.get("current_failures"),
+        "progress_updated_at": progress_updated,
+    }
+    if scanning:
+        success = parse_utc(health.get("last_success_at"))
+        age = (
+            max(0.0, (checked_at.astimezone(timezone.utc) - success).total_seconds() / 60)
+            if success else None
+        )
+        return {
+            **common, "state": "SCANNING", "market_data_state": "SCANNING",
+            "last_success_at": success, "age_minutes": age,
+            "message": "Scanner is actively processing the authoritative universe.",
+        }
+    if not health.get("last_success_at"):
         if health and health.get("last_error_at"):
             return {
+                **common,
                 "state": "ERROR",
                 "market_data_state": health.get("market_data_state") or "ERROR",
                 "last_success_at": None,
@@ -364,7 +426,8 @@ def scanner_health_state(
                 "message": "Scanner has not completed successfully. Latest scan failed.",
             }
         return {
-            "state": "NEVER RUN",
+            **common,
+            "state": "WAITING",
             "market_data_state": "UNKNOWN",
             "last_success_at": None,
             "age_minutes": None,
@@ -383,6 +446,7 @@ def scanner_health_state(
         state = "CURRENT"
         message = f"Scanner data is current. Last successful scan: {round(age)} minutes ago."
     return {
+        **common,
         "state": state,
         "market_data_state": health.get("market_data_state") or "UNKNOWN",
         "last_success_at": success,
