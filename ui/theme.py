@@ -134,7 +134,8 @@ def configure_page():
         .ob-grid-positions {grid-area:positions;min-width:0}.ob-grid-activity {grid-area:activity;min-width:0}
         .ob-grid-more {grid-area:more;min-width:0}
         .ob-grid-comparison > .ob-desk-panel,.ob-grid-authoritative > .ob-desk-panel,.ob-grid-risk .ob-desk-panel,.ob-grid-positions > .ob-desk-panel {margin:0}
-        .ob-risk-stack {display:grid;gap:12px}.ob-paper-link {background:var(--ob-bg-control);border:1px solid var(--ob-border-default);border-radius:6px;color:var(--ob-gold);font-size:.68rem;padding:.4rem .55rem;text-align:center;text-decoration:none}
+        .ob-risk-stack {display:grid;gap:12px}
+        .ob-compact-empty {align-items:center;background:var(--ob-bg-card);border:1px solid var(--ob-border-default);border-radius:8px;display:flex;gap:.75rem;justify-content:space-between;min-height:2.15rem;padding:.38rem .65rem}.ob-compact-empty span {color:var(--ob-text-secondary);font-size:.7rem;font-weight:800}.ob-compact-empty strong {color:var(--ob-text-muted);font-size:.68rem;text-align:right}
         .ob-performance-anchor {align-items:flex-start;display:flex;flex-direction:column;gap:.12rem;padding:.15rem .35rem .6rem}
         .ob-performance-anchor span {color:var(--ob-text-muted);font-size:.62rem;font-weight:800;letter-spacing:.055em}
         .ob-performance-anchor strong {font-size:1.65rem;line-height:1.1}
@@ -190,7 +191,7 @@ def configure_page():
 
         @media (min-width: 760px) and (max-width: 1099px) {
             .ob-trade-dashboard {grid-template-areas:"header header" "kpis kpis" "positions risk" "comparison comparison" "authoritative authoritative" "activity activity" "more more";grid-template-columns:minmax(0,2fr) minmax(280px,1fr)}
-            .ob-risk-stack {grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.ob-risk-stack .ob-paper-link {grid-column:1/-1}
+            .ob-risk-stack {grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
             .ob-desk-kpis {grid-template-columns:repeat(3,minmax(0,1fr))}
             .ob-performance-grid {grid-template-columns:repeat(3,minmax(0,1fr))}
         }

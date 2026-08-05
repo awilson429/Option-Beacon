@@ -210,6 +210,20 @@ class TradeRepository:
         cursor.close()
         return rows
 
+    def _table_columns(self, connection, table_name):
+        if self.backend == "postgresql":
+            rows = self._fetchall(
+                connection,
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema=current_schema() AND table_name=?",
+                (table_name,),
+            )
+            return {row["column_name"] for row in rows}
+        cursor = self._execute(connection, f"PRAGMA table_info({table_name})")
+        rows = cursor.fetchall()
+        cursor.close()
+        return {row["name"] for row in rows}
+
     def initialize(self):
         self._diagnostic("repository_schema_initialization_started")
         with self.connection() as connection:
@@ -327,10 +341,37 @@ class TradeRepository:
                     scan_duration REAL,
                     code_version TEXT,
                     market_data_state TEXT,
+                    current_run_number INTEGER,
+                    current_symbols_attempted INTEGER,
+                    current_symbol_count INTEGER,
+                    current_results INTEGER,
+                    current_failures INTEGER,
+                    progress_updated_at TEXT,
+                    current_owner_id TEXT,
                     updated_at TEXT NOT NULL
                 )
                 """,
             ).close()
+            existing_health_columns = self._table_columns(connection, "scanner_health")
+            for column, column_type in {
+                "current_run_number": "INTEGER",
+                "current_symbols_attempted": "INTEGER",
+                "current_symbol_count": "INTEGER",
+                "current_results": "INTEGER",
+                "current_failures": "INTEGER",
+                "progress_updated_at": "TEXT",
+                "current_owner_id": "TEXT",
+            }.items():
+                if self.backend == "postgresql":
+                    self._execute(
+                        connection,
+                        f"ALTER TABLE scanner_health ADD COLUMN IF NOT EXISTS {column} {column_type}",
+                    ).close()
+                elif column not in existing_health_columns:
+                    self._execute(
+                        connection,
+                        f"ALTER TABLE scanner_health ADD COLUMN {column} {column_type}",
+                    ).close()
             self._diagnostic(
                 "repository_schema_operation_completed", operation="scanner_health"
             )
@@ -805,6 +846,97 @@ class TradeRepository:
                     (status,),
                 )
             ]
+
+    def start_scan_run(
+        self, scanner_id=DEFAULT_SCANNER_ID, *, run_number, owner_id,
+        started_at, symbol_count=None, code_version=None,
+    ):
+        """Initialize current-run telemetry after the caller owns the scan lease."""
+        current = self.get_scan_health(scanner_id) or {}
+        now = utc_iso(started_at)
+        values = {
+            "last_started_at": now,
+            "last_completed_at": current.get("last_completed_at"),
+            "last_success_at": current.get("last_success_at"),
+            "last_error_at": current.get("last_error_at"),
+            "last_error_message": current.get("last_error_message"),
+            "last_symbols_processed": current.get("last_symbols_processed"),
+            "scan_duration": current.get("scan_duration"),
+            "code_version": code_version or current.get("code_version"),
+            "market_data_state": "SCANNING",
+            "current_run_number": int(run_number or 0),
+            "current_symbols_attempted": 0,
+            "current_symbol_count": symbol_count,
+            "current_results": 0,
+            "current_failures": 0,
+            "progress_updated_at": now,
+            "current_owner_id": owner_id,
+            "updated_at": utc_iso(),
+        }
+        self._upsert_health(scanner_id, values)
+        return self.get_scan_health(scanner_id)
+
+    def record_scan_progress(
+        self, scanner_id=DEFAULT_SCANNER_ID, *, run_number, owner_id,
+        symbols_attempted, symbol_count, results, failures, at=None,
+    ) -> bool:
+        """Persist bounded progress only for the still-authoritative run owner."""
+        with self.connection() as connection:
+            cursor = self._execute(
+                connection,
+                """
+                UPDATE scanner_health SET current_symbols_attempted=?,
+                    current_symbol_count=?,current_results=?,current_failures=?,
+                    progress_updated_at=?,updated_at=?
+                WHERE scanner_id=? AND current_run_number=? AND current_owner_id=?
+                """,
+                (
+                    int(symbols_attempted), int(symbol_count), int(results),
+                    int(failures), utc_iso(at), utc_iso(), scanner_id,
+                    int(run_number or 0), owner_id,
+                ),
+            )
+            updated = cursor.rowcount > 0
+            cursor.close()
+        return updated
+
+    def finish_scan_run(
+        self, scanner_id=DEFAULT_SCANNER_ID, *, run_number, owner_id,
+        completed_at, symbols_attempted, symbol_count, results, failures,
+        scan_duration, code_version=None, market_data_state="AVAILABLE",
+        error_message=None,
+    ) -> bool:
+        """Finalize only the run that still owns the persisted current-run state."""
+        completed = utc_iso(completed_at)
+        success = error_message is None
+        assignments = [
+            "last_completed_at=?", "last_symbols_processed=?", "scan_duration=?",
+            "code_version=?", "market_data_state=?", "current_symbols_attempted=?",
+            "current_symbol_count=?", "current_results=?", "current_failures=?",
+            "progress_updated_at=?", "current_owner_id=NULL", "updated_at=?",
+        ]
+        values = [
+            completed, int(results), scan_duration, code_version,
+            market_data_state, int(symbols_attempted), int(symbol_count),
+            int(results), int(failures), completed, utc_iso(),
+        ]
+        if success:
+            assignments.extend(["last_success_at=?", "last_error_message=NULL"])
+            values.append(completed)
+        else:
+            assignments.extend(["last_error_at=?", "last_error_message=?"])
+            values.extend([completed, str(error_message)[:500]])
+        values.extend([scanner_id, int(run_number or 0), owner_id])
+        with self.connection() as connection:
+            cursor = self._execute(
+                connection,
+                f"UPDATE scanner_health SET {','.join(assignments)} "
+                "WHERE scanner_id=? AND current_run_number=? AND current_owner_id=?",
+                tuple(values),
+            )
+            updated = cursor.rowcount > 0
+            cursor.close()
+        return updated
 
     def record_scan_heartbeat(
         self,

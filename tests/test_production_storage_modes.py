@@ -389,7 +389,7 @@ def test_healthcheck_exit_codes(tmp_path):
     repo = TradeRepository(tmp_path / "state.db", database_url="")
     code, never = check_health(repository=repo, scanner_id="health")
     assert code == 1
-    assert never["scanner_state"] == "NEVER RUN"
+    assert never["scanner_state"] == "WAITING"
 
     repo.record_scan_heartbeat(
         "health",
