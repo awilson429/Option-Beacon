@@ -3,7 +3,7 @@ from pathlib import Path
 from app import header_markup
 
 
-TIMESTAMP = "2026-07-31 10:42:18 AM ET"
+TIMESTAMP = "10:42:18 AM ET"
 
 
 def test_status_controls_render_inside_one_brand_header():
@@ -31,12 +31,13 @@ def test_refresh_label_timestamp_and_branding_remain_present():
     assert "Option Beacon" in markup
     assert "ETF + Single Stock Scanner" in markup
     assert "Refresh 1 min" in markup
-    assert f"Last refreshed {TIMESTAMP}" in markup
+    assert TIMESTAMP in markup
+    assert "Last refreshed" not in markup
     assert 'src="logo.png"' in markup
     assert 'class="pill pill-secondary pill-stack brand-refresh-label"' in markup
     refresh_start = markup.index('class="pill pill-secondary pill-stack brand-refresh-label"')
     refresh_end = markup.index("</span>", markup.index("</span>", refresh_start) + 1)
-    assert refresh_start < markup.index("Last refreshed", refresh_start) < refresh_end
+    assert refresh_start < markup.index(TIMESTAMP, refresh_start) < refresh_end
 
 
 def test_shared_css_uses_single_desktop_row_and_internal_responsive_fallback():
@@ -74,11 +75,19 @@ def test_status_pills_share_identical_dimensions_and_box_model():
     source = Path("ui/theme.py").read_text(encoding="utf-8")
     controls = source.split(".brand-controls .pill", 1)[1].split("}", 1)[0]
 
-    assert "width: 12rem" in controls
-    assert "height: 3rem" in controls
-    assert "min-height: 3rem" in controls
+    assert "width: 10rem" in controls
+    assert "height: 3.375rem" in controls
+    assert "min-height: 3.375rem" in controls
+    assert "border-radius: 8px" in controls
     assert "border-width: 1px" in controls
-    assert "padding: 0.42rem 0.75rem" in controls
+    assert "padding: 0.45rem 0.7rem" in controls
+
+
+def test_refresh_timestamp_uses_time_only_eastern_display_format():
+    source = Path("app.py").read_text(encoding="utf-8")
+
+    assert 'strftime("%I:%M:%S %p ET")' in source
+    assert 'strftime("%Y-%m-%d %I:%M:%S %p ET")' not in source
 
 
 def test_subtitle_is_centered_only_within_branding_text_wrapper():
