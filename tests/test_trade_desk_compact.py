@@ -9,15 +9,14 @@ from trade_desk_compact import (
     dashboard_shell_markup,
     filtered_activity_rows,
     kpi_row_markup,
+    more_stats_markup,
     paper_active_row,
     paper_position_rows,
     positions_table_markup,
-    performance_summary_markup,
     risk_panel_markup,
     risk_status_model,
     status_strip_markup,
     status_strip_model,
-    trade_stats_markup,
     today_summary_model,
 )
 
@@ -97,7 +96,8 @@ def test_risk_status_uses_authoritative_limits_and_semantic_thresholds():
     assert [item["percent"] for item in model["items"]] == [85, 50, 40, 60]
     assert model["items"][0]["treatment"] == "warning"
     markup = risk_panel_markup(model)
-    assert "Daily Loss" in markup and "$15.00 remaining" in markup
+    assert "Daily Loss" in markup and "85%" in markup
+    assert "$15.00 remaining" not in markup
     assert "ob-risk-warning" in markup
 
 
@@ -109,6 +109,8 @@ def test_activity_orders_filters_limits_and_expands_without_duplicates():
          "symbol": "QQQ", "description": "enter"},
         {"trade_id": "c", "event_type": "TRADE_CLOSED", "event_timestamp": NOW + timedelta(seconds=4),
          "symbol": "NVDA", "description": "exit", "realized_return": 1},
+        {"trade_id": "d", "event_type": "INVALIDATED", "event_timestamp": NOW + timedelta(seconds=6),
+         "symbol": "TSLA", "description": "invalid"},
     ]
     assert [row["Event"] for row in filtered_activity_rows(events, now=NOW, limit=2)] == ["EXIT", "ENTER"]
     assert [row["Event"] for row in filtered_activity_rows(events, selected="ENTRIES", now=NOW)] == ["ENTER"]
@@ -222,11 +224,11 @@ def test_approved_dashboard_shell_and_exact_grid_geometry_exist():
     assert "st.columns(" not in desk
     assert ".ob-trade-dashboard" in theme
     compact_css = theme.replace(" ", "").replace("\n", "")
-    assert "grid-template-columns:minmax(0,2fr)minmax(320px,1fr)" in compact_css
-    for area in ("header", "kpis", "performance", "risk", "positions", "activity", "summary", "stats"):
+    assert "grid-template-columns:minmax(0,7fr)minmax(280px,3fr)" in compact_css
+    for area in ("header", "kpis", "positions", "risk", "performance", "activity", "more"):
         assert f"ob-grid-{area}" in theme or f'"{area}' in theme
-    assert '"activitysummary"' in compact_css
-    assert '"activitystats"' in compact_css
+    assert '"positionsrisk""performancerisk""activityactivity""moremore"' in compact_css
+    assert "ob-grid-summary" not in theme and "ob-grid-stats" not in theme
     assert "trade_desk_best_trade_markup(" in desk
     assert "max-width:100%" in theme.replace(" ", "")
     assert "min-height:13.2rem" not in theme
@@ -238,17 +240,18 @@ def test_semantic_shell_contains_all_panels_and_inline_activity_controls():
         status="STATUS", kpis="KPIS", performance="PERFORMANCE",
         risk="RISK", best_trade="BEST", positions="POSITIONS",
         activity_rows="ACTIVITY ROWS", activity_filter="ENTRIES",
-        view_all=False, performance_summary="SUMMARY", trade_stats="STATS",
+        view_all=False, more_stats="MORE",
     )
     assert markup.count('class="ob-trade-dashboard"') == 1
     for css_class in (
         "ob-grid-header", "ob-grid-kpis", "ob-grid-performance",
         "ob-grid-risk", "ob-grid-positions", "ob-grid-activity",
-        "ob-grid-summary", "ob-grid-stats",
+        "ob-grid-more",
     ):
         assert css_class in markup
-    assert markup.index("PERFORMANCE") < markup.index("POSITIONS")
-    assert markup.index("RISK") < markup.index("POSITIONS")
+    assert markup.index("POSITIONS") < markup.index("PERFORMANCE")
+    assert markup.index("RISK") < markup.index("PERFORMANCE")
+    assert "ob-grid-summary" not in markup and "ob-grid-stats" not in markup
     assert 'class="ob-activity-filter is-active"' in markup
     assert markup.index("Recent Activity") < markup.index("ACTIVITY ROWS")
 
@@ -264,7 +267,7 @@ def test_trade_desk_sources_contain_no_malformed_utf8_artifacts():
     assert "Â" not in source
 
 
-def test_bottom_panels_use_existing_metrics_without_trading_mutation():
+def test_more_stats_collapses_secondary_metrics_without_redundancy():
     paper = {
         "realized_pnl": 40.0, "open_pnl": -10.0, "today_pnl": 30.0,
         "trades_today": 3, "win_rate": 50.0, "average_winner": 25.0,
@@ -274,13 +277,31 @@ def test_bottom_panels_use_existing_metrics_without_trading_mutation():
         "opened_alerts": 3, "win_rate": 50.0, "best_trade": 4.0,
         "worst_trade": -2.0, "average_hold_minutes": 18.0,
     }
-    summary_markup = performance_summary_markup(paper, paper_available=True)
-    stats_markup = trade_stats_markup(score, paper, paper_available=True)
-    assert "$+40.00" in summary_markup
-    assert "$-10.00" in summary_markup
-    assert "$+30.00" in summary_markup
-    assert "Total Trades" in stats_markup and ">3<" in stats_markup
+    stats_markup = more_stats_markup(score, paper, paper_available=True)
+    assert '<details class="ob-more-stats">' in stats_markup
+    assert "More Stats" in stats_markup
+    assert "Total Trades" not in stats_markup and "Win Rate" not in stats_markup
+    for label in ("Best Trade", "Worst Trade", "Average Win", "Average Loss", "Average Hold"):
+        assert label in stats_markup
     assert "+4.00%" in stats_markup and "-2.00%" in stats_markup
+
+
+def test_activity_all_hides_invalidations_and_labels_numeric_context():
+    events = [
+        {"trade_id": "invalid", "event_type": "INVALIDATED", "event_timestamp": NOW + timedelta(seconds=4),
+         "symbol": "IWM", "underlying_price": 220},
+        {"trade_id": "ready", "event_type": "ENTRY_READY", "event_timestamp": NOW + timedelta(seconds=3),
+         "symbol": "SPY", "underlying_price": 610},
+        {"trade_id": "entry", "event_type": "TRADE_ENTERED", "event_timestamp": NOW + timedelta(seconds=2),
+         "symbol": "QQQ", "option_symbol": "QQQ-C", "underlying_price": 480, "entry_price": 1.25},
+        {"trade_id": "exit", "event_type": "TRADE_CLOSED", "event_timestamp": NOW + timedelta(seconds=1),
+         "symbol": "NVDA", "realized_return": 12.5},
+    ]
+    rows = filtered_activity_rows(events, now=NOW, view_all=True)
+    assert [row["Event"] for row in rows] == ["READY", "ENTER", "EXIT"]
+    assert rows[0]["Display Result"].endswith(" underlying")
+    assert rows[1]["Display Result"].endswith(" entry")
+    assert rows[2]["Display Result"] == "+12.50%"
 
 
 def test_healthy_status_uses_strip_without_redundant_message_banner():
