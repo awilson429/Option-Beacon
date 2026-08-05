@@ -8,6 +8,7 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from build_information import build_information
 from finnhub_universe import active_symbol_groups, flatten_symbol_groups
@@ -31,6 +32,13 @@ from paper_execution import (
     run_paper_execution,
 )
 from paper_execution_repository import PaperExecutionRepository
+from mirror_execution import (
+    MirrorExecutionRepository,
+    mirror_enabled,
+    mirror_experiment_start,
+    pending_mirror_entries,
+    run_mirror_execution,
+)
 from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable
 from trade_state_service import (
     list_trade_outcomes,
@@ -150,6 +158,16 @@ def run_scan_once(
         with performance.measure("configuration_resolution"):
             paper_repository = PaperExecutionRepository(repository)
             paper_config = ExecutionConfig.from_environment()
+            mirror_repository = MirrorExecutionRepository(repository)
+            mirror_is_enabled = mirror_enabled()
+            mirror_start_date = mirror_experiment_start()
+            if mirror_is_enabled and mirror_start_date is None:
+                prior_mirror_state = mirror_repository.runtime_state()
+                prior_start = (prior_mirror_state or {}).get("experiment_start_date")
+                try:
+                    mirror_start_date = datetime.fromisoformat(str(prior_start)).date()
+                except (TypeError, ValueError):
+                    mirror_start_date = clock().astimezone(ZoneInfo("America/New_York")).date()
         config_record = execution_config_log_record(paper_config)
         config_record.update(scanner_id=scanner_id, run_number=run_number)
         LOGGER.info(json.dumps(config_record, sort_keys=True))
@@ -359,6 +377,19 @@ def run_scan_once(
                 run_number=run_number,
                 refreshed_positions=refreshed_paper_positions,
             )
+        stage = "mirror_execution"
+        lease.ensure_owned()
+        with performance.measure("mirror_handoff_query"):
+            mirror_candidates = pending_mirror_entries(
+                repository, results, mirror_repository
+            ) if mirror_is_enabled else []
+        with performance.measure("mirror_cycle"):
+            run_mirror_execution(
+                repository, mirror_repository, mirror_candidates,
+                enabled=mirror_is_enabled, scanner_id=scanner_id,
+                run_number=run_number, now=clock(),
+                experiment_start_date=mirror_start_date,
+            )
         if scan_phase_error is not None:
             completed = clock()
             with performance.measure("health_completion"):
@@ -393,7 +424,7 @@ def run_scan_once(
         if stage in {
             "paper_repository_initialization", "paper_runtime_config_persistence",
             "paper_state_refresh",
-            "authoritative_entry_query", "paper_execution",
+            "authoritative_entry_query", "paper_execution", "mirror_execution",
         }:
             LOGGER.exception(json.dumps({
                 "event": "paper_cycle_failed", "scanner_id": scanner_id,
