@@ -1,9 +1,12 @@
 import json
 import os
+import time
 from datetime import date, datetime
 from functools import lru_cache
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+from scanner_performance import measure_stage, record_provider_call
 
 
 DEFAULT_BASE_URL = "https://api.tradier.com/v1"
@@ -51,10 +54,27 @@ def _get_json(path, params=None, timeout=8):
         url = f"{url}?{urlencode(params)}"
 
     request = Request(url, headers=_headers())
+    started = time.perf_counter()
+    operation = {
+        "/markets/options/expirations": "option_expirations",
+        "/markets/options/chains": "option_chain",
+        "/markets/quotes": "option_quote",
+    }.get(path, "request")
     try:
         with urlopen(request, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8")), ""
+            payload = json.loads(response.read().decode("utf-8"))
+            record_provider_call(
+                "Tradier", operation, (time.perf_counter() - started) * 1000,
+                success=True, http_status=getattr(response, "status", None),
+            )
+            return payload, ""
     except Exception as exc:
+        status = getattr(exc, "code", None)
+        record_provider_call(
+            "Tradier", operation, (time.perf_counter() - started) * 1000,
+            success=False, rate_limited=status == 429,
+            timeout=isinstance(exc, TimeoutError), http_status=status,
+        )
         return None, f"Tradier request failed: {exc}"
 
 
@@ -264,21 +284,22 @@ def option_liquidity_for_setup(result):
     if error:
         return {"available": False, "score": 0, "label": "Unavailable", "detail": error}
 
-    same_side = [
-        contract for contract in contracts
-        if str(contract.get("option_type", "")).lower() == side
-    ]
-    if not same_side:
-        return {"available": False, "score": 0, "label": "Unavailable", "detail": f"No {side} contracts returned for {expiration}."}
+    with measure_stage("option_contract_filtering"):
+        same_side = [
+            contract for contract in contracts
+            if str(contract.get("option_type", "")).lower() == side
+        ]
+        if not same_side:
+            return {"available": False, "score": 0, "label": "Unavailable", "detail": f"No {side} contracts returned for {expiration}."}
 
-    scored = []
-    for contract in same_side:
-        score, spread_pct = _contract_score(contract, price)
-        scored.append((score, spread_pct, contract))
+        scored = []
+        for contract in same_side:
+            score, spread_pct = _contract_score(contract, price)
+            scored.append((score, spread_pct, contract))
 
-    scored.sort(key=lambda item: item[0], reverse=True)
-    best_score, best_spread, best_contract = scored[0]
-    return _contract_payload(best_contract, best_score, best_spread, dte)
+        scored.sort(key=lambda item: item[0], reverse=True)
+        best_score, best_spread, best_contract = scored[0]
+        return _contract_payload(best_contract, best_score, best_spread, dte)
 
 
 def enrich_with_option_liquidity(result):

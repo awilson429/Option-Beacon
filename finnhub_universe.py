@@ -7,6 +7,8 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
+from scanner_performance import record_provider_call, record_throttle_wait
+
 
 DEFAULT_ETF_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA"]
 DEFAULT_STOCK_SYMBOLS = ["NVDA", "TSLA", "AAPL", "AMD"]
@@ -229,8 +231,23 @@ def candidate_symbols():
 def _request_json(path, params, api_key):
     query = urlencode({**params, "token": api_key})
     request = Request(f"{FINNHUB_BASE_URL}{path}?{query}", headers={"User-Agent": "OptionBeacon/1.0"})
-    with urlopen(request, timeout=8) as response:
-        return json.loads(response.read().decode("utf-8"))
+    started = time.perf_counter()
+    try:
+        with urlopen(request, timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            record_provider_call(
+                "Finnhub", "quote", (time.perf_counter() - started) * 1000,
+                success=True, http_status=getattr(response, "status", None),
+            )
+            return payload
+    except Exception as exc:
+        status = getattr(exc, "code", None)
+        record_provider_call(
+            "Finnhub", "quote", (time.perf_counter() - started) * 1000,
+            success=False, rate_limited=status == 429,
+            timeout=isinstance(exc, TimeoutError), http_status=status,
+        )
+        raise
 
 
 def today_label():
@@ -308,6 +325,7 @@ def rank_daily_movers(api_key=None, symbols=None, limit=None, attention_limit=No
                 quotes.append(quote)
         except (OSError, URLError, ValueError, TimeoutError) as exc:
             errors.append(f"{symbol}: {exc}")
+        record_throttle_wait(pause_seconds)
         time.sleep(pause_seconds)
 
     if not quotes:
