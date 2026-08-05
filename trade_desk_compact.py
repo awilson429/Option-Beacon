@@ -37,7 +37,7 @@ def status_strip_model(
         severity = "warning"
     scan_time = state.get("last_success_at")
     scanner_label = (
-        "SCANNER HEALTHY" if severity == "healthy" else
+        "SCANNER CURRENT" if severity == "healthy" else
         "SCANNER AWAITING DATA" if processed == 0 and scanner not in {"ERROR", "FAILED", "UNAVAILABLE"} else
         "SCANNER PARTIAL" if configured_symbols and 0 < processed < configured_symbols else
         f"SCANNER {scanner}"
@@ -177,7 +177,7 @@ def risk_panel_markup(model):
         return panel_markup("Risk Status", '<div class="ob-desk-empty">PAPER risk state unavailable.</div>')
     rows = "".join(
         f'<div class="ob-risk-row"><div class="ob-risk-line"><span>{escape(item["label"])}</span>'
-        f'<span>{escape(item["display"])} Â· {item["percent"]:.0f}%</span></div>'
+        f'<span>{escape(item["display"])} <small>{item["percent"]:.0f}%</small></span></div>'
         f'<div class="ob-risk-track"><span class="ob-risk-fill ob-risk-{item["treatment"]}" '
         f'style="width:{item["percent"]:.1f}%"></span></div></div>'
         for item in model["items"]
@@ -195,7 +195,6 @@ def performance_panel_markup(summary, paper_summary, *, paper_available):
             ("Trades Closed", str(paper_summary["trades_closed_today"])),
             ("Profit Factor", "âˆž" if math.isinf(factor) else f'{factor:.2f}'),
         )
-        note = "Persisted PAPER account performance; no synthetic equity curve."
     else:
         score = summary or {}
         values = (
@@ -205,15 +204,11 @@ def performance_panel_markup(summary, paper_summary, *, paper_available):
             ("Best Trade", _percent_or_dash(score.get("best_trade"), signed=True)),
             ("Profit Factor", _number_or_dash(score.get("profit_factor"))),
         )
-        note = "Authoritative lifecycle fallback; PAPER account state unavailable."
     stats = "".join(
         f'<div class="ob-performance-stat"><span>{escape(label)}</span><strong>{escape(value)}</strong></div>'
         for label, value in values
     )
-    return panel_markup(
-        "Today Performance",
-        f'<div class="ob-performance-grid">{stats}</div><div class="ob-panel-note">{escape(note)}</div>',
-    )
+    return panel_markup("Today Performance", f'<div class="ob-performance-grid">{stats}</div>')
 
 
 def paper_position_rows(positions, config, now):
@@ -238,19 +233,20 @@ def paper_position_rows(positions, config, now):
 def positions_table_markup(rows):
     if not rows:
         return panel_markup("Open Positions", '<div class="ob-desk-empty">No open positions.</div>')
-    headers = ("SYMBOL", "TYPE", "STRIKE / EXP", "ENTRY", "CURRENT", "P&L $", "P&L %", "HOLD", "STATUS", "DETAILS")
+    headers = ("SYMBOL", "TYPE", "CONTRACT", "ENTRY", "CURRENT", "P&L $", "P&L %", "HOLD", "STATUS", "DETAILS")
     head = "".join(f"<th>{escape(value)}</th>" for value in headers)
     body = []
     for row in rows:
         treatment = "positive" if row["pnl_dollars"] >= 0 else "negative"
         detail = (
-            f'Qty {row["quantity"]} Â· Stop ${row["stop"]:.2f} Â· Target ${row["target"]:.2f} Â· '
-            f'MFE {row["mfe"]:+.2f}% Â· MAE {row["mae"]:+.2f}% Â· Score {row["score"] if row["score"] is not None else "â€”"}'
+            f'Qty {row["quantity"]} · Strike/expiry {row["strike_exp"]} · Stop ${row["stop"]:.2f} · '
+            f'Target ${row["target"]:.2f} · MFE {row["mfe"]:+.2f}% · MAE {row["mae"]:+.2f}% · '
+            f'Score {row["score"] if row["score"] is not None else "—"}'
         )
         body.append(
             '<tr>'
             f'<td><strong>{escape(row["symbol"])}</strong></td><td>{escape(row["type"])}</td>'
-            f'<td>{escape(row["strike_exp"])}</td><td>${row["entry"]:.2f}</td><td>${row["current"]:.2f}</td>'
+            f'<td>{escape(row["contract"])}</td><td>${row["entry"]:.2f}</td><td>${row["current"]:.2f}</td>'
             f'<td class="ob-value-{treatment}">${row["pnl_dollars"]:+,.2f}</td>'
             f'<td class="ob-value-{treatment}">{row["pnl_percent"]:+.2f}%</td>'
             f'<td>{escape(row["duration"])}</td><td><span class="ob-position-state">OPEN</span></td>'
@@ -260,9 +256,10 @@ def positions_table_markup(rows):
     return panel_markup("Open Positions", table)
 
 
-def activity_panel_markup(rows):
+def activity_panel_markup(rows, *, show_title=True):
+    title = "Recent Activity" if show_title else ""
     if not rows:
-        return panel_markup("Recent Activity", '<div class="ob-desk-empty">No meaningful activity recorded.</div>')
+        return panel_markup(title, '<div class="ob-desk-empty">No meaningful activity recorded.</div>')
     items = "".join(
         f'<div class="ob-activity-row"><span class="ob-activity-time">{escape(str(row["Time"]))}</span>'
         f'<span class="ob-activity-tag ob-activity-{escape(str(row["Event"]).lower().replace(" ", "-"))}">{escape(str(row["Event"]))}</span>'
@@ -271,11 +268,12 @@ def activity_panel_markup(rows):
         f'<span class="ob-activity-result">{escape(str(row.get("Price / Result") or "â€”"))}</span></div>'
         for row in rows
     )
-    return panel_markup("Recent Activity", items)
+    return panel_markup(title, items)
 
 
 def panel_markup(title, body):
-    return f'<section class="ob-desk-panel"><h3>{escape(title)}</h3>{body}</section>'
+    heading = f'<h3>{escape(title)}</h3>' if title else ""
+    return f'<section class="ob-desk-panel">{heading}{body}</section>'
 
 
 def _percent_or_dash(value, *, signed=False):
