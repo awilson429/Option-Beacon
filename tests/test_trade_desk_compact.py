@@ -47,7 +47,7 @@ def test_profile_status_and_zero_processed_never_claim_scanner_healthy():
     )
     markup = status_strip_markup(state)
     assert "PAPER BROAD ACTIVE" in markup
-    assert "SCANNER HEALTHY" not in markup
+    assert "SCANNER CURRENT" not in markup
     assert "SCANNER AWAITING DATA" in markup
 
 
@@ -114,6 +114,19 @@ def test_activity_orders_filters_limits_and_expands_without_duplicates():
     assert len(filtered_activity_rows([events[2], duplicate_exit], now=NOW)) == 1
 
 
+def test_recent_activity_production_default_is_six_and_controls_are_integrated():
+    from pathlib import Path
+    source = Path("app.py").read_text(encoding="utf-8")
+    start = source.index("def render_outcome_trade_journal(")
+    end = source.index("def render_live_session_opportunity(", start)
+    desk = source[start:end]
+    assert "limit=6" in desk
+    assert "st.toggle(" not in desk
+    assert 'activity_title.markdown("### Recent Activity")' in desk
+    assert 'key="trade_desk_activity_all"' in desk
+    assert "activity_panel_markup(activity, show_title=False)" in desk
+
+
 def test_collapsed_paper_position_row_preserves_current_calculations():
     trade = PaperOptionTrade(
         trade_id="t", source_signal_id="s", created_timestamp=NOW, ticker="SPY",
@@ -173,3 +186,32 @@ def test_compact_trade_desk_uses_progressive_disclosure_and_responsive_css():
     mobile = css.split("@media(max-width:700px)", 1)[1]
     assert "grid-template-columns:repeat(2,minmax(0,1fr))" in mobile
     assert ".ob-position-scroll{overscroll-behavior-inline:contain}" in mobile
+
+
+def test_polish_geometry_empty_states_encoding_and_segmented_controls():
+    from pathlib import Path
+    theme = Path("ui/theme.py").read_text(encoding="utf-8")
+    source = Path("app.py").read_text(encoding="utf-8")
+    start = source.index("def render_outcome_trade_journal(")
+    end = source.index("def render_paper_trading_page(", start)
+    desk = source[start:end]
+    assert "height:4.1rem" in theme.replace(" ", "")
+    assert ".ob-best-trade-empty" in theme
+    assert ".st-key-trade_desk_activity_filter" in theme
+    assert '[role="radiogroup"]' in theme
+    assert ".ob-disclaimer" in theme
+    assert "notice notice-warning\">Decision-support" not in source
+    assert "compact_panel=True" in desk
+    assert "No setup currently meets entry requirements." in desk
+    assert "Â·" not in desk
+    assert "Ã" not in desk
+
+
+def test_healthy_status_uses_strip_without_redundant_message_banner():
+    from pathlib import Path
+    source = Path("app.py").read_text(encoding="utf-8")
+    start = source.index("def render_outcome_trade_journal(")
+    end = source.index("def render_live_session_opportunity(", start)
+    desk = source[start:end]
+    assert 'if status["severity"] != "healthy"' not in desk
+    assert "scanner_alert or provider_alert" in desk

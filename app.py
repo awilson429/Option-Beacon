@@ -3645,7 +3645,12 @@ def render_outcome_trade_journal(
         now=now,
     )
     st.markdown(status_strip_markup(status), unsafe_allow_html=True)
-    if status["severity"] != "healthy":
+    reliability = reliability_state or {}
+    scanner_alert = str(reliability.get("scanner_state") or "").upper() in {
+        "STALE", "ERROR", "FAILED", "UNAVAILABLE", "NEVER RUN",
+    }
+    provider_alert = str(reliability.get("market_data_state") or "").upper() == "UNAVAILABLE"
+    if scanner_alert or provider_alert:
         message = (reliability_state or {}).get("message")
         if message:
             (st.error if status["severity"] == "error" else st.warning)(message)
@@ -3716,7 +3721,9 @@ def render_outcome_trade_journal(
             ),
             unsafe_allow_html=True,
         )
-        render_live_session_opportunity(latest_results, records)
+        render_live_session_opportunity(
+            latest_results, records, compact_panel=True
+        )
         st.button(
             "View Paper Trading →",
             key="trade_desk_view_paper",
@@ -3724,27 +3731,39 @@ def render_outcome_trade_journal(
             args=("Paper Trading", st.session_state),
         )
 
-    event_filter = st.radio(
-        "Activity filter", ACTIVITY_FILTERS, horizontal=True,
-        label_visibility="collapsed", key="trade_desk_activity_filter",
+    activity_title, activity_filters, activity_action = st.columns(
+        [0.28, 0.54, 0.18], gap="small"
     )
-    view_all = st.toggle(
-        "View all activity", value=False, key="trade_desk_activity_all"
-    )
+    activity_title.markdown("### Recent Activity")
+    with activity_filters:
+        event_filter = st.radio(
+            "Activity filter", ACTIVITY_FILTERS, horizontal=True,
+            label_visibility="collapsed", key="trade_desk_activity_filter",
+        )
+    view_all = bool(st.session_state.get("trade_desk_activity_expanded", False))
+    with activity_action:
+        if st.button(
+            "Show latest" if view_all else "View all",
+            key="trade_desk_activity_all",
+        ):
+            view_all = not view_all
+            st.session_state["trade_desk_activity_expanded"] = view_all
     authoritative_events = (
         trade_repository.list_trade_events(limit=200)
         if trade_repository else []
     )
     events = [*authoritative_events, *paper_position_events(option_positions)]
     activity = filtered_activity_rows(
-        events, selected=event_filter, now=now, view_all=view_all, limit=8
+        events, selected=event_filter, now=now, view_all=view_all, limit=6
     )
-    st.markdown(activity_panel_markup(activity), unsafe_allow_html=True)
-    if not view_all and len(events) > 8:
-        st.caption("Latest 8 meaningful events shown · full history remains in History.")
+    st.markdown(
+        activity_panel_markup(activity, show_title=False), unsafe_allow_html=True
+    )
 
 
-def render_live_session_opportunity(latest_results, trade_history):
+def render_live_session_opportunity(
+    latest_results, trade_history, *, compact_panel=False
+):
     """Render one canonically eligible trade and an optional developing setup."""
     rows = [
         *opportunity_rows(latest_results, "Bullish", limit=5),
@@ -3766,6 +3785,13 @@ def render_live_session_opportunity(latest_results, trade_history):
     ]
     if not eligible_rows:
         st.markdown("### Today's Best Trade")
+        if compact_panel:
+            st.markdown(
+                '<div class="ob-best-trade-empty">'
+                'No setup currently meets entry requirements.</div>',
+                unsafe_allow_html=True,
+            )
+            return
         render_empty_state("No trade currently meets the entry requirements.")
         if directional_rows:
             developing = max(
@@ -4244,7 +4270,7 @@ def main():
         render_developer_tools(trade_state)
 
     st.markdown(
-        '<div class="notice notice-warning">Decision-support dashboard only. Not financial advice.</div>',
+        '<div class="ob-disclaimer">Decision-support dashboard only. Not financial advice.</div>',
         unsafe_allow_html=True,
     )
     st.markdown(
