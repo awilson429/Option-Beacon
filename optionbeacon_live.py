@@ -17,6 +17,11 @@ from signal_history import record_scanner_result, update_trade_outcomes_from_res
 from trade_planning import enrich_with_trade_plan
 from trade_plan_service import process_scanner_trade_plan
 from tradier_options import enrich_with_option_liquidity
+from scanner_performance import (
+    measure_stage,
+    record_provider_call,
+    record_retry_wait,
+)
 
 ETF_SYMBOLS = DEFAULT_ETF_SYMBOLS
 STOCK_SYMBOLS = DEFAULT_STOCK_SYMBOLS
@@ -107,14 +112,27 @@ def _download_market_data(symbol, period, *, sleep=time.sleep, jitter=random.uni
     for attempt in range(MARKET_DATA_MAX_ATTEMPTS):
         if _MARKET_DATA_SCAN_STATS is not None:
             _MARKET_DATA_SCAN_STATS["requests"] += 1
+        request_started = time.perf_counter()
         try:
             frame = download_data(symbol, period)
+            record_provider_call(
+                "Yahoo Finance via yfinance", "historical_bars",
+                (time.perf_counter() - request_started) * 1000,
+                success=True,
+            )
             if _MARKET_DATA_SCAN_CACHE is not None:
                 _MARKET_DATA_SCAN_CACHE[key] = frame.copy()
             return frame
         except Exception as exc:
+            rate_limited = _rate_limit_error(exc)
+            record_provider_call(
+                "Yahoo Finance via yfinance", "historical_bars",
+                (time.perf_counter() - request_started) * 1000,
+                success=False, rate_limited=rate_limited,
+                timeout=isinstance(exc, TimeoutError),
+            )
             last_error = exc
-            if not _rate_limit_error(exc):
+            if not rate_limited:
                 raise
             if _MARKET_DATA_SCAN_STATS is not None:
                 _MARKET_DATA_SCAN_STATS["rate_limited_symbols"].add(
@@ -123,6 +141,7 @@ def _download_market_data(symbol, period, *, sleep=time.sleep, jitter=random.uni
             if attempt < MARKET_DATA_MAX_ATTEMPTS - 1:
                 delay = MARKET_DATA_BACKOFF_SECONDS * (2**attempt)
                 delay += jitter(0, MARKET_DATA_MAX_JITTER_SECONDS)
+                record_retry_wait(delay, rate_limited=True)
                 sleep(delay)
     raise RuntimeError("Yahoo Finance rate limit retries exhausted") from last_error
 
@@ -184,55 +203,65 @@ def add_indicators(df):
 
 
 def generate_signal(symbol):
-    raw_data = get_data(symbol)
+    with measure_stage("market_data"):
+        raw_data = get_data(symbol)
 
     if raw_data.empty:
         return None
 
-    df = add_indicators(raw_data)
+    with measure_stage("indicator_calculation"):
+        df = add_indicators(raw_data)
 
     if len(df) < 30:
         return None
 
     i = len(df) - 1
-    result = score_candle(df, i, symbol)
-    result = enrich_with_trade_plan(result)
-    result = enrich_with_option_liquidity(result)
-    result["last_candle_at"] = eastern_candle_timestamp(df.index[i])
-    result["timestamp"] = eastern_timestamp()
-    process_scanner_trade_plan(result)
-    update_trade_outcomes_from_result(result)
-    record_scanner_result(result)
-    try:
-        from false_breakout_experiment import record_live_shadow
+    with measure_stage("scoring"):
+        result = score_candle(df, i, symbol)
+    with measure_stage("trade_plan_enrichment"):
+        result = enrich_with_trade_plan(result)
+    with measure_stage("option_liquidity"):
+        result = enrich_with_option_liquidity(result)
+    with measure_stage("timestamp_enrichment"):
+        result["last_candle_at"] = eastern_candle_timestamp(df.index[i])
+        result["timestamp"] = eastern_timestamp()
+    with measure_stage("trade_plan_persistence"):
+        process_scanner_trade_plan(result)
+    with measure_stage("legacy_outcome_persistence"):
+        update_trade_outcomes_from_result(result)
+    with measure_stage("scanner_result_persistence"):
+        record_scanner_result(result)
+    with measure_stage("shadow_experiments"):
+        try:
+            from false_breakout_experiment import record_live_shadow
 
-        record_live_shadow(result, df, i)
-    except Exception as exc:
-        LOGGER.warning(
-            "Experiment 001 shadow evaluation failed for %s: %s",
-            symbol,
-            exc,
-        )
-    try:
-        from regime_selection_experiment import record_live_shadow
+            record_live_shadow(result, df, i)
+        except Exception as exc:
+            LOGGER.warning(
+                "Experiment 001 shadow evaluation failed for %s: %s",
+                symbol,
+                exc,
+            )
+        try:
+            from regime_selection_experiment import record_live_shadow
 
-        record_live_shadow(result, df, i)
-    except Exception as exc:
-        LOGGER.warning(
-            "Experiment 002 shadow evaluation failed for %s: %s",
-            symbol,
-            exc,
-        )
-    try:
-        from signal_funnel_experiment import record_live_shadow
+            record_live_shadow(result, df, i)
+        except Exception as exc:
+            LOGGER.warning(
+                "Experiment 002 shadow evaluation failed for %s: %s",
+                symbol,
+                exc,
+            )
+        try:
+            from signal_funnel_experiment import record_live_shadow
 
-        record_live_shadow(result)
-    except Exception as exc:
-        LOGGER.warning(
-            "Experiment 003 signal funnel shadow evaluation failed for %s: %s",
-            symbol,
-            exc,
-        )
+            record_live_shadow(result)
+        except Exception as exc:
+            LOGGER.warning(
+                "Experiment 003 signal funnel shadow evaluation failed for %s: %s",
+                symbol,
+                exc,
+            )
     return result
 
 
