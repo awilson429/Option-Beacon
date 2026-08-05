@@ -225,9 +225,9 @@ def test_approved_dashboard_shell_and_exact_grid_geometry_exist():
     assert ".ob-trade-dashboard" in theme
     compact_css = theme.replace(" ", "").replace("\n", "")
     assert "grid-template-columns:minmax(0,7fr)minmax(280px,3fr)" in compact_css
-    for area in ("header", "kpis", "positions", "risk", "performance", "activity", "more"):
+    for area in ("header", "kpis", "positions", "risk", "comparison", "authoritative", "activity", "more"):
         assert f"ob-grid-{area}" in theme or f'"{area}' in theme
-    assert '"positionsrisk""performancerisk""activityactivity""moremore"' in compact_css
+    assert '"positionsrisk""comparisoncomparison""authoritativeauthoritative""activityactivity""moremore"' in compact_css
     assert "ob-grid-summary" not in theme and "ob-grid-stats" not in theme
     assert "trade_desk_best_trade_markup(" in desk
     assert "max-width:100%" in theme.replace(" ", "")
@@ -237,20 +237,22 @@ def test_approved_dashboard_shell_and_exact_grid_geometry_exist():
 
 def test_semantic_shell_contains_all_panels_and_inline_activity_controls():
     markup = dashboard_shell_markup(
-        status="STATUS", kpis="KPIS", performance="PERFORMANCE",
+        status="STATUS", kpis="KPIS",
         risk="RISK", best_trade="BEST", positions="POSITIONS",
+        comparison="COMPARISON", authoritative_trades="AUTHORITATIVE",
         activity_rows="ACTIVITY ROWS", activity_filter="ENTRIES",
         view_all=False, more_stats="MORE",
     )
     assert markup.count('class="ob-trade-dashboard"') == 1
     for css_class in (
-        "ob-grid-header", "ob-grid-kpis", "ob-grid-performance",
+        "ob-grid-header", "ob-grid-kpis", "ob-grid-comparison", "ob-grid-authoritative",
         "ob-grid-risk", "ob-grid-positions", "ob-grid-activity",
         "ob-grid-more",
     ):
         assert css_class in markup
-    assert markup.index("POSITIONS") < markup.index("PERFORMANCE")
-    assert markup.index("RISK") < markup.index("PERFORMANCE")
+    assert markup.index("POSITIONS") < markup.index("COMPARISON")
+    assert markup.index("RISK") < markup.index("COMPARISON")
+    assert markup.index("COMPARISON") < markup.index("AUTHORITATIVE")
     assert "ob-grid-summary" not in markup and "ob-grid-stats" not in markup
     assert 'class="ob-activity-filter is-active"' in markup
     assert markup.index("Recent Activity") < markup.index("ACTIVITY ROWS")

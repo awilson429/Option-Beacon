@@ -119,7 +119,8 @@ def configure_page():
                 "header header"
                 "kpis kpis"
                 "positions risk"
-                "performance risk"
+                "comparison comparison"
+                "authoritative authoritative"
                 "activity activity"
                 "more more";
             grid-template-columns:minmax(0,7fr) minmax(280px,3fr);
@@ -129,10 +130,10 @@ def configure_page():
         .ob-grid-header h2 {font-size:1.55rem;line-height:1.1;margin:0}.ob-grid-header p {color:var(--ob-text-muted);font-size:.72rem;margin:.18rem 0 0}
         .ob-grid-header .ob-desk-status {flex:0 1 auto;margin:0}
         .ob-grid-kpis {grid-area:kpis;min-width:0}.ob-grid-kpis .ob-desk-kpis {margin:0}
-        .ob-grid-performance {grid-area:performance;min-width:0}.ob-grid-risk {grid-area:risk;min-width:0}
+        .ob-grid-comparison {grid-area:comparison;min-width:0}.ob-grid-authoritative {grid-area:authoritative;min-width:0}.ob-grid-risk {grid-area:risk;min-width:0}
         .ob-grid-positions {grid-area:positions;min-width:0}.ob-grid-activity {grid-area:activity;min-width:0}
         .ob-grid-more {grid-area:more;min-width:0}
-        .ob-grid-performance > .ob-desk-panel,.ob-grid-risk .ob-desk-panel,.ob-grid-positions > .ob-desk-panel {margin:0}
+        .ob-grid-comparison > .ob-desk-panel,.ob-grid-authoritative > .ob-desk-panel,.ob-grid-risk .ob-desk-panel,.ob-grid-positions > .ob-desk-panel {margin:0}
         .ob-risk-stack {display:grid;gap:12px}.ob-paper-link {background:var(--ob-bg-control);border:1px solid var(--ob-border-default);border-radius:6px;color:var(--ob-gold);font-size:.68rem;padding:.4rem .55rem;text-align:center;text-decoration:none}
         .ob-performance-anchor {align-items:flex-start;display:flex;flex-direction:column;gap:.12rem;padding:.15rem .35rem .6rem}
         .ob-performance-anchor span {color:var(--ob-text-muted);font-size:.62rem;font-weight:800;letter-spacing:.055em}
@@ -145,6 +146,11 @@ def configure_page():
         .ob-activity-filters {background:var(--ob-bg-control);border:1px solid var(--ob-border-default);border-radius:6px;display:flex;min-width:0;overflow-x:auto;white-space:nowrap}
         .ob-activity-filter {border-right:1px solid var(--ob-border-default);color:var(--ob-text-muted);font-size:.56rem;font-weight:800;padding:.28rem .4rem;text-decoration:none}.ob-activity-filter:last-child {border-right:0}.ob-activity-filter.is-active {box-shadow:inset 0 -2px var(--ob-accent-gold);color:var(--ob-gold)}
         .ob-activity-view {color:var(--ob-gold);font-size:.62rem;text-decoration:none;white-space:nowrap}
+        .ob-compare-header {align-items:center;display:flex;gap:.7rem;justify-content:space-between}.ob-compare-header h3 {margin:0}
+        .ob-session-tabs {background:var(--ob-bg-control);border:1px solid var(--ob-border-default);border-radius:6px;display:flex}.ob-session-tab {color:var(--ob-text-muted);font-size:.58rem;font-weight:800;padding:.28rem .45rem;text-decoration:none}.ob-session-tab.is-active {box-shadow:inset 0 -2px var(--ob-accent-gold);color:var(--ob-gold)}
+        .ob-compare-grid {display:grid;gap:.65rem;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:.5rem}.ob-compare-column {background:var(--ob-bg-control);border:1px solid var(--ob-border-default);border-radius:7px;padding:.45rem .55rem}.ob-compare-column h4 {color:var(--ob-gold);font-size:.65rem;margin:0 0 .3rem}.ob-compare-column > div {align-items:center;border-bottom:1px solid var(--ob-border-default);display:flex;justify-content:space-between;padding:.18rem 0}.ob-compare-column > div:last-child {border-bottom:0}.ob-compare-column span,.ob-participation span {color:var(--ob-text-muted);font-size:.62rem}.ob-compare-column strong,.ob-participation strong {color:var(--ob-text-primary);font-size:.68rem}
+        .ob-participation,.ob-auth-summary {display:flex;flex-wrap:wrap;gap:.4rem 1rem;margin-top:.5rem}.ob-participation span,.ob-auth-summary span {white-space:nowrap}.ob-auth-summary {border-bottom:1px solid var(--ob-border-default);margin:.1rem 0 .45rem;padding-bottom:.4rem}.ob-auth-summary span {color:var(--ob-text-muted);font-size:.62rem}.ob-auth-summary strong {color:var(--ob-text-primary);margin-left:.2rem}
+        .ob-missed-summary {background:color-mix(in srgb,var(--ob-warning) 8%,var(--ob-bg-control));border-left:3px solid var(--ob-warning);display:grid;gap:.08rem;margin-top:.5rem;padding:.38rem .5rem}.ob-missed-summary span {color:var(--ob-warning);font-size:.58rem;font-weight:800}.ob-missed-summary strong {font-size:1rem}.ob-missed-summary small {color:var(--ob-text-muted);font-size:.6rem}.ob-auth-table details {min-width:7rem}
         .ob-more-stats {background:var(--ob-bg-card);border:1px solid var(--ob-border-default);border-radius:8px;color:var(--ob-text-muted);font-size:.68rem;padding:.48rem .65rem}
         .ob-more-stats summary {color:var(--ob-gold);cursor:pointer;font-size:.64rem;font-weight:800;letter-spacing:.045em;text-transform:uppercase}
         .ob-more-stats-grid {display:grid;gap:0 .8rem;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:.35rem}
@@ -168,7 +174,7 @@ def configure_page():
         .ob-paper-status-warning {border-color:var(--ob-warning)}
 
         @media (max-width: 759px) {
-            .ob-trade-dashboard {border-radius:9px;gap:9px;grid-template-areas:"header" "kpis" "positions" "risk" "performance" "activity" "more";grid-template-columns:minmax(0,1fr);padding:9px}
+            .ob-trade-dashboard {border-radius:9px;gap:9px;grid-template-areas:"header" "kpis" "positions" "risk" "comparison" "authoritative" "activity" "more";grid-template-columns:minmax(0,1fr);padding:9px}
             .ob-grid-header {align-items:flex-start;flex-direction:column}.ob-grid-header .ob-desk-status {width:100%}
             .ob-desk-status {align-items:flex-start;flex-direction:column;gap:.38rem}
             .ob-desk-status-pill + .ob-desk-status-pill::before {content:"";margin:0}
@@ -176,13 +182,14 @@ def configure_page():
             .ob-performance-grid {grid-template-columns:repeat(2,minmax(0,1fr))}.ob-performance-stat {border-bottom:1px solid var(--ob-border-default);border-right:0}
             .ob-activity-row {grid-template-columns:6.6rem 3.6rem minmax(3rem,.5fr) minmax(5rem,1fr)}.ob-activity-result {grid-column:3/-1;text-align:left}
             .ob-position-scroll {overscroll-behavior-inline:contain}
+            .ob-compare-grid {grid-template-columns:minmax(0,1fr)}.ob-compare-header {align-items:flex-start;flex-direction:column}
             .ob-more-stats-grid {grid-template-columns:repeat(2,minmax(0,1fr))}.ob-stat-row {border-bottom:1px solid var(--ob-border-default);border-right:0}
             .ob-active-state {float:none;display:inline-block}.ob-active-result{font-size:.92rem}
             .ob-paper-status {align-items:flex-start;flex-direction:column;gap:.35rem;overflow:visible}
         }
 
         @media (min-width: 760px) and (max-width: 1099px) {
-            .ob-trade-dashboard {grid-template-areas:"header header" "kpis kpis" "positions risk" "performance risk" "activity activity" "more more";grid-template-columns:minmax(0,2fr) minmax(280px,1fr)}
+            .ob-trade-dashboard {grid-template-areas:"header header" "kpis kpis" "positions risk" "comparison comparison" "authoritative authoritative" "activity activity" "more more";grid-template-columns:minmax(0,2fr) minmax(280px,1fr)}
             .ob-risk-stack {grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.ob-risk-stack .ob-paper-link {grid-column:1/-1}
             .ob-desk-kpis {grid-template-columns:repeat(3,minmax(0,1fr))}
             .ob-performance-grid {grid-template-columns:repeat(3,minmax(0,1fr))}

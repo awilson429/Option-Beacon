@@ -143,6 +143,12 @@ from trade_desk_compact import (
     status_strip_model,
     today_summary_model,
 )
+from trade_desk_comparison import (
+    authoritative_trades_markup,
+    available_session_dates,
+    comparison_markup,
+    trade_comparison_model,
+)
 from paper_trading_page import (
     closed_paper_trade_rows,
     execution_journal_rows,
@@ -3839,6 +3845,8 @@ def render_outcome_trade_journal(
     local_config = ExecutionConfig()
     config = local_config
     option_positions = []
+    paper_captures = []
+    paper_journal = []
     paper_available = False
     worker_config_state = None
 
@@ -3852,6 +3860,8 @@ def render_outcome_trade_journal(
                 trade_repository, initialize=False
             )
             option_positions = paper_repository.load()
+            paper_captures = paper_repository.records()
+            paper_journal = paper_repository.journal_rows(limit=5000)
             worker_config_state = paper_repository.get_runtime_config()
             if worker_config_state:
                 config = ExecutionConfig.from_resolved_state(
@@ -3899,7 +3909,7 @@ def render_outcome_trade_journal(
     paper_rows = paper_position_rows(option_positions, config, now)
     summary = journal_summary_metrics(records) if records else None
     authoritative_events = (
-        trade_repository.list_trade_events(limit=200)
+        trade_repository.list_trade_events(limit=5000)
         if trade_repository else []
     )
     events = [*authoritative_events, *paper_position_events(option_positions)]
@@ -3929,12 +3939,23 @@ def render_outcome_trade_journal(
         positions_table_markup(paper_rows)
         if paper_available else authoritative_positions_markup(authoritative_open)
     )
+    sessions = available_session_dates(authoritative_events, now)
+    requested_session = str(st.query_params.get("desk_session", "TODAY")).upper()
+    selected_session = (
+        "PREVIOUS"
+        if requested_session == "PREVIOUS" and sessions["previous"] is not None
+        else "TODAY"
+    )
+    session_date = (
+        sessions["previous"] if selected_session == "PREVIOUS" else sessions["today"]
+    )
+    comparison = trade_comparison_model(
+        authoritative_events, paper_journal, paper_captures, option_positions,
+        session_date=session_date,
+    )
     dashboard = dashboard_shell_markup(
         status=status_strip_markup(status),
         kpis=kpi_row_markup(kpis),
-        performance=performance_panel_markup(
-            summary, paper_summary, paper_available=paper_available
-        ),
         risk=risk_panel_markup(
             risk_status_model(
                 paper_summary, config, paper_available=paper_available
@@ -3942,6 +3963,14 @@ def render_outcome_trade_journal(
         ),
         best_trade=trade_desk_best_trade_markup(latest_results, records),
         positions=positions,
+        comparison=comparison_markup(
+            comparison,
+            has_previous=sessions["previous"] is not None,
+            selected=selected_session,
+        ),
+        authoritative_trades=authoritative_trades_markup(
+            comparison, selected=selected_session
+        ),
         activity_rows=activity_rows_markup(activity),
         activity_filter=event_filter,
         view_all=view_all,
