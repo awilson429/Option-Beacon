@@ -230,15 +230,16 @@ def configure_page():
         }
 
         .brand-controls .pill {
+            border-radius: 8px;
             border-width: 1px;
-            height: 3rem;
-            min-height: 3rem;
-            padding: 0.42rem 0.75rem;
-            width: 12rem;
+            height: 3.375rem;
+            min-height: 3.375rem;
+            padding: 0.45rem 0.7rem;
+            width: 10rem;
         }
 
         .brand-refresh-label {
-            min-width: 12rem;
+            min-width: 10rem;
         }
 
         .brand-refreshed-at {
@@ -250,13 +251,13 @@ def configure_page():
 
         .pill-stack {
             flex-direction: column;
-            gap: 0.05rem;
-            line-height: 1.05;
+            gap: 0.2rem;
+            line-height: 1;
         }
 
         .pill-subtext {
             color: var(--ob-muted);
-            font-size: 0.64rem;
+            font-size: 0.6rem;
             font-weight: 600;
             letter-spacing: 0;
             text-transform: none;

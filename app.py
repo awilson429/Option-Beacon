@@ -592,7 +592,7 @@ def header_markup(market_open, refreshed_at, header_logo):
                     <span class="pill pill-market {market_class}">{market_status}</span>
                     <span class="pill pill-secondary pill-stack brand-refresh-label">
                         <span>Refresh 1 min</span>
-                        <span class="pill-subtext brand-refreshed-at">Last refreshed {refreshed_at}</span>
+                        <span class="pill-subtext brand-refreshed-at">{refreshed_at}</span>
                     </span>
                 </div>
             </div>
@@ -603,7 +603,7 @@ def header_markup(market_open, refreshed_at, header_logo):
 
 def render_header():
     market_open = is_market_open_now()
-    refreshed_at = eastern_now().strftime("%Y-%m-%d %I:%M:%S %p ET")
+    refreshed_at = eastern_now().strftime("%I:%M:%S %p ET")
     st.markdown(
         header_markup(market_open, refreshed_at, logo_source()),
         unsafe_allow_html=True,
