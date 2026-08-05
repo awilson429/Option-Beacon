@@ -11,10 +11,12 @@ from trade_desk_compact import (
     paper_active_row,
     paper_position_rows,
     positions_table_markup,
+    performance_summary_markup,
     risk_panel_markup,
     risk_status_model,
     status_strip_markup,
     status_strip_model,
+    trade_stats_markup,
     today_summary_model,
 )
 
@@ -114,17 +116,18 @@ def test_activity_orders_filters_limits_and_expands_without_duplicates():
     assert len(filtered_activity_rows([events[2], duplicate_exit], now=NOW)) == 1
 
 
-def test_recent_activity_production_default_is_six_and_controls_are_integrated():
+def test_recent_activity_production_default_is_five_and_controls_are_integrated():
     from pathlib import Path
     source = Path("app.py").read_text(encoding="utf-8")
     start = source.index("def render_outcome_trade_journal(")
     end = source.index("def render_live_session_opportunity(", start)
     desk = source[start:end]
-    assert "limit=6" in desk
+    assert "limit=5" in desk
     assert "st.toggle(" not in desk
     assert 'activity_title.markdown("### Recent Activity")' in desk
     assert 'key="trade_desk_activity_all"' in desk
-    assert "activity_panel_markup(activity, show_title=False)" in desk
+    assert 'key="trade_desk_activity_panel"' in desk
+    assert "activity_rows_markup(activity)" in desk
 
 
 def test_collapsed_paper_position_row_preserves_current_calculations():
@@ -177,7 +180,7 @@ def test_compact_trade_desk_uses_progressive_disclosure_and_responsive_css():
     assert "st.columns([0.64, 0.36]" in compact
     assert "positions_table_markup(" in compact
     assert "risk_status_model(" in compact
-    assert "activity_panel_markup(" in compact
+    assert "activity_rows_markup(" in compact
     assert "render_recently_closed(repository)" not in compact
     assert "### Opened Alerts" not in compact
     assert "@media (max-width: 700px)" in theme
@@ -205,6 +208,42 @@ def test_polish_geometry_empty_states_encoding_and_segmented_controls():
     assert "No setup currently meets entry requirements." in desk
     assert "Â·" not in desk
     assert "Ã" not in desk
+
+
+def test_approved_dashboard_shell_and_exact_grid_geometry_exist():
+    from pathlib import Path
+    source = Path("app.py").read_text(encoding="utf-8")
+    theme = Path("ui/theme.py").read_text(encoding="utf-8")
+    start = source.index("def render_outcome_trade_journal(")
+    end = source.index("def render_live_session_opportunity(", start)
+    desk = source[start:end]
+    assert 'st.container(key="trade_desk_dashboard_shell")' in desk
+    assert "st.columns([0.64, 0.36]" in desk
+    assert "[0.40, 0.32, 0.28]" in desk
+    assert desk.index("primary_left, primary_right") < desk.index("positions_table_markup(")
+    assert desk.index("positions_table_markup(") < desk.index("activity_column, summary_column, stats_column")
+    assert 'key="trade_desk_best_trade_panel"' in desk
+    assert '.st-key-trade_desk_dashboard_shell' in theme
+    assert "max-width:100%" in theme.replace(" ", "")
+
+
+def test_bottom_panels_use_existing_metrics_without_trading_mutation():
+    paper = {
+        "realized_pnl": 40.0, "open_pnl": -10.0, "today_pnl": 30.0,
+        "trades_today": 3, "win_rate": 50.0, "average_winner": 25.0,
+        "average_loser": -15.0,
+    }
+    score = {
+        "opened_alerts": 3, "win_rate": 50.0, "best_trade": 4.0,
+        "worst_trade": -2.0, "average_hold_minutes": 18.0,
+    }
+    summary_markup = performance_summary_markup(paper, paper_available=True)
+    stats_markup = trade_stats_markup(score, paper, paper_available=True)
+    assert "$+40.00" in summary_markup
+    assert "$-10.00" in summary_markup
+    assert "$+30.00" in summary_markup
+    assert "Total Trades" in stats_markup and ">3<" in stats_markup
+    assert "+4.00%" in stats_markup and "-2.00%" in stats_markup
 
 
 def test_healthy_status_uses_strip_without_redundant_message_banner():

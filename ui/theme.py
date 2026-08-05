@@ -120,6 +120,31 @@ def configure_page():
         .st-key-trade_desk_activity_filter [role="radiogroup"] p {font-size:.61rem;font-weight:800;letter-spacing:.035em}
         .st-key-trade_desk_activity_all button {min-height:1.75rem;padding:.25rem .55rem}.st-key-trade_desk_activity_all button p {font-size:.65rem}
         .ob-disclaimer {color:var(--ob-text-muted);font-size:.62rem;margin:.25rem 0;text-align:center}
+        .st-key-trade_desk_dashboard_shell {
+            background:var(--ob-bg-header);border:1px solid var(--ob-border-strong);
+            border-radius:11px;box-sizing:border-box;margin:.2rem 0 .65rem;
+            max-width:100%;overflow:hidden;padding:.72rem .78rem;
+        }
+        .st-key-trade_desk_dashboard_shell > div[data-testid="stVerticalBlock"] {gap:.68rem}
+        .st-key-trade_desk_dashboard_shell .content-section {margin:0;padding:0}
+        .st-key-trade_desk_dashboard_shell .content-title {font-size:1.55rem;line-height:1.1}
+        .st-key-trade_desk_dashboard_shell .content-kicker {font-size:.72rem;margin-top:.18rem}
+        .st-key-trade_desk_dashboard_shell .ob-desk-status {margin:0}
+        .ob-performance-panel {min-height:13.2rem}
+        .ob-performance-anchor {align-items:flex-start;display:flex;flex-direction:column;gap:.12rem;padding:.15rem .35rem .6rem}
+        .ob-performance-anchor span {color:var(--ob-text-muted);font-size:.62rem;font-weight:800;letter-spacing:.055em}
+        .ob-performance-anchor strong {font-size:1.65rem;line-height:1.1}
+        .ob-performance-rule {background:linear-gradient(90deg,var(--ob-positive),color-mix(in srgb,var(--ob-positive) 12%,transparent));border-radius:3px;height:3px;margin-top:.35rem;width:100%}
+        .st-key-trade_desk_best_trade_panel {background:var(--ob-bg-card);border:1px solid var(--ob-border-default);border-radius:8px;margin:.55rem 0;padding:.58rem .68rem}
+        .st-key-trade_desk_best_trade_panel h3 {font-size:.86rem;margin:0 0 .35rem}
+        .st-key-trade_desk_best_trade_panel .ob-best-trade-empty {background:transparent;border:0;margin:0;padding:.15rem 0}
+        .st-key-trade_desk_activity_panel {background:var(--ob-bg-card);border:1px solid var(--ob-border-default);border-radius:8px;box-sizing:border-box;height:100%;min-height:12.5rem;padding:.62rem .68rem}
+        .st-key-trade_desk_activity_panel > div[data-testid="stVerticalBlock"] {gap:.35rem}
+        .st-key-trade_desk_activity_panel h3 {font-size:.82rem;margin:.2rem 0 0;white-space:nowrap}
+        .ob-summary-row,.ob-stat-row {align-items:center;border-bottom:1px solid var(--ob-border-default);display:flex;gap:.5rem;justify-content:space-between;padding:.3rem 0}
+        .ob-summary-row:last-child,.ob-stat-row:last-child {border-bottom:0}
+        .ob-summary-row span,.ob-stat-row span {color:var(--ob-text-muted);font-size:.68rem}
+        .ob-summary-row strong,.ob-stat-row strong {font-size:.74rem;white-space:nowrap}
         .ob-active-trade {
             background:var(--ob-bg-card); border:1px solid var(--ob-border-default); border-left:3px solid var(--ob-accent-gold);
             border-radius:8px; display:grid; gap:.18rem; margin:.35rem 0; padding:.58rem .72rem;
@@ -138,6 +163,10 @@ def configure_page():
         .ob-paper-status-warning {border-color:var(--ob-warning)}
 
         @media (max-width: 700px) {
+            .st-key-trade_desk_dashboard_shell {border-radius:9px;padding:.55rem}
+            .st-key-trade_desk_dashboard_shell > div[data-testid="stVerticalBlock"] {gap:.5rem}
+            .ob-performance-panel {min-height:0}
+            .st-key-trade_desk_activity_panel {min-height:0}
             .ob-desk-status {align-items:flex-start;flex-direction:column;gap:.38rem}
             .ob-desk-status-pill + .ob-desk-status-pill::before {content:"";margin:0}
             .ob-desk-kpis {grid-template-columns:repeat(2,minmax(0,1fr))}.ob-desk-kpi {height:3.95rem;min-height:3.95rem;padding:.42rem .5rem}.ob-desk-kpi-label {white-space:normal}
@@ -151,6 +180,7 @@ def configure_page():
         @media (min-width: 701px) and (max-width: 1050px) {
             .ob-desk-kpis {grid-template-columns:repeat(3,minmax(0,1fr))}
             .ob-performance-grid {grid-template-columns:repeat(3,minmax(0,1fr))}
+            .st-key-trade_desk_activity_panel {min-height:0}
         }
 
         .brand-row {
