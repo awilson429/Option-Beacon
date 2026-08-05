@@ -83,6 +83,7 @@ from optionbeacon_snapshot import load_latest_results
 from execution_config import ExecutionConfig
 from paper_execution import paper_account_summary
 from paper_execution_repository import PaperExecutionRepository
+from mirror_execution import MirrorExecutionRepository, mirror_summary
 from trade_repository import TradeRepository
 from option_position_tracker import (
     completed_position_rows,
@@ -155,6 +156,10 @@ from paper_trading_page import (
     execution_status_model,
     open_paper_position_rows,
     paper_execution_funnel,
+    mirror_status_model,
+    mirror_trade_rows,
+    mirror_experiment_model,
+    portfolio_comparison,
 )
 from setup_intelligence import setup_intelligence
 from selectivity_dashboard import render_selectivity_analysis
@@ -4115,6 +4120,7 @@ def render_paper_trading_page():
     config = local_config
     positions, raw_journal, captures, authoritative_events = [], [], [], []
     worker_health, worker_config_state = None, None
+    mirror_rows, mirror_runtime = [], None
     database_url = dashboard_database_url()
     if database_url:
         try:
@@ -4126,6 +4132,12 @@ def render_paper_trading_page():
             authoritative_events = trade_repository.list_trade_events(limit=5000)
             worker_health = trade_repository.get_latest_scan_health()
             worker_config_state = repository.get_runtime_config()
+            mirror_repository = MirrorExecutionRepository(trade_repository, initialize=False)
+            try:
+                mirror_rows = mirror_repository.rows()
+                mirror_runtime = mirror_repository.runtime_state()
+            except Exception:
+                mirror_rows, mirror_runtime = [], None
             if worker_config_state:
                 config = ExecutionConfig.from_resolved_state(
                     worker_config_state.get("resolved_config"), fallback=local_config
@@ -4149,6 +4161,70 @@ def render_paper_trading_page():
         if worker_config_state else "AWAITING WORKER STATE"
     )
     st.caption(f"CURRENT WORKER PROFILE: {worker_profile}")
+
+    mirror_status = mirror_status_model(mirror_runtime, worker_health)
+    st.markdown(
+        f'<div class="ob-paper-status ob-paper-status-{mirror_status["treatment"]}" '
+        f'style="display:inline-flex;width:auto;padding:7px 12px;margin-top:4px">'
+        f'<span>{escape(mirror_status["label"])}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    broad_tab, mirror_tab, compare_tab = st.tabs(["BROAD", "MIRROR", "COMPARE"])
+    with broad_tab:
+        st.caption("Existing risk-filtered PAPER portfolio. Its policy and ledger are unchanged.")
+    with mirror_tab:
+        mirror_metrics = mirror_summary(mirror_rows)
+        st.caption("MIRROR · 1 CONTRACT / AUTH TRADE · Railway writer · read-only UI")
+        for metric_row in (
+            (("Authoritative Entries", mirror_metrics["authoritative_entries"]), ("Attempted", mirror_metrics["attempted"]),
+             ("Opened", mirror_metrics["opened"]), ("Unexecutable", mirror_metrics["unexecutable"]),
+             ("Open Positions", mirror_metrics["open_positions"]), ("Closed Trades", mirror_metrics["closed_trades"])),
+            (("Realized P&L", f'${mirror_metrics["realized_pnl"]:+,.2f}'), ("Unrealized P&L", f'${mirror_metrics["unrealized_pnl"]:+,.2f}'),
+             ("Total P&L", f'${mirror_metrics["total_pnl"]:+,.2f}'), ("Win Rate", f'{mirror_metrics["win_rate"]:.1f}%'),
+             ("Current Capital", f'${mirror_metrics["current_capital_required"]:,.2f}'), ("Peak Capital", f'${mirror_metrics["peak_capital_required"]:,.2f}')),
+        ):
+            columns = st.columns(6)
+            for column, (label, value) in zip(columns, metric_row):
+                column.metric(label, value)
+        st.caption(
+            f'Wins / Losses: {mirror_metrics["winning_trades"]} / {mirror_metrics["losing_trades"]} · '
+            f'Avg winner: ${mirror_metrics["average_winner"]:+,.2f} · Avg loser: ${mirror_metrics["average_loser"]:+,.2f} · '
+            f'Profit factor: {"∞" if math.isinf(mirror_metrics["profit_factor"]) else f"{mirror_metrics["profit_factor"]:.2f}"} · '
+            f'Avg debit: ${mirror_metrics["average_entry_debit"]:,.2f} · Largest debit: ${mirror_metrics["largest_entry_debit"]:,.2f} · '
+            f'Max drawdown: ${mirror_metrics["max_drawdown"]:,.2f} '
+            f'({mirror_metrics["max_drawdown_percent_of_peak_capital"]:.1f}% of peak capital)'
+        )
+        experiment = mirror_experiment_model(mirror_rows, mirror_runtime, now)
+        st.caption(
+            f'Experiment Day {experiment["experiment_day"]} · '
+            f'Trading Sessions Completed: {experiment["trading_sessions_completed"]} · '
+            f'Start: {experiment["start_date"] or "awaiting worker state"}'
+        )
+        if experiment["daily"]:
+            with st.expander("Daily MIRROR experiment breakdown", expanded=False):
+                st.dataframe(pd.DataFrame(experiment["daily"]), use_container_width=True, hide_index=True)
+        rows = mirror_trade_rows(mirror_rows)
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            st.caption("No MIRROR dispositions have been recorded. Historical sessions are MIRROR NOT RUNNING.")
+    with compare_tab:
+        comparison = portfolio_comparison(
+            authoritative_events, raw_journal, captures, positions, mirror_rows
+        )
+        st.markdown("#### OPTIONBEACON vs BROAD vs MIRROR")
+        st.caption("OptionBeacon returns are underlying percentages; BROAD and MIRROR P&L are simulated option-contract dollars.")
+        st.dataframe(pd.DataFrame(comparison["metrics"]), use_container_width=True, hide_index=True)
+        missed = comparison["missed"]
+        st.caption(
+            f'Authoritative winners BROAD missed: {missed["authoritative_winners_broad_missed"]} · '
+            f'Winners MIRROR executed: {missed["authoritative_winners_mirror_executed"]} · '
+            f'Winners MIRROR could not execute: {missed["authoritative_winners_mirror_unexecutable"]} · '
+            f'BROAD avoided losers: {missed["broad_avoided_losers"]}'
+        )
+        if comparison["trades"]:
+            st.dataframe(pd.DataFrame(comparison["trades"]), use_container_width=True, hide_index=True)
 
     funnel = paper_execution_funnel(
         authoritative_events, raw_journal, captures, now
