@@ -126,6 +126,8 @@ from trade_desk_compact import (
     ACTIVITY_FILTERS,
     activity_panel_markup,
     activity_rows_markup,
+    authoritative_positions_markup,
+    dashboard_shell_markup,
     dashboard_kpi_model,
     filtered_activity_rows,
     kpi_row_markup,
@@ -3764,6 +3766,64 @@ def _render_pre_shell_unified_trade_desk(
     )
 
 
+def trade_desk_best_trade_markup(latest_results, trade_history):
+    """Return the canonical Best Trade as compact semantic dashboard HTML."""
+    rows = [
+        *opportunity_rows(latest_results, "Bullish", limit=5),
+        *opportunity_rows(latest_results, "Bearish", limit=5),
+    ]
+    eligible = [
+        row for row in rows
+        if (row.get("result") or {}).get("trade_plan")
+        and actionable_trade_plan(row.get("result") or {})
+    ]
+    if not eligible:
+        return (
+            '<section class="ob-desk-panel ob-best-trade-panel">'
+            '<h3>Today&#39;s Best Trade</h3>'
+            '<div class="ob-desk-empty">No setup currently meets entry requirements.</div>'
+            '</section>'
+        )
+    selected = max(eligible, key=lambda item: item.get("score") or 0)
+    result = selected["result"]
+    try:
+        evidence = historical_evidence(result, trade_history)
+    except Exception:
+        evidence = historical_evidence(result, [])
+    open_record = matching_open_trade(result, trade_history)
+    coach = (
+        open_trade_coach_output(
+            open_record, result.get("price"), eastern_now(), evidence
+        )
+        if open_record is not None else None
+    )
+    summary = opportunity_summary(result, evidence, coach)
+    entry = opportunity_entry_presentation(
+        {"eligible": True}, is_open=open_record is not None, coach=coach
+    )
+    fields = (
+        ("Rule Score", summary["confidence"]),
+        ("Entry", summary["entry"]),
+        ("Stop", summary["stop"]),
+        ("Target", summary["target_1"]),
+        ("Status", entry["entry_status"]),
+    )
+    metrics = "".join(
+        '<div class="ob-best-metric">'
+        f'<span>{escape(label)}</span><strong>{escape(str(value))}</strong></div>'
+        for label, value in fields
+    )
+    rationale = historical_edge_summary(evidence)
+    return (
+        '<section class="ob-desk-panel ob-best-trade-panel">'
+        '<div class="ob-best-heading"><h3>Today&#39;s Best Trade</h3>'
+        f'<strong>{escape(summary["symbol"])} · {escape(summary["direction"])}</strong></div>'
+        f'<div class="ob-best-grid">{metrics}</div>'
+        '<details class="ob-best-details"><summary>Why this trade?</summary>'
+        f'<p>{escape(rationale)}</p></details></section>'
+    )
+
+
 def render_outcome_trade_journal(
     records=None,
     latest_results=None,
@@ -3845,129 +3905,68 @@ def render_outcome_trade_journal(
     )
     events = [*authoritative_events, *paper_position_events(option_positions)]
 
-    with st.container(key="trade_desk_dashboard_shell"):
-        desk_header, desk_status = st.columns([0.62, 0.38], gap="medium")
-        with desk_header:
-            render_section_header(
-                "Trade Desk",
-                "Monitor positions, manage risk, and track performance in real time.",
-            )
-        with desk_status:
-            st.markdown(status_strip_markup(status), unsafe_allow_html=True)
-
-        reliability = reliability_state or {}
-        scanner_alert = str(reliability.get("scanner_state") or "").upper() in {
-            "STALE", "ERROR", "FAILED", "UNAVAILABLE", "NEVER RUN",
-        }
-        provider_alert = (
-            str(reliability.get("market_data_state") or "").upper()
-            == "UNAVAILABLE"
+    requested_filter = str(
+        st.query_params.get(
+            "desk_activity",
+            st.session_state.get("trade_desk_activity_filter", "ALL"),
         )
-        if scanner_alert or provider_alert:
-            message = reliability.get("message")
-            if message:
-                (st.error if status["severity"] == "error" else st.warning)(message)
-        render_critical_trade_event(trade_repository)
-        st.markdown(kpi_row_markup(kpis), unsafe_allow_html=True)
-
-        primary_left, primary_right = st.columns([0.64, 0.36], gap="medium")
-        with primary_left:
-            st.markdown(
-                performance_panel_markup(
-                    summary, paper_summary, paper_available=paper_available
-                ),
-                unsafe_allow_html=True,
-            )
-        with primary_right:
-            st.markdown(
-                risk_panel_markup(
-                    risk_status_model(
-                        paper_summary, config, paper_available=paper_available
-                    )
-                ),
-                unsafe_allow_html=True,
-            )
-            with st.container(key="trade_desk_best_trade_panel"):
-                render_live_session_opportunity(
-                    latest_results, records, compact_panel=True
-                )
-            st.button(
-                "View Paper Trading →",
-                key="trade_desk_view_paper",
-                on_click=set_active_workspace,
-                args=("Paper Trading", st.session_state),
-            )
-
-        if paper_available:
-            st.markdown(positions_table_markup(paper_rows), unsafe_allow_html=True)
-        else:
-            with st.container(key="trade_desk_positions_fallback"):
-                st.markdown("### Open Positions")
-                if authoritative_open:
-                    primary = [
-                        "Symbol", "Direction", "Entry", "Current Price",
-                        "Open Return", "Stop", "Target 1", "Status",
-                    ]
-                    st.dataframe(
-                        pd.DataFrame(authoritative_open)[primary],
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-                    with st.expander("Position details", expanded=False):
-                        st.dataframe(
-                            pd.DataFrame(authoritative_open),
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-                else:
-                    st.caption("No open positions.")
-
-        activity_column, summary_column, stats_column = st.columns(
-            [0.40, 0.32, 0.28], gap="medium"
+    ).upper()
+    event_filter = (
+        requested_filter if requested_filter in ACTIVITY_FILTERS else "ALL"
+    )
+    requested_all = str(
+        st.query_params.get(
+            "desk_all",
+            "1" if st.session_state.get("trade_desk_activity_expanded") else "0",
         )
-        with activity_column:
-            with st.container(key="trade_desk_activity_panel"):
-                activity_title, activity_filters, activity_action = st.columns(
-                    [0.24, 0.58, 0.18], gap="small"
-                )
-                activity_title.markdown("### Recent Activity")
-                with activity_filters:
-                    event_filter = st.radio(
-                        "Activity filter", ACTIVITY_FILTERS, horizontal=True,
-                        label_visibility="collapsed",
-                        key="trade_desk_activity_filter",
-                    )
-                view_all = bool(
-                    st.session_state.get("trade_desk_activity_expanded", False)
-                )
-                with activity_action:
-                    if st.button(
-                        "Latest" if view_all else "View all",
-                        key="trade_desk_activity_all",
-                    ):
-                        view_all = not view_all
-                        st.session_state["trade_desk_activity_expanded"] = view_all
-                activity = filtered_activity_rows(
-                    events, selected=event_filter, now=now,
-                    view_all=view_all, limit=5,
-                )
-                st.markdown(
-                    activity_rows_markup(activity), unsafe_allow_html=True
-                )
-        with summary_column:
-            st.markdown(
-                performance_summary_markup(
-                    paper_summary, paper_available=paper_available
-                ),
-                unsafe_allow_html=True,
+    ).lower()
+    view_all = requested_all in {"1", "true", "yes"}
+    st.session_state["trade_desk_activity_filter"] = event_filter
+    st.session_state["trade_desk_activity_expanded"] = view_all
+    activity = filtered_activity_rows(
+        events, selected=event_filter, now=now, view_all=view_all, limit=5
+    )
+    positions = (
+        positions_table_markup(paper_rows)
+        if paper_available else authoritative_positions_markup(authoritative_open)
+    )
+    dashboard = dashboard_shell_markup(
+        status=status_strip_markup(status),
+        kpis=kpi_row_markup(kpis),
+        performance=performance_panel_markup(
+            summary, paper_summary, paper_available=paper_available
+        ),
+        risk=risk_panel_markup(
+            risk_status_model(
+                paper_summary, config, paper_available=paper_available
             )
-        with stats_column:
-            st.markdown(
-                trade_stats_markup(
-                    scorecard, paper_summary, paper_available=paper_available
-                ),
-                unsafe_allow_html=True,
-            )
+        ),
+        best_trade=trade_desk_best_trade_markup(latest_results, records),
+        positions=positions,
+        activity_rows=activity_rows_markup(activity),
+        activity_filter=event_filter,
+        view_all=view_all,
+        performance_summary=performance_summary_markup(
+            paper_summary, paper_available=paper_available
+        ),
+        trade_stats=trade_stats_markup(
+            scorecard, paper_summary, paper_available=paper_available
+        ),
+    )
+    reliability = reliability_state or {}
+    scanner_alert = str(reliability.get("scanner_state") or "").upper() in {
+        "STALE", "ERROR", "FAILED", "UNAVAILABLE", "NEVER RUN",
+    }
+    provider_alert = (
+        str(reliability.get("market_data_state") or "").upper()
+        == "UNAVAILABLE"
+    )
+    if scanner_alert or provider_alert:
+        message = reliability.get("message")
+        if message:
+            (st.error if status["severity"] == "error" else st.warning)(message)
+    render_critical_trade_event(trade_repository)
+    st.markdown(dashboard, unsafe_allow_html=True)
 
 
 def render_live_session_opportunity(

@@ -107,6 +107,7 @@ def test_page_is_sql_backed_read_only_and_trade_desk_links_without_duplication()
     assert "Why trades were rejected" in page
     for forbidden in (".save(", ".append(", "close_position(", "update_position("):
         assert forbidden not in page
-    assert "View Paper Trading →" in desk
+    compact_model = Path("trade_desk_compact.py").read_text(encoding="utf-8")
+    assert "View Paper Trading →" in compact_model
     assert "Open Option Positions" not in desk
     assert "Execution Journal" not in desk
