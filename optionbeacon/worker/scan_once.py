@@ -61,6 +61,67 @@ EOD_QUOTE_ATTEMPTS = 3
 EOD_QUOTE_BACKOFF_SECONDS = (1, 2)
 
 
+def _safe_funnel_error_message(exc):
+    message = str(exc or "").splitlines()[0][:160]
+    lowered = message.lower()
+    if any(value in lowered for value in ("postgres://", "postgresql://", "token", "password", "secret")):
+        return "Authoritative funnel diagnostic stage failed; sensitive detail redacted."
+    return message or "Authoritative funnel diagnostic stage failed."
+
+
+def record_authoritative_entry_funnel(
+    *, repository, scanner_id, run_number, started_at, completed_at,
+    symbols, monotonic=time.perf_counter,
+):
+    """Attempt exactly one failure-isolated snapshot for one scanner-cycle identity."""
+    attempt_started = monotonic()
+    stage = "initialization"
+    LOGGER.info(json.dumps({
+        "event": "authoritative_entry_funnel_started",
+        "scanner_id": scanner_id, "run_number": run_number,
+        "symbol_count": len(symbols), "symbols_attempted": len(symbols),
+        "timestamp": completed_at.isoformat(),
+    }, sort_keys=True))
+    try:
+        diagnostics = AuthoritativeEntryFunnelRepository(repository)
+        stage = "authoritative_entry_query"
+        entered_events = [
+            event for event in repository.list_trade_events(limit=5000)
+            if event.get("event_type") == "TRADE_ENTERED"
+            and event.get("event_timestamp") >= started_at.isoformat()
+            and event.get("event_timestamp") <= completed_at.isoformat()
+        ]
+        stage = "persistence"
+        record = diagnostics.save_cycle(
+            scanner_id=scanner_id, run_number=run_number,
+            started_at=started_at, completed_at=completed_at,
+            symbols=symbols, entered_events=entered_events,
+        )
+        LOGGER.info(json.dumps({
+            "event": "authoritative_entry_funnel_completed",
+            "scanner_id": scanner_id, "run_number": run_number,
+            "scanned": record["scanned"],
+            "valid_results": record["valid_results"],
+            "directional": record["directional_candidates"],
+            "score_qualified": record["qualified_setups"],
+            "ready_armed": record["armed"],
+            "trigger_reached": record["trigger_reached"],
+            "trade_entered": record["trade_entered"],
+            "blocker_count": sum(record["blockers"].values()),
+            "duration_ms": round((monotonic() - attempt_started) * 1000, 3),
+        }, sort_keys=True))
+        return True
+    except Exception as exc:
+        LOGGER.error(json.dumps({
+            "event": "authoritative_entry_funnel_failed",
+            "scanner_id": scanner_id, "run_number": run_number,
+            "stage": stage, "exception_type": type(exc).__name__,
+            "message": _safe_funnel_error_message(exc),
+            "duration_ms": round((monotonic() - attempt_started) * 1000, 3),
+        }, sort_keys=True))
+        return False
+
+
 def environment_symbol_groups():
     """Load the CLI universe without consulting Streamlit secrets."""
     return active_symbol_groups(api_key=os.getenv("FINNHUB_API_KEY", "").strip())
@@ -163,11 +224,6 @@ def run_scan_once(
             mirror_repository = MirrorExecutionRepository(repository)
             mirror_is_enabled = mirror_enabled()
             mirror_start_date = mirror_experiment_start()
-            try:
-                entry_funnel_repository = AuthoritativeEntryFunnelRepository(repository)
-            except Exception:
-                entry_funnel_repository = None
-                LOGGER.exception("Authoritative entry funnel initialization failed safely")
             if mirror_is_enabled and mirror_start_date is None:
                 prior_mirror_state = mirror_repository.runtime_state()
                 prior_start = (prior_mirror_state or {}).get("experiment_start_date")
@@ -313,27 +369,6 @@ def run_scan_once(
                            if key not in {"completed_wall_time", "started_wall_time"}},
                     }, sort_keys=True))
                     log_scan_progress(symbol_index)
-            if entry_funnel_repository is not None:
-                try:
-                    funnel_completed_at = clock()
-                    entered_events = [
-                        event for event in repository.list_trade_events(limit=5000)
-                        if event.get("event_type") == "TRADE_ENTERED"
-                        and event.get("event_timestamp") >= started.isoformat()
-                        and event.get("event_timestamp") <= funnel_completed_at.isoformat()
-                    ]
-                    funnel_record = entry_funnel_repository.save_cycle(
-                        scanner_id=scanner_id, run_number=run_number,
-                        started_at=started, completed_at=funnel_completed_at,
-                        symbols=funnel_symbols, entered_events=entered_events,
-                    )
-                    LOGGER.info(json.dumps({
-                        "event": "authoritative_entry_funnel_completed",
-                        "scanner_id": scanner_id, "run_number": run_number,
-                        **funnel_record,
-                    }, sort_keys=True))
-                except Exception:
-                    LOGGER.exception("Authoritative entry funnel persistence failed safely")
             stage = "provider_summary"
             with performance.measure("provider_summary"):
                 provider_summary = end_market_data_scan_cycle()
@@ -369,6 +404,16 @@ def run_scan_once(
                         "run_number": run_number, "error": type(exc).__name__,
                         "paper_handoff_will_run": True,
                     }, sort_keys=True))
+
+        stage = "authoritative_entry_funnel"
+        funnel_completed_at = clock()
+        with performance.measure("authoritative_entry_funnel"):
+            record_authoritative_entry_funnel(
+                repository=repository, scanner_id=scanner_id,
+                run_number=run_number, started_at=started,
+                completed_at=funnel_completed_at, symbols=funnel_symbols,
+                monotonic=monotonic,
+            )
 
         stage = "authoritative_entry_query"
         lease.ensure_owned()

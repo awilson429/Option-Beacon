@@ -72,7 +72,14 @@ class AuthoritativeEntryFunnelRepository:
                 (cycle_id,scanner_id,run_number,session_date,started_at,completed_at,scanned,
                  valid_results,directional_candidates,qualified_setups,armed,trigger_reached,
                  trade_entered,blocker_counts_json,thresholds_json,created_at)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(cycle_id) DO NOTHING""", (
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(cycle_id) DO UPDATE SET
+                 completed_at=excluded.completed_at,scanned=excluded.scanned,
+                 valid_results=excluded.valid_results,
+                 directional_candidates=excluded.directional_candidates,
+                 qualified_setups=excluded.qualified_setups,armed=excluded.armed,
+                 trigger_reached=excluded.trigger_reached,trade_entered=excluded.trade_entered,
+                 blocker_counts_json=excluded.blocker_counts_json,
+                 thresholds_json=excluded.thresholds_json""", (
                 cycle_id, scanner_id, run_number, session_date, utc_iso(started_at), utc_iso(completed_at),
                 counts["scanned"], counts["valid_results"], counts["directional_candidates"],
                 counts["qualified_setups"], counts["armed"], counts["trigger_reached"],
@@ -83,7 +90,13 @@ class AuthoritativeEntryFunnelRepository:
                 self.repository._execute(connection, """INSERT INTO authoritative_entry_funnel_symbols
                     (cycle_id,symbol,direction,score,state,primary_blocker,failed_conditions_json,
                      trigger_price,current_price,distance_to_trigger_pct,last_updated,trade_entered)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(cycle_id,symbol) DO NOTHING""", (
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(cycle_id,symbol) DO UPDATE SET
+                     direction=excluded.direction,score=excluded.score,state=excluded.state,
+                     primary_blocker=excluded.primary_blocker,
+                     failed_conditions_json=excluded.failed_conditions_json,
+                     trigger_price=excluded.trigger_price,current_price=excluded.current_price,
+                     distance_to_trigger_pct=excluded.distance_to_trigger_pct,
+                     last_updated=excluded.last_updated,trade_entered=excluded.trade_entered""", (
                     cycle_id, row["symbol"], row["direction"], row["score"], row["state"],
                     row["primary_blocker"], json.dumps(row["failed_conditions"], sort_keys=True),
                     row["trigger_price"], row["current_price"], row["distance_to_trigger_pct"],
