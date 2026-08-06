@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from html import escape
 from zoneinfo import ZoneInfo
 
+from mirror_execution import mirror_capital_summary
+
 
 EASTERN = ZoneInfo("America/New_York")
 
@@ -140,6 +142,7 @@ def trade_comparison_model(
     paper_wins = sum(_paper_pnl(item) > 0 for item in paper_closed)
     paper_losses = sum(_paper_pnl(item) < 0 for item in paper_closed)
     mirror_runtime = mirror_runtime or {}
+    mirror_capital = mirror_capital_summary(mirror_rows or [])
     mirror_start = _date(mirror_runtime.get("experiment_start_date"))
     session_mirror = {
         str(row.get("opportunity_id")): row
@@ -213,6 +216,7 @@ def trade_comparison_model(
             "wins": sum(value > 0 for value in mirror_closed_pnl),
             "losses": sum(value < 0 for value in mirror_closed_pnl),
             "pnl": sum(mirror_opened_pnl) if mirror_opened_pnl or not mirror_opened else None,
+            **mirror_capital,
         },
         "missed_winners": {
             "count": len(missed),
@@ -246,6 +250,16 @@ def comparison_markup(model, *, has_previous=False, selected="TODAY"):
         + (f'<span>MIRROR: Evaluated <strong>{mirror["evaluated"]}</strong> · Opened <strong>{mirror["opened"]}</strong> · Unexecutable <strong>{mirror["unexecutable"]}</strong> · Pending <strong>{mirror["pending"]}</strong> · Participation <strong>{mirror["participation_rate"]:.1f}%</strong></span>' if mirror["available"] else '<span>MIRROR: <strong>No MIRROR data for this session</strong></span>')
         + '</div>'
     )
+    capital = (
+        '<div class="ob-mirror-capital"><span>MIRROR CAPITAL DEPLOYED</span>'
+        f'<strong>{_money_unsigned(mirror["current_capital_required"])}</strong>'
+        f'<small>Peak {_money_unsigned(mirror["peak_capital_required"])} · No limit</small>'
+        '<div>'
+        f'<span>Open contracts <strong>{mirror["open_contracts"]}</strong></span>'
+        f'<span>Cumulative gross debit <strong>{_money_unsigned(mirror["cumulative_gross_debit"])}</strong></span>'
+        f'<span>Return on peak <strong>{_percent(mirror["return_on_peak_capital_percent"])}</strong></span>'
+        '</div></div>'
+    )
     missed = model["missed_winners"]
     reasons = ", ".join(f'{key}: {value}' for key, value in missed["rejection_counts"].items()) or "None recorded"
     missed_block = (
@@ -255,7 +269,7 @@ def comparison_markup(model, *, has_previous=False, selected="TODAY"):
     return (
         '<section class="ob-desk-panel"><div class="ob-compare-header"><h3>OptionBeacon vs PAPER vs MIRROR</h3>'
         f'<nav class="ob-session-tabs">{tabs}</nav></div><div class="ob-compare-grid">{columns}</div>'
-        f'{participation}{missed_block}</section>'
+        f'{participation}{capital}{missed_block}</section>'
     )
 
 
@@ -437,6 +451,10 @@ def _percent(value):
 
 def _money(value):
     return f'${float(value):+,.2f}' if value is not None else "—"
+
+
+def _money_unsigned(value):
+    return f'${float(value):,.2f}' if value is not None else "—"
 
 
 def _price(value):

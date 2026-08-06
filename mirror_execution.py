@@ -392,8 +392,8 @@ def mirror_summary(rows):
     winners, losers = [x for x in pnl if x > 0], [x for x in pnl if x < 0]
     realized = sum(pnl)
     unrealized = sum(float(row["unrealized_pnl"] or 0) for row in open_rows)
-    debits = [float(row["total_debit"] or 0) for row in opened]
-    peak_capital = _peak_capital(opened)
+    capital = mirror_capital_summary(rows)
+    debits = [float(row["total_debit"]) for row in opened if row.get("total_debit") is not None]
     max_drawdown = _max_drawdown(closed)
     return {"authoritative_entries": len(rows), "attempted": len(rows), "opened": len(opened),
             "unexecutable": len(rows) - len(opened), "open_positions": len(open_rows), "closed_trades": len(closed),
@@ -403,11 +403,67 @@ def mirror_summary(rows):
             "average_winner": sum(winners) / len(winners) if winners else 0,
             "average_loser": sum(losers) / len(losers) if losers else 0,
             "profit_factor": sum(winners) / abs(sum(losers)) if losers else math.inf if winners else 0,
-            "current_capital_required": sum(float(row["total_debit"] or 0) for row in open_rows),
-            "peak_capital_required": peak_capital, "cumulative_gross_debit": sum(debits),
-            "average_entry_debit": sum(debits) / len(debits) if debits else 0,
-            "largest_entry_debit": max(debits, default=0), "max_drawdown": max_drawdown,
-            "max_drawdown_percent_of_peak_capital": max_drawdown / peak_capital * 100 if peak_capital else 0}
+            "current_capital_required": capital["current_capital_required"],
+            "peak_capital_required": capital["peak_capital_required"],
+            "cumulative_gross_debit": capital["cumulative_gross_debit"],
+            "open_contracts": capital["open_contracts"],
+            "return_on_peak_capital_percent": capital["return_on_peak_capital_percent"],
+            "average_entry_debit": (
+                sum(debits) / len(debits) if len(debits) == len(opened) and debits
+                else 0 if not opened else None
+            ),
+            "largest_entry_debit": (
+                max(debits) if len(debits) == len(opened) and debits
+                else 0 if not opened else None
+            ), "max_drawdown": max_drawdown,
+            "max_drawdown_percent_of_peak_capital": (
+                max_drawdown / capital["peak_capital_required"] * 100
+                if capital["peak_capital_required"] else 0
+                if capital["peak_capital_required"] == 0 else None
+            )}
+
+
+def mirror_capital_summary(rows):
+    """Derive capital requirements only from immutable persisted MIRROR debits."""
+    opened = [row for row in rows if row.get("opened_at")]
+    open_rows = [row for row in opened if str(row.get("status") or "").upper() in {"OPEN", "EXIT_PENDING"}]
+    open_contracts = sum(int(row.get("quantity") or 0) for row in open_rows)
+    current = (
+        sum(float(row["total_debit"]) for row in open_rows)
+        if all(row.get("total_debit") is not None for row in open_rows) else None
+    )
+    cumulative = (
+        sum(float(row["total_debit"]) for row in opened)
+        if all(row.get("total_debit") is not None for row in opened) else None
+    )
+    peak_known = all(
+        row.get("total_debit") is not None
+        and (str(row.get("status") or "").upper() in {"OPEN", "EXIT_PENDING"} or row.get("exit_quote_at"))
+        for row in opened
+    )
+    peak = _peak_capital(opened) if peak_known else None
+    pnl_known = all(
+        row.get("realized_pnl") is not None
+        if str(row.get("status") or "").upper() == "CLOSED"
+        else row.get("unrealized_pnl") is not None
+        for row in opened
+    )
+    total_pnl = sum(
+        float(row["realized_pnl"])
+        if str(row.get("status") or "").upper() == "CLOSED"
+        else float(row["unrealized_pnl"])
+        for row in opened
+    ) if pnl_known else None
+    return {
+        "current_capital_required": current,
+        "peak_capital_required": peak,
+        "cumulative_gross_debit": cumulative,
+        "open_contracts": open_contracts,
+        "return_on_peak_capital_percent": (
+            total_pnl / peak * 100 if total_pnl is not None and peak else None
+        ),
+        "capital_limit": None,
+    }
 
 
 def _peak_capital(rows):
