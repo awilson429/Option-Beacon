@@ -26,6 +26,7 @@ from optionbeacon.worker.lock_lease import (
     ScannerLockLease,
 )
 from execution_config import ExecutionConfig, execution_config_log_record
+from authoritative_entry_funnel import AuthoritativeEntryFunnelRepository
 from paper_execution import (
     pending_authoritative_entries,
     refresh_paper_positions,
@@ -141,6 +142,7 @@ def run_scan_once(
     symbols_attempted = 0
     symbol_count = 0
     failed_symbols = []
+    funnel_symbols = []
     provider_summary = None
     scan_phase_error = None
     stage = "market_data_cycle_start"
@@ -161,6 +163,11 @@ def run_scan_once(
             mirror_repository = MirrorExecutionRepository(repository)
             mirror_is_enabled = mirror_enabled()
             mirror_start_date = mirror_experiment_start()
+            try:
+                entry_funnel_repository = AuthoritativeEntryFunnelRepository(repository)
+            except Exception:
+                entry_funnel_repository = None
+                LOGGER.exception("Authoritative entry funnel initialization failed safely")
             if mirror_is_enabled and mirror_start_date is None:
                 prior_mirror_state = mirror_repository.runtime_state()
                 prior_start = (prior_mirror_state or {}).get("experiment_start_date")
@@ -295,6 +302,7 @@ def run_scan_once(
                         )
                         symbol_record["started_wall_time"] = symbol_started_at
                     performance.add_symbol(symbol_record)
+                    funnel_symbols.append((symbol, result))
                     LOGGER.info(json.dumps({
                         "event": "scanner_symbol_timing",
                         "scanner_id": scanner_id,
@@ -305,6 +313,27 @@ def run_scan_once(
                            if key not in {"completed_wall_time", "started_wall_time"}},
                     }, sort_keys=True))
                     log_scan_progress(symbol_index)
+            if entry_funnel_repository is not None:
+                try:
+                    funnel_completed_at = clock()
+                    entered_events = [
+                        event for event in repository.list_trade_events(limit=5000)
+                        if event.get("event_type") == "TRADE_ENTERED"
+                        and event.get("event_timestamp") >= started.isoformat()
+                        and event.get("event_timestamp") <= funnel_completed_at.isoformat()
+                    ]
+                    funnel_record = entry_funnel_repository.save_cycle(
+                        scanner_id=scanner_id, run_number=run_number,
+                        started_at=started, completed_at=funnel_completed_at,
+                        symbols=funnel_symbols, entered_events=entered_events,
+                    )
+                    LOGGER.info(json.dumps({
+                        "event": "authoritative_entry_funnel_completed",
+                        "scanner_id": scanner_id, "run_number": run_number,
+                        **funnel_record,
+                    }, sort_keys=True))
+                except Exception:
+                    LOGGER.exception("Authoritative entry funnel persistence failed safely")
             stage = "provider_summary"
             with performance.measure("provider_summary"):
                 provider_summary = end_market_data_scan_cycle()
