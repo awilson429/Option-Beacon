@@ -12,6 +12,11 @@ import streamlit as st
 from ui.theme import configure_page
 
 from after_hours import after_hours_focus_rows, fetch_after_hours_briefing
+from authoritative_entry_funnel import (
+    AuthoritativeEntryFunnelRepository,
+    FUNNEL_STAGES,
+    near_entry_rows,
+)
 from build_information import build_information, render_build_footer
 from dashboard_storage_config import dashboard_database_url
 from developer_tools import (
@@ -4342,6 +4347,101 @@ def render_paper_trading_page():
         )
 
 
+def render_authoritative_entry_funnel(repository):
+    """Render persisted worker diagnostics without initializing or writing tables."""
+    st.markdown("### AUTHORITATIVE ENTRY FUNNEL — TODAY")
+    if repository is None:
+        st.caption("Authoritative funnel diagnostics are awaiting shared worker state.")
+        return
+    try:
+        diagnostics = AuthoritativeEntryFunnelRepository(repository, initialize=False)
+        today = eastern_now().date()
+        cycle = diagnostics.latest_cycle(today)
+        if not cycle:
+            st.caption("No authoritative funnel snapshot has been recorded for today yet.")
+            return
+        symbols = diagnostics.symbol_rows(cycle["cycle_id"])
+        previous = diagnostics.previous_session_cycle(today)
+    except Exception:
+        st.caption("Authoritative funnel diagnostics are not available in shared state yet.")
+        return
+
+    labels = {
+        "scanned": "Scanned", "valid_results": "Valid Results",
+        "directional_candidates": "Directional", "qualified_setups": "Score-Qualified Setups",
+        "armed": "READY / ARMED (pre-trigger)", "trigger_reached": "Trigger Reached",
+        "trade_entered": "TRADE_ENTERED",
+    }
+    columns = st.columns(len(FUNNEL_STAGES))
+    for column, stage in zip(columns, FUNNEL_STAGES):
+        column.metric(labels[stage], int(cycle.get(stage) or 0))
+    st.caption(
+        f'Latest completed cycle: {cycle.get("completed_at")} · '
+        "Counts are measured by the Railway authoritative worker."
+    )
+
+    blockers = cycle.get("blocker_counts") or {}
+    st.markdown("#### Top Current Blockers")
+    if blockers:
+        st.dataframe(pd.DataFrame([
+            {"Primary Blocker": reason, "Symbols": count}
+            for reason, count in sorted(blockers.items(), key=lambda item: (-item[1], item[0]))
+        ]), use_container_width=True, hide_index=True)
+    else:
+        st.caption("No current blockers were recorded.")
+
+    candidate_rows = [{
+        "Symbol": row.get("symbol"), "Direction": row.get("direction") or "—",
+        "Score": row.get("score") if row.get("score") is not None else "—",
+        "State": row.get("state") or "—", "Primary Blocker": row.get("primary_blocker") or "ENTERED",
+        "Trigger": row.get("trigger_price") if row.get("trigger_price") is not None else "—",
+        "Current Price": row.get("current_price") if row.get("current_price") is not None else "—",
+        "Distance to Trigger": (
+            f'{float(row["distance_to_trigger_pct"]):+.3f}%'
+            if row.get("distance_to_trigger_pct") is not None else "—"
+        ),
+        "Last Updated": row.get("last_updated") or "—",
+    } for row in symbols if row.get("direction") or row.get("primary_blocker") != "DIRECTION_UNCLEAR"]
+    if candidate_rows:
+        st.markdown("#### Current Candidate Diagnostics")
+        st.dataframe(pd.DataFrame(candidate_rows), use_container_width=True, hide_index=True)
+
+    near = near_entry_rows(symbols)
+    if near:
+        st.markdown("#### Near Entry")
+        for index, row in enumerate(near, 1):
+            distance = (
+                f'{float(row["distance_to_trigger_pct"]):+.3f}% from trigger'
+                if row.get("distance_to_trigger_pct") is not None
+                else str(row.get("primary_blocker") or "awaiting lifecycle")
+            )
+            st.caption(
+                f'{index}. {row.get("symbol")} {row.get("direction")} · '
+                f'{row.get("state")} · {distance}'
+            )
+
+    if previous:
+        st.markdown("#### Previous Trading Session — Latest Persisted Cycle")
+        st.caption(
+            "Historical intraday same-clock snapshots were not available before this instrumentation; "
+            "this compares the latest persisted cycle for each session."
+        )
+        comparison = [
+            {
+                "Stage": labels[stage], "Today": int(cycle.get(stage) or 0),
+                "Previous Session": int(previous.get(stage) or 0),
+            }
+            for stage in FUNNEL_STAGES
+        ]
+        st.dataframe(pd.DataFrame(comparison), use_container_width=True, hide_index=True)
+
+    with st.expander("Authoritative entry thresholds", expanded=False):
+        st.dataframe(pd.DataFrame([
+            {"Setting": key, "Configured Value": value}
+            for key, value in (cycle.get("thresholds") or {}).items()
+        ]), use_container_width=True, hide_index=True)
+
+
 def render_developer_tools(trade_state=None):
     """Render read-only internal diagnostics without exposing provider secrets."""
     render_section_header(
@@ -4356,6 +4456,7 @@ def render_developer_tools(trade_state=None):
         st,
         (trade_state or {}).get("repository"),
     )
+    render_authoritative_entry_funnel((trade_state or {}).get("repository"))
 
     st.markdown("### System Status")
     status_rows = system_status()
