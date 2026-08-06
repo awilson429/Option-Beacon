@@ -85,6 +85,7 @@ def mirror_row(identity, *, at=NOW, status="CLOSED", opened=True, pnl=25.0, code
     return {
         "opportunity_id": identity, "entry_event_at": at,
         "opened_at": at if opened else None, "status": status,
+        "exit_quote_at": at + timedelta(minutes=30) if opened and status == "CLOSED" else None,
         "disposition_code": code,
         "realized_pnl": pnl if status == "CLOSED" else None,
         "unrealized_pnl": pnl if status != "CLOSED" and opened else None,
@@ -189,6 +190,9 @@ def test_three_equal_cards_include_persisted_mirror_metrics_and_status():
         "opened": 1, "unexecutable": 1, "pending": 0,
         "participation_rate": 50.0, "closed": 1,
         "wins": 1, "losses": 0, "pnl": 34.5,
+        "current_capital_required": 0.0, "peak_capital_required": 125.0,
+        "cumulative_gross_debit": 125.0, "open_contracts": 0,
+        "return_on_peak_capital_percent": 27.6, "capital_limit": None,
     }
     markup = comparison_markup(model)
     assert "OptionBeacon vs PAPER vs MIRROR" in markup

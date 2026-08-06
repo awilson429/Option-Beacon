@@ -466,6 +466,21 @@ def money(value):
         return "N/A"
 
 
+def mirror_capital_money(value):
+    """Format persisted MIRROR capital without inventing a zero for missing data."""
+    try:
+        return f"${float(value):,.2f}" if value is not None else "—"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def mirror_capital_percent(value):
+    try:
+        return f"{float(value):.1f}%" if value is not None else "—"
+    except (TypeError, ValueError):
+        return "—"
+
+
 def short_time(value):
     if value in [None, ""]:
         return eastern_now().strftime("%I:%M %p ET").lstrip("0")
@@ -4198,7 +4213,16 @@ def render_paper_trading_page():
              ("Open Positions", mirror_metrics["open_positions"]), ("Closed Trades", mirror_metrics["closed_trades"])),
             (("Realized P&L", f'${mirror_metrics["realized_pnl"]:+,.2f}'), ("Unrealized P&L", f'${mirror_metrics["unrealized_pnl"]:+,.2f}'),
              ("Total P&L", f'${mirror_metrics["total_pnl"]:+,.2f}'), ("Win Rate", f'{mirror_metrics["win_rate"]:.1f}%'),
-             ("Current Capital", f'${mirror_metrics["current_capital_required"]:,.2f}'), ("Peak Capital", f'${mirror_metrics["peak_capital_required"]:,.2f}')),
+             ("Current Capital", mirror_capital_money(mirror_metrics["current_capital_required"])),
+             ("Peak Capital", mirror_capital_money(mirror_metrics["peak_capital_required"]))),
+            (("Open Contracts", mirror_metrics["open_contracts"]),
+             ("Cumulative Gross Debit", mirror_capital_money(mirror_metrics["cumulative_gross_debit"])),
+             ("Return on Peak", (
+                 f'{mirror_metrics["return_on_peak_capital_percent"]:+.2f}%'
+                 if mirror_metrics["return_on_peak_capital_percent"] is not None else "—"
+             )), ("Capital Limit", "No limit"),
+             ("Average Entry Debit", mirror_capital_money(mirror_metrics["average_entry_debit"])),
+             ("Largest Entry Debit", mirror_capital_money(mirror_metrics["largest_entry_debit"]))),
         ):
             columns = st.columns(6)
             for column, (label, value) in zip(columns, metric_row):
@@ -4207,9 +4231,9 @@ def render_paper_trading_page():
             f'Wins / Losses: {mirror_metrics["winning_trades"]} / {mirror_metrics["losing_trades"]} · '
             f'Avg winner: ${mirror_metrics["average_winner"]:+,.2f} · Avg loser: ${mirror_metrics["average_loser"]:+,.2f} · '
             f'Profit factor: {"∞" if math.isinf(mirror_metrics["profit_factor"]) else f"{mirror_metrics["profit_factor"]:.2f}"} · '
-            f'Avg debit: ${mirror_metrics["average_entry_debit"]:,.2f} · Largest debit: ${mirror_metrics["largest_entry_debit"]:,.2f} · '
+            f'Avg debit: {mirror_capital_money(mirror_metrics["average_entry_debit"])} · Largest debit: {mirror_capital_money(mirror_metrics["largest_entry_debit"])} · '
             f'Max drawdown: ${mirror_metrics["max_drawdown"]:,.2f} '
-            f'({mirror_metrics["max_drawdown_percent_of_peak_capital"]:.1f}% of peak capital)'
+            f'({mirror_capital_percent(mirror_metrics["max_drawdown_percent_of_peak_capital"])} of peak capital)'
         )
         experiment = mirror_experiment_model(mirror_rows, mirror_runtime, now)
         st.caption(
