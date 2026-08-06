@@ -96,6 +96,7 @@ def record_authoritative_entry_funnel(
             scanner_id=scanner_id, run_number=run_number,
             started_at=started_at, completed_at=completed_at,
             symbols=symbols, entered_events=entered_events,
+            candidate_records=list_trade_outcomes(repository),
         )
         LOGGER.info(json.dumps({
             "event": "authoritative_entry_funnel_completed",
@@ -103,10 +104,12 @@ def record_authoritative_entry_funnel(
             "scanned": record["scanned"],
             "valid_results": record["valid_results"],
             "directional": record["directional_candidates"],
-            "score_qualified": record["qualified_setups"],
+            "confidence_qualified": record["confidence_qualified"],
+            "visible_setup_qualified": record["visible_setup_qualified"],
             "ready_armed": record["armed"],
             "trigger_reached": record["trigger_reached"],
             "trade_entered": record["trade_entered"],
+            "not_entered": record["not_entered"],
             "blocker_count": sum(record["blockers"].values()),
             "duration_ms": round((monotonic() - attempt_started) * 1000, 3),
         }, sort_keys=True))
@@ -349,6 +352,7 @@ def run_scan_once(
                                 process_scanner_result(
                                     repository, result, source_version=build["commit"],
                                     current_timestamp=clock(), eod_exit_time=eod_exit_time,
+                                    scanner_id=scanner_id, run_number=run_number,
                                 )
                         symbol_completed_at = clock()
                         symbol_record = timing.finish(

@@ -59,7 +59,8 @@ def test_actual_blockers_cover_data_direction_score_trigger_and_lifecycle():
     assert counts == {
         "scanned": 4, "valid_results": 3, "directional_candidates": 2,
         "qualified_setups": 1, "armed": 1, "trigger_reached": 1,
-        "trade_entered": 1,
+        "trade_entered": 1, "visible_setup_qualified": 1,
+        "confidence_qualified": 2, "not_entered": 4,
     }
 
 

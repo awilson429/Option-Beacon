@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import json
 import os
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
@@ -168,6 +169,8 @@ def process_scanner_result(
     minimum_entry_confidence=DEFAULT_MIN_ENTRY_CONFIDENCE,
     current_timestamp=None,
     eod_exit_time=DEFAULT_EOD_EXIT_TIME_ET,
+    scanner_id=None,
+    run_number=None,
 ) -> int:
     """Advance authoritative outcomes directly from one stable scanner result."""
     symbol = str((result or {}).get("symbol") or "").upper()
@@ -181,6 +184,7 @@ def process_scanner_result(
     for record in list_trade_outcomes(repository):
         if record.symbol.upper() != symbol or record.exit_time is not None:
             continue
+        prior_entry_time = record.entry_time
         before = serialize_trade_outcome(record)
         if price is not None and price > 0:
             eod_due = (
@@ -229,6 +233,7 @@ def process_scanner_result(
                     lifecycle_timestamp,
                 )
         if serialize_trade_outcome(record) != before:
+            entered_now = prior_entry_time is None and record.entry_time is not None
             sync_trade_outcome(
                 repository,
                 record,
@@ -237,6 +242,14 @@ def process_scanner_result(
                 rule_score=(result or {}).get("score") or (result or {}).get("confidence"),
             )
             _persist_outcome_label(repository, record)
+            if entered_now:
+                LOGGER.info(json.dumps({
+                    "event": "authoritative_trade_entered",
+                    "scanner_id": scanner_id, "run_number": run_number,
+                    "opportunity_id": record.trade_id, "symbol": record.symbol,
+                    "direction": record.direction, "confidence": record.confidence,
+                    "trigger": record.entry, "entry_price": price,
+                }, sort_keys=True))
             changed += 1
     candidate = scanner_result_to_trade_outcome(result)
     if (
