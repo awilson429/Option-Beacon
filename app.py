@@ -4010,6 +4010,7 @@ def render_outcome_trade_journal(
         positions_table_markup(paper_rows)
         if paper_available else authoritative_positions_markup(authoritative_open)
     )
+    positions_collapsed = not (paper_rows if paper_available else authoritative_open)
     sessions = available_session_dates(authoritative_events, now)
     requested_session = str(st.query_params.get("desk_session", "TODAY")).upper()
     selected_session = (
@@ -4046,6 +4047,7 @@ def render_outcome_trade_journal(
         activity_rows=activity_rows_markup(activity),
         activity_filter=event_filter,
         view_all=view_all,
+        positions_collapsed=positions_collapsed,
         more_stats=more_stats_markup(
             scorecard, paper_summary, paper_available=paper_available
         ),

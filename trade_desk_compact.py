@@ -266,7 +266,9 @@ def paper_position_rows(positions, config, now):
 
 def positions_table_markup(rows):
     if not rows:
-        return compact_empty_markup("Open Positions", "0")
+        return compact_empty_markup(
+            "Open Positions", "0", extra_class="ob-open-positions-empty"
+        )
     headers = ("SYMBOL", "TYPE", "CONTRACT", "ENTRY", "CURRENT", "P&L $", "P&L %", "HOLD", "STATUS", "DETAILS")
     head = "".join(f"<th>{escape(value)}</th>" for value in headers)
     body = []
@@ -346,6 +348,7 @@ def _activity_details_markup(row):
 def dashboard_shell_markup(
     *, status, kpis, risk, best_trade, positions, comparison,
     authoritative_trades, activity_rows, activity_filter, view_all, more_stats,
+    positions_collapsed=False,
 ):
     """Compose the complete deterministic Trade Desk CSS-grid body."""
     filters = "".join(
@@ -363,8 +366,9 @@ def dashboard_shell_markup(
         f'<a class="ob-activity-view" href="{view_href}">{"Latest" if view_all else "View all"}</a>'
         f'</div>{activity_rows}</section>'
     )
+    dashboard_class = "ob-trade-dashboard ob-positions-empty" if positions_collapsed else "ob-trade-dashboard"
     return (
-        '<div class="ob-trade-dashboard">'
+        f'<div class="{dashboard_class}">'
         '<header class="ob-grid-header"><div><h2>Trade Desk</h2>'
         '<p>Monitor positions, manage risk, and track performance in real time.</p>'
         f'</div>{status}</header>'
@@ -382,7 +386,9 @@ def dashboard_shell_markup(
 
 def authoritative_positions_markup(rows):
     if not rows:
-        return compact_empty_markup("Open Positions", "0")
+        return compact_empty_markup(
+            "Open Positions", "0", extra_class="ob-open-positions-empty"
+        )
     headers = ("SYMBOL", "TYPE", "ENTRY", "CURRENT", "P&L %", "STATUS")
     head = "".join(f'<th>{value}</th>' for value in headers)
     body = "".join(
@@ -409,9 +415,10 @@ def panel_markup(title, body, *, extra_class=""):
     return f'<section class="{classes}">{heading}{body}</section>'
 
 
-def compact_empty_markup(label, value):
+def compact_empty_markup(label, value, *, extra_class=""):
+    classes = f"ob-compact-empty {extra_class}".strip()
     return (
-        '<section class="ob-compact-empty">'
+        f'<section class="{classes}">'
         f'<span>{escape(str(label))}</span><strong>{escape(str(value))}</strong>'
         '</section>'
     )

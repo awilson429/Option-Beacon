@@ -189,10 +189,56 @@ def test_unified_position_table_is_newest_first_and_details_are_collapsed():
 
 def test_empty_positions_are_compact_and_populated_positions_expand():
     empty = positions_table_markup([])
-    assert 'class="ob-compact-empty"' in empty
+    assert 'class="ob-compact-empty ob-open-positions-empty"' in empty
     assert "Open Positions" in empty and ">0<" in empty
     assert "ob-position-table" not in empty
-    assert 'class="ob-compact-empty"' in authoritative_positions_markup([])
+    assert "No open positions" not in empty
+    assert 'class="ob-compact-empty ob-open-positions-empty"' in authoritative_positions_markup([])
+
+    trade = PaperOptionTrade(
+        trade_id="one", source_signal_id="opp-one", created_timestamp=NOW,
+        ticker="SPY", direction="Bullish", underlying_entry_price=600,
+        confidence=95, historical_grade="A", scanner_score=95, entry_reason="x",
+        expiration="2026-08-07", strike=600, option_type="call",
+        option_symbol="SPY-C", delta=.5, implied_volatility=.2,
+        bid=.9, ask=1.1, mid=1, spread_percent=20,
+        open_interest=100, volume=100,
+    )
+    position = position_from_trade(
+        trade, execution_time=NOW, fill_price=1, quantity=1
+    )
+    one = positions_table_markup(
+        paper_position_rows([position], ExecutionConfig(), NOW)
+    )
+    assert "ob-position-table" in one
+    assert "SPY-C" in one and "View" in one
+    assert "ob-open-positions-empty" not in one
+
+
+def test_empty_positions_switch_shell_to_content_driven_layout():
+    common = dict(
+        status="STATUS", kpis="KPIS", risk="RISK", best_trade="BEST",
+        comparison="COMPARISON", authoritative_trades="AUTHORITATIVE",
+        activity_rows="ACTIVITY", activity_filter="ALL", view_all=False,
+        more_stats="MORE",
+    )
+    empty = dashboard_shell_markup(
+        positions=positions_table_markup([]), positions_collapsed=True, **common
+    )
+    populated = dashboard_shell_markup(
+        positions="FULL POSITIONS", positions_collapsed=False, **common
+    )
+    assert 'class="ob-trade-dashboard ob-positions-empty"' in empty
+    assert 'class="ob-trade-dashboard"' in populated
+    assert "ob-positions-empty" not in populated
+
+    from pathlib import Path
+    css = Path("ui/theme.py").read_text(encoding="utf-8").replace(" ", "").replace("\n", "")
+    assert ".ob-open-positions-empty{box-sizing:border-box;min-height:3.25rem" in css
+    assert '"positionspositions""riskrisk""comparisoncomparison"' in css
+    mobile = css.split("@media(max-width:759px)", 1)[1]
+    assert ".ob-open-positions-empty{min-height:3.25rem;width:100%}" in mobile
+    assert "overflow-x:visible" not in css
 
 
 def test_best_trade_empty_is_compact_and_populated_is_expanded(monkeypatch):
