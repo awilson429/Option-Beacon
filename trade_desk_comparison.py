@@ -158,7 +158,8 @@ def trade_comparison_model(
         if not mirror:
             row.update(
                 mirror_disposition="NOT RECORDED" if mirror_available else "NO MIRROR DATA",
-                mirror_reason="—", mirror_pnl=None,
+                mirror_reason="—", mirror_pnl=None, mirror_contract="—",
+                mirror_entry=None, mirror_option_price=None, mirror_contract_details=None,
             )
             continue
         disposition_code = str(mirror.get("disposition_code") or "NOT RECORDED")
@@ -173,6 +174,10 @@ def trade_comparison_model(
                 "EXIT PENDING" if str(mirror.get("status") or "").upper() == "EXIT_PENDING" else "—"
             ),
             mirror_pnl=_mirror_pnl(mirror),
+            mirror_contract=_mirror_contract_label(mirror),
+            mirror_entry=mirror.get("entry_fill") if mirror.get("opened_at") else None,
+            mirror_option_price=_mirror_option_price(mirror),
+            mirror_contract_details=_mirror_contract_details(mirror),
         )
     mirror_matched = [session_mirror[identity] for identity in entries if identity in session_mirror]
     mirror_opened = [row for row in mirror_matched if row.get("opened_at")]
@@ -283,6 +288,12 @@ def authoritative_trades_markup(model, *, selected="TODAY"):
                     f'Rejection {row["paper_reason"]}'
                 )
                 diagnostics = f'<details><summary>Why missed?</summary><div>{escape(details)}</div></details>'
+            mirror_contract = escape(str(row["mirror_contract"]))
+            if row.get("mirror_contract_details"):
+                mirror_contract += (
+                    '<details><summary>Contract details</summary><div>'
+                    + escape(row["mirror_contract_details"]) + '</div></details>'
+                )
             rows.append(
                 '<tr>'
                 f'<td>{escape(row["time"])}</td><td><strong>{escape(row["symbol"])}</strong></td>'
@@ -291,10 +302,12 @@ def authoritative_trades_markup(model, *, selected="TODAY"):
                 f'<td class="ob-value-{treatment}">{_percent(row["auth_return"])}</td><td>{escape(row["status"])}</td>'
                 f'<td>{escape(row["paper_disposition"])}</td><td>{escape(row["paper_reason"])}</td>'
                 f'<td>{_money(row["paper_pnl"]) if row["paper_pnl"] is not None else "—"}{diagnostics}</td>'
-                f'<td>{escape(row["mirror_disposition"])}</td><td>{escape(row["mirror_reason"])}</td>'
+                f'<td>{escape(row["mirror_disposition"])}</td><td>{mirror_contract}</td>'
+                f'<td>{_price(row["mirror_entry"]) if row["mirror_entry"] is not None else "—"}</td>'
+                f'<td>{escape(row["mirror_reason"])}</td>'
                 f'<td>{_money(row["mirror_pnl"]) if row["mirror_pnl"] is not None else "—"}</td></tr>'
             )
-        headers = ("TIME", "SYMBOL", "DIRECTION", "ENTRY", "EXIT / CURRENT", "RESULT", "AUTH RETURN", "STATUS", "BROAD", "BROAD REASON", "BROAD PAPER OPTION P&L", "MIRROR", "MIRROR REASON", "MIRROR OPTION P&L")
+        headers = ("TIME", "SYMBOL", "DIRECTION", "ENTRY", "EXIT / CURRENT", "RESULT", "AUTH RETURN", "STATUS", "BROAD", "BROAD REASON", "BROAD PAPER OPTION P&L", "MIRROR", "MIRROR CONTRACT", "MIRROR ENTRY", "MIRROR REASON", "MIRROR OPTION P&L")
         body = '<div class="ob-position-scroll"><table class="ob-position-table ob-auth-table"><thead><tr>' + "".join(f'<th>{value}</th>' for value in headers) + '</tr></thead><tbody>' + "".join(rows) + '</tbody></table></div>'
     title = "Today's OptionBeacon Trades" if selected == "TODAY" else "Previous Session OptionBeacon Trades"
     return f'<section class="ob-desk-panel"><h3>{title}</h3>{summary}{body}</section>'
@@ -316,6 +329,45 @@ def _mirror_pnl(row):
     if row.get("opened_at"):
         return round(float(row["unrealized_pnl"]), 2) if row.get("unrealized_pnl") is not None else None
     return None
+
+
+def _mirror_contract_label(row):
+    if not row or not row.get("opened_at"):
+        return "—"
+    expiration = _date(row.get("expiration"))
+    expiry = expiration.strftime("%m/%d/%y") if expiration else "—"
+    strike = _number_or_none(row.get("strike"))
+    strike_text = f'{strike:g}' if strike is not None else "—"
+    option_type = str(row.get("option_type") or "—").upper()
+    symbol = str(row.get("symbol") or "—").upper()
+    return f"{symbol} {expiry} ${strike_text} {option_type}"
+
+
+def _mirror_option_price(row):
+    if not row or not row.get("opened_at"):
+        return None
+    return row.get("exit_fill") if str(row.get("status") or "").upper() == "CLOSED" else row.get("current_mark")
+
+
+def _mirror_contract_details(row):
+    if not row or not row.get("opened_at"):
+        return None
+    price_label = "Exit fill" if str(row.get("status") or "").upper() == "CLOSED" else "Current mark"
+    values = (
+        ("OCC symbol", row.get("option_symbol")),
+        ("Expiration", row.get("expiration")),
+        ("Strike", _plain_price(row.get("strike"))),
+        ("Type", str(row.get("option_type") or "—").upper()),
+        ("Entry bid", _plain_price(row.get("entry_bid"))),
+        ("Entry ask", _plain_price(row.get("entry_ask"))),
+        ("Entry midpoint", _plain_price(row.get("entry_mid"))),
+        ("Simulated fill", _plain_price(row.get("entry_fill"))),
+        ("Quantity", row.get("quantity")),
+        ("Initial debit", _money_unsigned(row.get("total_debit"))),
+        (price_label, _plain_price(_mirror_option_price(row))),
+        ("Option P&L", _money(_mirror_pnl(row))),
+    )
+    return " · ".join(f"{label}: {value if value not in (None, '') else '—'}" for label, value in values)
 
 
 def _mirror_status(runtime):
@@ -362,6 +414,13 @@ def _number(value):
         return 0.0
 
 
+def _number_or_none(value):
+    try:
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _average(values):
     numeric = [float(value) for value in values if value is not None]
     return sum(numeric) / len(numeric) if numeric else None
@@ -381,6 +440,14 @@ def _money(value):
 
 
 def _price(value):
+    return f'${float(value):,.2f}' if value is not None else "—"
+
+
+def _plain_price(value):
+    return f'${float(value):,.2f}' if value is not None else "—"
+
+
+def _money_unsigned(value):
     return f'${float(value):,.2f}' if value is not None else "—"
 
 

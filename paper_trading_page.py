@@ -264,7 +264,13 @@ def portfolio_comparison(authoritative_events, broad_journal, broad_captures, br
             "BROAD Disposition": (broad or {}).get("reason_code") or "PENDING",
             "BROAD Option P&L ($)": broad_pnl,
             "MIRROR Disposition": (mirror or {}).get("disposition_code") or "MIRROR NOT RUNNING",
-            "MIRROR Contract": (mirror or {}).get("option_symbol") or "—",
+            "MIRROR Contract": _mirror_contract_label(mirror),
+            "MIRROR Entry": (mirror or {}).get("entry_fill") if (mirror or {}).get("opened_at") else None,
+            "MIRROR Current / Exit": (
+                (mirror or {}).get("exit_fill")
+                if str((mirror or {}).get("status") or "").upper() == "CLOSED"
+                else (mirror or {}).get("current_mark")
+            ) if (mirror or {}).get("opened_at") else None,
             "MIRROR Option P&L ($)": (mirror or {}).get("realized_pnl"),
         })
     auth_closed = [row for row in detail if row["Auth Result"] in {"WIN", "LOSS"}]
@@ -290,6 +296,20 @@ def portfolio_comparison(authoritative_events, broad_journal, broad_captures, br
         "broad_avoided_losers": sum(row["Auth Result"] == "LOSS" and row["BROAD Disposition"] not in {"ELIGIBLE", "ACCEPTED"} for row in detail),
     }
     return {"metrics": metrics, "trades": detail, "missed": missed}
+
+
+def _mirror_contract_label(row):
+    if not row or not row.get("opened_at"):
+        return "—"
+    try:
+        expiration = datetime.fromisoformat(str(row.get("expiration"))).strftime("%m/%d/%y")
+    except (TypeError, ValueError):
+        expiration = "—"
+    try:
+        strike = f'{float(row.get("strike")):g}'
+    except (TypeError, ValueError):
+        strike = "—"
+    return f'{str(row.get("symbol") or "—").upper()} {expiration} ${strike} {str(row.get("option_type") or "—").upper()}'
 
 
 def _json(value):
