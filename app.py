@@ -3839,6 +3839,8 @@ def render_outcome_trade_journal(
     paper_journal = []
     paper_available = False
     worker_config_state = None
+    mirror_rows = []
+    mirror_runtime = None
 
     database_url = dashboard_database_url()
     if database_url:
@@ -3853,6 +3855,14 @@ def render_outcome_trade_journal(
             paper_captures = paper_repository.records()
             paper_journal = paper_repository.journal_rows(limit=5000)
             worker_config_state = paper_repository.get_runtime_config()
+            try:
+                mirror_repository = MirrorExecutionRepository(
+                    trade_repository, initialize=False
+                )
+                mirror_rows = mirror_repository.rows()
+                mirror_runtime = mirror_repository.runtime_state()
+            except Exception:
+                mirror_rows, mirror_runtime = [], None
             if worker_config_state:
                 config = ExecutionConfig.from_resolved_state(
                     worker_config_state.get("resolved_config"), fallback=local_config
@@ -3940,7 +3950,8 @@ def render_outcome_trade_journal(
     )
     comparison = trade_comparison_model(
         authoritative_events, paper_journal, paper_captures, option_positions,
-        session_date=session_date,
+        session_date=session_date, mirror_rows=mirror_rows,
+        mirror_runtime=mirror_runtime,
     )
     dashboard = dashboard_shell_markup(
         status=status_strip_markup(status),
