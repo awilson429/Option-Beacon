@@ -1,4 +1,4 @@
-"""Read-only authoritative-versus-PAPER Trade Desk comparison models."""
+"""Read-only authoritative, BROAD PAPER, and MIRROR comparison models."""
 
 from __future__ import annotations
 
@@ -25,9 +25,10 @@ def available_session_dates(authoritative_events, now):
 
 
 def trade_comparison_model(
-    authoritative_events, journal_rows, captures, paper_positions, *, session_date
+    authoritative_events, journal_rows, captures, paper_positions, *, session_date,
+    mirror_rows=None, mirror_runtime=None,
 ):
-    """Join a session's authoritative entries to PAPER decisions by durable IDs."""
+    """Join a session by exact authoritative IDs; never fuzzy symbol/time matching."""
     events = [
         event for event in authoritative_events
         if event.get("event_timestamp")
@@ -138,6 +139,47 @@ def trade_comparison_model(
     paper_matched = [item for item in paper_matched if item]
     paper_wins = sum(_paper_pnl(item) > 0 for item in paper_closed)
     paper_losses = sum(_paper_pnl(item) < 0 for item in paper_closed)
+    mirror_runtime = mirror_runtime or {}
+    mirror_start = _date(mirror_runtime.get("experiment_start_date"))
+    session_mirror = {
+        str(row.get("opportunity_id")): row
+        for row in (mirror_rows or [])
+        if row.get("opportunity_id")
+        and row.get("entry_event_at")
+        and _aware(row["entry_event_at"]).astimezone(EASTERN).date() == session_date
+    }
+    mirror_available = bool(session_mirror) or bool(
+        mirror_runtime and mirror_start and session_date >= mirror_start
+    )
+    if not mirror_available:
+        session_mirror = {}
+    for row in rows:
+        mirror = session_mirror.get(row["authoritative_id"])
+        if not mirror:
+            row.update(
+                mirror_disposition="NOT RECORDED" if mirror_available else "NO MIRROR DATA",
+                mirror_reason="—", mirror_pnl=None,
+            )
+            continue
+        disposition_code = str(mirror.get("disposition_code") or "NOT RECORDED")
+        row.update(
+            mirror_disposition=(
+                "OPENED" if mirror.get("opened_at") else
+                "UNEXECUTABLE" if str(mirror.get("status") or "").upper() == "UNEXECUTABLE" else
+                disposition_code
+            ),
+            mirror_reason=(
+                disposition_code if not mirror.get("opened_at") else
+                "EXIT PENDING" if str(mirror.get("status") or "").upper() == "EXIT_PENDING" else "—"
+            ),
+            mirror_pnl=_mirror_pnl(mirror),
+        )
+    mirror_matched = [session_mirror[identity] for identity in entries if identity in session_mirror]
+    mirror_opened = [row for row in mirror_matched if row.get("opened_at")]
+    mirror_closed = [row for row in mirror_opened if str(row.get("status") or "").upper() == "CLOSED"]
+    mirror_unexecutable = [row for row in mirror_matched if not row.get("opened_at")]
+    mirror_closed_pnl = [value for value in (_mirror_pnl(row) for row in mirror_closed) if value is not None]
+    mirror_opened_pnl = [value for value in (_mirror_pnl(row) for row in mirror_opened) if value is not None]
     reasons = Counter(row["paper_reason"] for row in missed if row["paper_reason"] != "—")
     return {
         "session_date": session_date,
@@ -155,6 +197,18 @@ def trade_comparison_model(
             "closed": len(paper_closed), "wins": paper_wins, "losses": paper_losses,
             "pnl": sum(_paper_pnl(item) for item in paper_matched),
         },
+        "mirror": {
+            "available": mirror_available,
+            "status": _mirror_status(mirror_runtime),
+            "evaluated": len(mirror_matched), "opened": len(mirror_opened),
+            "unexecutable": len(mirror_unexecutable),
+            "pending": max(0, len(rows) - len(mirror_matched)) if mirror_available else 0,
+            "participation_rate": len(mirror_opened) / len(rows) * 100 if rows and mirror_available else 0.0,
+            "closed": len(mirror_closed),
+            "wins": sum(value > 0 for value in mirror_closed_pnl),
+            "losses": sum(value < 0 for value in mirror_closed_pnl),
+            "pnl": sum(mirror_opened_pnl) if mirror_opened_pnl or not mirror_opened else None,
+        },
         "missed_winners": {
             "count": len(missed),
             "average_return": _average([row["auth_return"] for row in missed]),
@@ -165,7 +219,7 @@ def trade_comparison_model(
 
 
 def comparison_markup(model, *, has_previous=False, selected="TODAY"):
-    auth, paper = model["authoritative"], model["paper"]
+    auth, paper, mirror = model["authoritative"], model["paper"], model["mirror"]
     selected = selected if selected in {"TODAY", "PREVIOUS"} else "TODAY"
     tabs = (
         f'<a class="ob-session-tab {"is-active" if selected == "TODAY" else ""}" href="?page=trade-desk&amp;desk_session=TODAY">Today</a>'
@@ -173,7 +227,8 @@ def comparison_markup(model, *, has_previous=False, selected="TODAY"):
     )
     metrics = (
         ("OPTIONBEACON", "Trades", auth["trades"], "Wins", auth["wins"], "Losses", auth["losses"], "Win Rate", f'{auth["win_rate"]:.1f}%', "Avg Auth Return", _percent(auth["average_return"])),
-        ("PAPER", "Opened", paper["opened"], "Closed", paper["closed"], "Wins / Losses", f'{paper["wins"]} / {paper["losses"]}', "Participation", f'{paper["participation_rate"]:.1f}%', "Option P&L", _money(paper["pnl"])),
+        ("BROAD PAPER", "Opened", paper["opened"], "Closed", paper["closed"], "Wins / Losses", f'{paper["wins"]} / {paper["losses"]}', "Participation", f'{paper["participation_rate"]:.1f}%', "Option P&L", _money(paper["pnl"])),
+        (f'MIRROR · {mirror["status"]}', "Opened", mirror["opened"] if mirror["available"] else "—", "Closed", mirror["closed"] if mirror["available"] else "—", "Wins / Losses", f'{mirror["wins"]} / {mirror["losses"]}' if mirror["available"] else "—", "Participation", f'{mirror["participation_rate"]:.1f}%' if mirror["available"] else "—", "Option P&L", _money(mirror["pnl"]) if mirror["available"] else "—"),
     )
     columns = "".join(
         '<div class="ob-compare-column"><h4>' + escape(str(values[0])) + '</h4>'
@@ -182,10 +237,9 @@ def comparison_markup(model, *, has_previous=False, selected="TODAY"):
     )
     participation = (
         f'<div class="ob-participation"><span>Authoritative Entries <strong>{auth["trades"]}</strong></span>'
-        f'<span>PAPER Evaluated <strong>{paper["evaluated"]}</strong></span>'
-        f'<span>PAPER Opened <strong>{paper["opened"]}</strong></span>'
-        f'<span>PAPER Rejected <strong>{paper["rejected"]}</strong></span>'
-        f'<span>Participation <strong>{paper["participation_rate"]:.1f}%</strong></span></div>'
+        f'<span>BROAD: Evaluated <strong>{paper["evaluated"]}</strong> · Opened <strong>{paper["opened"]}</strong> · Rejected <strong>{paper["rejected"]}</strong> · Participation <strong>{paper["participation_rate"]:.1f}%</strong></span>'
+        + (f'<span>MIRROR: Evaluated <strong>{mirror["evaluated"]}</strong> · Opened <strong>{mirror["opened"]}</strong> · Unexecutable <strong>{mirror["unexecutable"]}</strong> · Pending <strong>{mirror["pending"]}</strong> · Participation <strong>{mirror["participation_rate"]:.1f}%</strong></span>' if mirror["available"] else '<span>MIRROR: <strong>No MIRROR data for this session</strong></span>')
+        + '</div>'
     )
     missed = model["missed_winners"]
     reasons = ", ".join(f'{key}: {value}' for key, value in missed["rejection_counts"].items()) or "None recorded"
@@ -194,7 +248,7 @@ def comparison_markup(model, *, has_previous=False, selected="TODAY"):
         f'<strong>{missed["count"]}</strong><small>Avg auth underlying return {_percent(missed["average_return"])} · {escape(reasons)}</small></div>'
     )
     return (
-        '<section class="ob-desk-panel"><div class="ob-compare-header"><h3>OptionBeacon vs PAPER</h3>'
+        '<section class="ob-desk-panel"><div class="ob-compare-header"><h3>OptionBeacon vs PAPER vs MIRROR</h3>'
         f'<nav class="ob-session-tabs">{tabs}</nav></div><div class="ob-compare-grid">{columns}</div>'
         f'{participation}{missed_block}</section>'
     )
@@ -236,9 +290,11 @@ def authoritative_trades_markup(model, *, selected="TODAY"):
                 f'<td class="ob-value-{treatment}">{escape(row["auth_result"])}</td>'
                 f'<td class="ob-value-{treatment}">{_percent(row["auth_return"])}</td><td>{escape(row["status"])}</td>'
                 f'<td>{escape(row["paper_disposition"])}</td><td>{escape(row["paper_reason"])}</td>'
-                f'<td>{_money(row["paper_pnl"]) if row["paper_pnl"] is not None else "—"}{diagnostics}</td></tr>'
+                f'<td>{_money(row["paper_pnl"]) if row["paper_pnl"] is not None else "—"}{diagnostics}</td>'
+                f'<td>{escape(row["mirror_disposition"])}</td><td>{escape(row["mirror_reason"])}</td>'
+                f'<td>{_money(row["mirror_pnl"]) if row["mirror_pnl"] is not None else "—"}</td></tr>'
             )
-        headers = ("TIME", "SYMBOL", "DIRECTION", "ENTRY", "EXIT / CURRENT", "RESULT", "AUTH RETURN", "STATUS", "PAPER", "PAPER REASON", "PAPER OPTION P&L")
+        headers = ("TIME", "SYMBOL", "DIRECTION", "ENTRY", "EXIT / CURRENT", "RESULT", "AUTH RETURN", "STATUS", "BROAD", "BROAD REASON", "BROAD PAPER OPTION P&L", "MIRROR", "MIRROR REASON", "MIRROR OPTION P&L")
         body = '<div class="ob-position-scroll"><table class="ob-position-table ob-auth-table"><thead><tr>' + "".join(f'<th>{value}</th>' for value in headers) + '</tr></thead><tbody>' + "".join(rows) + '</tbody></table></div>'
     title = "Today's OptionBeacon Trades" if selected == "TODAY" else "Previous Session OptionBeacon Trades"
     return f'<section class="ob-desk-panel"><h3>{title}</h3>{summary}{body}</section>'
@@ -250,6 +306,34 @@ def _paper_pnl(position):
     quantity = int(position.quantity or 1)
     current = position.exit_mid if position.status != "OPEN" else position.current_mid
     return round((current - position.entry_mid) * 100 * quantity, 2)
+
+
+def _mirror_pnl(row):
+    if row is None:
+        return None
+    if str(row.get("status") or "").upper() == "CLOSED":
+        return round(float(row["realized_pnl"]), 2) if row.get("realized_pnl") is not None else None
+    if row.get("opened_at"):
+        return round(float(row["unrealized_pnl"]), 2) if row.get("unrealized_pnl") is not None else None
+    return None
+
+
+def _mirror_status(runtime):
+    if not runtime:
+        return "WAITING"
+    if not bool(runtime.get("enabled")):
+        return "DISABLED"
+    state = str(runtime.get("status") or "WAITING").upper()
+    if state == "DEGRADED" or runtime.get("last_error"):
+        return "DEGRADED"
+    return "WAITING" if state == "WAITING" else "ACTIVE"
+
+
+def _date(value):
+    try:
+        return datetime.fromisoformat(str(value)).date() if value else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _aware(value):

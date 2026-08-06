@@ -1,8 +1,11 @@
 import json
+import inspect
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
+
+import app
 
 from trade_desk_comparison import (
     authoritative_trades_markup,
@@ -78,6 +81,20 @@ def sample_model():
     )
 
 
+def mirror_row(identity, *, at=NOW, status="CLOSED", opened=True, pnl=25.0, code="MIRROR_CLOSED"):
+    return {
+        "opportunity_id": identity, "entry_event_at": at,
+        "opened_at": at if opened else None, "status": status,
+        "disposition_code": code,
+        "realized_pnl": pnl if status == "CLOSED" else None,
+        "unrealized_pnl": pnl if status != "CLOSED" and opened else None,
+    }
+
+
+def mirror_runtime(status="ACTIVE", *, enabled=1, start="2026-08-05"):
+    return {"status": status, "enabled": enabled, "experiment_start_date": start}
+
+
 def test_authoritative_daily_summary_and_paper_metrics_remain_separate():
     model = sample_model()
     assert model["authoritative"]["trades"] == 3
@@ -147,3 +164,88 @@ def test_unproven_match_is_pending_instead_of_symbol_time_guessing():
         session_date=NOW.astimezone().date(),
     )
     assert model["rows"][0]["paper_disposition"] == "PENDING"
+
+
+def test_three_equal_cards_include_persisted_mirror_metrics_and_status():
+    model = trade_comparison_model(
+        [
+            event("win-opened", "TRADE_ENTERED", 1, "NVDA"),
+            event("win-opened", "TRADE_CLOSED", 2, "NVDA", realized_return=.88),
+            event("unexec", "TRADE_ENTERED", 3, "XLE"),
+        ], [], [], [], session_date=NOW.astimezone().date(),
+        mirror_rows=[
+            mirror_row("win-opened", pnl=34.5),
+            mirror_row("unexec", opened=False, status="UNEXECUTABLE", pnl=None, code="MIRROR_NO_VALID_CONTRACT"),
+        ], mirror_runtime=mirror_runtime(),
+    )
+    assert model["mirror"] == {
+        "available": True, "status": "ACTIVE", "evaluated": 2,
+        "opened": 1, "unexecutable": 1, "pending": 0,
+        "participation_rate": 50.0, "closed": 1,
+        "wins": 1, "losses": 0, "pnl": 34.5,
+    }
+    markup = comparison_markup(model)
+    assert "OptionBeacon vs PAPER vs MIRROR" in markup
+    assert markup.count('class="ob-compare-column"') == 3
+    assert "BROAD PAPER" in markup and "MIRROR · ACTIVE" in markup
+    assert "Unexecutable" in markup and "MIRROR: Evaluated" in markup
+
+
+def test_mirror_today_and_previous_filter_by_entry_session():
+    prior = NOW - timedelta(days=1)
+    events = [event("today", "TRADE_ENTERED", 0, "SPY"),
+              {**event("prior", "TRADE_ENTERED", 0, "QQQ"), "event_timestamp": prior}]
+    rows = [mirror_row("today"), mirror_row("prior", at=prior, pnl=-12)]
+    today = trade_comparison_model(events, [], [], [], session_date=NOW.astimezone().date(),
+                                   mirror_rows=rows, mirror_runtime=mirror_runtime(start="2026-08-04"))
+    previous = trade_comparison_model(events, [], [], [], session_date=prior.astimezone().date(),
+                                      mirror_rows=rows, mirror_runtime=mirror_runtime(start="2026-08-04"))
+    assert today["mirror"]["opened"] == 1 and today["mirror"]["pnl"] == 25
+    assert previous["mirror"]["opened"] == 1 and previous["mirror"]["pnl"] == -12
+
+
+def test_pre_experiment_session_is_not_interpreted_as_zero_performance():
+    prior = NOW - timedelta(days=1)
+    events = [{**event("prior", "TRADE_ENTERED", 0, "QQQ"), "event_timestamp": prior}]
+    model = trade_comparison_model(events, [], [], [], session_date=prior.astimezone().date(),
+                                   mirror_rows=[], mirror_runtime=mirror_runtime(start="2026-08-05"))
+    assert model["mirror"]["available"] is False
+    assert model["rows"][0]["mirror_disposition"] == "NO MIRROR DATA"
+    assert "No MIRROR data for this session" in comparison_markup(model, selected="PREVIOUS")
+
+
+@pytest.mark.parametrize("runtime,label", [
+    (mirror_runtime("ACTIVE"), "MIRROR · ACTIVE"),
+    (mirror_runtime("WAITING"), "MIRROR · WAITING"),
+    (mirror_runtime("DEGRADED"), "MIRROR · DEGRADED"),
+    (mirror_runtime("ACTIVE", enabled=0), "MIRROR · DISABLED"),
+    (None, "MIRROR · WAITING"),
+])
+def test_mirror_status_rendering(runtime, label):
+    model = trade_comparison_model([], [], [], [], session_date=NOW.astimezone().date(),
+                                   mirror_rows=[], mirror_runtime=runtime)
+    assert label in comparison_markup(model)
+
+
+def test_exact_id_join_only_and_trade_table_has_three_system_units():
+    events = [event("auth-id", "TRADE_ENTERED", 1, "SPY"),
+              event("auth-id", "TRADE_CLOSED", 2, "SPY", realized_return=.42)]
+    model = trade_comparison_model(
+        events, [], [], [], session_date=NOW.astimezone().date(),
+        mirror_rows=[mirror_row("different-id", pnl=99)], mirror_runtime=mirror_runtime(),
+    )
+    row = model["rows"][0]
+    assert row["mirror_disposition"] == "NOT RECORDED" and row["mirror_pnl"] is None
+    markup = authoritative_trades_markup(model)
+    assert "AUTH RETURN" in markup
+    assert "BROAD PAPER OPTION P&L" in markup and "MIRROR OPTION P&L" in markup
+
+
+def test_responsive_three_card_css_and_streamlit_remains_read_only():
+    css = open("ui/theme.py", encoding="utf-8").read()
+    assert "grid-template-columns:repeat(3,minmax(0,1fr))" in css
+    assert ".ob-compare-grid {grid-template-columns:minmax(0,1fr)}" in css
+    source = inspect.getsource(app.render_outcome_trade_journal)
+    assert "MirrorExecutionRepository" in source
+    for forbidden in ("run_mirror_execution", "save_runtime_state", "record_disposition", ".close(", ".update_mark("):
+        assert forbidden not in source
