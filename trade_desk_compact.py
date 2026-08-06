@@ -309,13 +309,37 @@ def activity_rows_markup(rows):
     """Rows-only markup for controls contained by the keyed activity panel."""
     if not rows:
         return '<div class="ob-desk-empty">No meaningful activity recorded.</div>'
-    return "".join(
-        f'<div class="ob-activity-row"><span class="ob-activity-time">{escape(str(row["Time"]))}</span>'
-        f'<span class="ob-activity-tag ob-activity-{escape(str(row["Event"]).lower().replace(" ", "-"))}">{escape(str(row["Event"]))}</span>'
-        f'<strong>{escape(str(row.get("Symbol") or "—"))}</strong>'
-        f'<span>{escape(str(row.get("Display Detail") or "—"))}</span>'
-        f'<span class="ob-activity-result">{escape(str(row.get("Display Result") or "—"))}</span></div>'
-        for row in rows
+    items = []
+    for row in rows:
+        if row.get("Lifecycle Detail"):
+            items.append(
+                f'<div class="ob-activity-row ob-activity-lifecycle"><span class="ob-activity-time">{escape(str(row["Time"]))}</span>'
+                f'<span class="ob-activity-tag ob-activity-{escape(str(row["Event"]).lower().replace(" ", "-"))}">{escape(str(row["Event"]))}</span>'
+                f'<strong>{escape(str(row.get("Symbol") or "—"))}</strong>'
+                f'<b>{escape(str(row.get("Direction") or "—"))}</b>'
+                f'<span class="ob-activity-state">{escape(str(row.get("Lifecycle State") or "—"))}</span>'
+                f'<div class="ob-activity-market">{escape(str(row["Lifecycle Detail"]))}</div>'
+                f'<div class="ob-activity-meta">{escape(str(row.get("Lifecycle Meta") or "—"))}</div>'
+                f'{_activity_details_markup(row)}</div>'
+            )
+        else:
+            items.append(
+                f'<div class="ob-activity-row"><span class="ob-activity-time">{escape(str(row["Time"]))}</span>'
+                f'<span class="ob-activity-tag ob-activity-{escape(str(row["Event"]).lower().replace(" ", "-"))}">{escape(str(row["Event"]))}</span>'
+                f'<strong>{escape(str(row.get("Symbol") or "—"))}</strong>'
+                f'<span>{escape(str(row.get("Display Detail") or "—"))}</span>'
+                f'<span class="ob-activity-result">{escape(str(row.get("Display Result") or "—"))}</span></div>'
+            )
+    return "".join(items)
+
+
+def _activity_details_markup(row):
+    detail = row.get("Lifecycle Diagnostics")
+    if not detail:
+        return ""
+    return (
+        '<details class="ob-activity-details"><summary>Details</summary>'
+        f'<div>{escape(str(detail))}</div></details>'
     )
 
 
@@ -517,7 +541,188 @@ def filtered_activity_rows(events, *, selected="ALL", now=None, view_all=False, 
         elif value != "—" and event.get("event_type") != "TRADE_CLOSED":
             value = f"{value} underlying"
         row["Display Result"] = value
+        presentation = event.get("_authoritative_activity") or {}
+        if presentation:
+            row.update(presentation)
     return rows
+
+
+def enrich_authoritative_activity_events(events, opportunities, funnel_rows, *, now=None):
+    """Join read-only lifecycle context strictly by immutable opportunity ID."""
+    checked_at = _datetime(now) or datetime.now(timezone.utc)
+    opportunity_by_id = {
+        str(row.get("id")): row for row in opportunities or [] if row.get("id")
+    }
+    funnel_by_id = {
+        str(row.get("opportunity_id")): row
+        for row in funnel_rows or [] if row.get("opportunity_id")
+    }
+    enriched = []
+    for source in events:
+        event = dict(source)
+        identity = str(event.get("opportunity_id") or "")
+        opportunity = opportunity_by_id.get(identity)
+        if not opportunity:
+            enriched.append(event)
+            continue
+        funnel = funnel_by_id.get(identity)
+        event["_authoritative_activity"] = _authoritative_activity_presentation(
+            event, opportunity, funnel, checked_at
+        )
+        enriched.append(event)
+    return enriched
+
+
+def _authoritative_activity_presentation(event, opportunity, funnel, now):
+    event_type = str(event.get("event_type") or "")
+    direction = "CALL" if opportunity.get("direction") == "Bullish" else "PUT" if opportunity.get("direction") == "Bearish" else "—"
+    trigger = _activity_number(opportunity.get("entry_reference"))
+    confidence = _activity_number(opportunity.get("confidence"))
+    current = (
+        _activity_number(event.get("underlying_price"))
+        if event_type == "TRADE_ENTERED"
+        else _activity_number((funnel or {}).get("current_price"))
+    )
+    current_label = "Entry" if event_type == "TRADE_ENTERED" else "Current"
+    if current is None:
+        current = _activity_number(event.get("underlying_price"))
+        current_label = "Reference"
+    state = _activity_lifecycle_state(event_type, opportunity, funnel)
+    distance = _activity_trigger_distance(direction, current, trigger)
+    market = []
+    if current is not None:
+        market.append(f"{current_label} ${current:.2f}")
+    if trigger is not None:
+        market.append(f"Trigger ${trigger:.2f}")
+    if distance:
+        market.append(distance)
+    if event_type == "TRADE_CLOSED":
+        market = _exit_market_detail(event)
+    meta = []
+    if confidence is not None:
+        meta.append(f"Confidence {confidence:g}")
+    age = _activity_candidate_age(opportunity, event, state, now)
+    if age is not None:
+        meta.append(f"Age {age}")
+    reason = _activity_reason(event, opportunity, funnel, distance)
+    if reason:
+        meta.append(reason)
+    details = [
+        f"Opportunity ID {identity}" for identity in [event.get("opportunity_id")] if identity
+    ]
+    details.extend([
+        f"Created {opportunity.get('signal_timestamp') or '—'}",
+        f"Persisted trigger {_activity_price(trigger)}",
+        f"{current_label} price {_activity_price(current)}",
+        f"Confidence {confidence:g}" if confidence is not None else "Confidence —",
+        f"Lifecycle state {state}",
+        f"Disposition {str((funnel or {}).get('authoritative_disposition') or reason or 'Awaiting lifecycle evaluation').replace('_', ' ')}",
+        f"Authoritative confidence qualified {'YES' if confidence is not None and confidence >= 65 else 'NO' if confidence is not None else '—'}",
+        f"Visible setup qualified {'YES' if (funnel or {}).get('visible_setup_qualified') else 'NO' if funnel else '—'}",
+    ])
+    return {
+        "Direction": direction,
+        "Lifecycle State": state,
+        "Lifecycle Detail": " · ".join(market) if market else "—",
+        "Lifecycle Meta": " · ".join(meta) if meta else "—",
+        "Lifecycle Diagnostics": " · ".join(details),
+    }
+
+
+def _activity_trigger_distance(direction, current, trigger):
+    if current is None or trigger in (None, 0) or direction not in {"CALL", "PUT"}:
+        return None
+    crossed = current >= trigger if direction == "CALL" else current <= trigger
+    absolute = abs(current - trigger)
+    percent = absolute / abs(trigger) * 100
+    if absolute < 1e-9:
+        return "TRIGGER REACHED"
+    return (
+        f"TRIGGER REACHED · ${absolute:.2f} beyond trigger ({percent:.2f}%)"
+        if crossed else f"${absolute:.2f} away ({percent:.2f}%)"
+    )
+
+
+def _activity_lifecycle_state(event_type, opportunity, funnel):
+    if event_type == "TRADE_ENTERED":
+        return "ENTERED"
+    if event_type in EXIT_EVENTS:
+        return "CLOSED" if event_type == "TRADE_CLOSED" else event_type.replace("_", " ")
+    funnel_state = str((funnel or {}).get("state") or "").upper()
+    if funnel_state and funnel_state != "UNAVAILABLE":
+        return funnel_state
+    if event_type == "ENTRY_READY":
+        return "READY"
+    if event_type == "WATCH_CREATED":
+        return "WATCHING"
+    return str(opportunity.get("state") or "—").replace("_", " ").upper()
+
+
+def _activity_reason(event, opportunity, funnel, distance):
+    event_type = str(event.get("event_type") or "")
+    if event_type == "TRADE_ENTERED":
+        return "Entered"
+    if event_type == "TRADE_CLOSED":
+        return str(event.get("exit_reason") or "Closed").replace("_", " ")
+    blocker = str((funnel or {}).get("primary_blocker") or "")
+    reasons = {
+        "TRIGGER_NOT_REACHED": "Waiting for trigger",
+        "ENTRY_CONFIDENCE_BELOW_MINIMUM": "Confidence below 65",
+        "ENTRY_WINDOW": "Entry window closed",
+        "SETUP_INVALIDATED": "Invalidated",
+        "DO_NOT_CHASE": "Extended / do not chase",
+        "AWAITING_AUTHORITATIVE_LIFECYCLE": "Awaiting lifecycle evaluation",
+    }
+    if blocker:
+        return reasons.get(blocker, blocker.replace("_", " ").title())
+    if str(opportunity.get("state") or "").upper() == "NEVER_TRIGGERED":
+        return "Candidate expired"
+    if distance and "away" in distance:
+        return "Waiting for trigger"
+    return "Awaiting lifecycle evaluation"
+
+
+def _activity_candidate_age(opportunity, event, state, now):
+    created = _datetime(opportunity.get("signal_timestamp"))
+    if created is None:
+        return None
+    endpoint = now if state in {"READY", "WATCHING", "ARMED", "DEVELOPING", "CANDIDATE"} else _datetime(event.get("event_timestamp")) or now
+    minutes = max(0, int((endpoint - created).total_seconds() // 60))
+    return f"{minutes}m" if minutes < 60 else f"{minutes // 60}h {minutes % 60}m"
+
+
+def _exit_market_detail(event):
+    values = []
+    if event.get("entry_price") is not None:
+        values.append(f'Entry {_activity_price(event.get("entry_price"))}')
+    if event.get("exit_price") is not None:
+        values.append(f'Exit {_activity_price(event.get("exit_price"))}')
+    if event.get("realized_return") is not None:
+        values.append(f'Return {float(event["realized_return"]):+.2f}%')
+    metadata = event.get("metadata") or {}
+    if metadata.get("hold_minutes") is not None:
+        values.append(f'Hold {int(float(metadata["hold_minutes"]))}m')
+    return values
+
+
+def _activity_number(value):
+    try:
+        number = float(value)
+        return number if math.isfinite(number) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _activity_price(value):
+    number = _activity_number(value)
+    return f"${number:.2f}" if number is not None else "—"
+
+
+def _datetime(value):
+    if value is None:
+        return None
+    parsed = value if isinstance(value, datetime) else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 def _timestamp(value):
