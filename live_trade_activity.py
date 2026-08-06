@@ -146,7 +146,11 @@ def meaningful_events(events, limit=20):
     for event in events:
         if event.get("event_type") not in MEANINGFUL_EVENT_TYPES:
             continue
-        material = (event.get("trade_id"), event.get("event_type"), event.get("underlying_price"), event.get("exit_reason"))
+        material = (
+            event.get("opportunity_id") or event.get("trade_id"),
+            event.get("event_type"), event.get("underlying_price"),
+            event.get("exit_reason"),
+        )
         if material == previous:
             continue
         selected.append(event)

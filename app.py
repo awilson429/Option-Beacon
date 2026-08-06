@@ -135,6 +135,7 @@ from trade_desk_compact import (
     authoritative_positions_markup,
     dashboard_shell_markup,
     dashboard_kpi_model,
+    enrich_authoritative_activity_events,
     filtered_activity_rows,
     kpi_row_markup,
     more_stats_markup,
@@ -3599,7 +3600,24 @@ def _render_pre_unified_trade_desk(
     )
     view_all = st.toggle("View all activity", value=False, key="trade_desk_activity_all")
     authoritative_events = repository.list_trade_events(limit=200) if repository else []
-    events = [*authoritative_events, *paper_position_events(option_positions)]
+    activity_opportunities, activity_funnel_rows = [], []
+    if trade_repository:
+        try:
+            activity_opportunities = trade_repository.list_opportunities(limit=5000)
+            funnel_repository = AuthoritativeEntryFunnelRepository(
+                trade_repository, initialize=False
+            )
+            latest_funnel = funnel_repository.latest_cycle()
+            if latest_funnel:
+                activity_funnel_rows = funnel_repository.symbol_rows(
+                    latest_funnel["cycle_id"]
+                )
+        except Exception:
+            activity_opportunities, activity_funnel_rows = [], []
+    events = enrich_authoritative_activity_events(
+        [*authoritative_events, *paper_position_events(option_positions)],
+        activity_opportunities, activity_funnel_rows, now=now,
+    )
     rows = filtered_activity_rows(
         events, selected=event_filter, now=now, view_all=view_all, limit=8
     )
@@ -3772,7 +3790,24 @@ def _render_pre_shell_unified_trade_desk(
         trade_repository.list_trade_events(limit=200)
         if trade_repository else []
     )
-    events = [*authoritative_events, *paper_position_events(option_positions)]
+    activity_opportunities, activity_funnel_rows = [], []
+    if trade_repository:
+        try:
+            activity_opportunities = trade_repository.list_opportunities(limit=5000)
+            funnel_repository = AuthoritativeEntryFunnelRepository(
+                trade_repository, initialize=False
+            )
+            latest_funnel = funnel_repository.latest_cycle()
+            if latest_funnel:
+                activity_funnel_rows = funnel_repository.symbol_rows(
+                    latest_funnel["cycle_id"]
+                )
+        except Exception:
+            activity_opportunities, activity_funnel_rows = [], []
+    events = enrich_authoritative_activity_events(
+        [*authoritative_events, *paper_position_events(option_positions)],
+        activity_opportunities, activity_funnel_rows, now=now,
+    )
     activity = filtered_activity_rows(
         events, selected=event_filter, now=now, view_all=view_all, limit=6
     )
@@ -3931,7 +3966,24 @@ def render_outcome_trade_journal(
         trade_repository.list_trade_events(limit=5000)
         if trade_repository else []
     )
-    events = [*authoritative_events, *paper_position_events(option_positions)]
+    activity_opportunities, activity_funnel_rows = [], []
+    if trade_repository:
+        try:
+            activity_opportunities = trade_repository.list_opportunities(limit=5000)
+            funnel_repository = AuthoritativeEntryFunnelRepository(
+                trade_repository, initialize=False
+            )
+            latest_funnel = funnel_repository.latest_cycle()
+            if latest_funnel:
+                activity_funnel_rows = funnel_repository.symbol_rows(
+                    latest_funnel["cycle_id"]
+                )
+        except Exception:
+            activity_opportunities, activity_funnel_rows = [], []
+    events = enrich_authoritative_activity_events(
+        [*authoritative_events, *paper_position_events(option_positions)],
+        activity_opportunities, activity_funnel_rows, now=now,
+    )
 
     requested_filter = str(
         st.query_params.get(
