@@ -173,10 +173,12 @@ def run_paper_execution(
             )
             if trade is None:
                 LOGGER.info(json.dumps({
-                    "event": "paper_candidate_skipped", "scanner_id": scanner_id,
+                    "event": "broad_authoritative_handoff", "scanner_id": scanner_id,
                     "run_number": run_number,
+                    "opportunity_id": result.get("_authoritative_entry_id"),
                     "symbol": str((result or {}).get("symbol") or "").upper(),
-                    "decision_reason": "NOT_AUTHORITATIVE_OR_NOT_QUALIFIED",
+                    "disposition": "SKIPPED",
+                    "reason": "NOT_AUTHORITATIVE_OR_NOT_QUALIFIED",
                 }, sort_keys=True))
                 continue
             decision = evaluate_execution(
@@ -195,9 +197,11 @@ def run_paper_execution(
             if not decision.eligible:
                 rejected += 1
                 LOGGER.info(json.dumps({
-                    "event": "paper_entry_rejected", "scanner_id": scanner_id,
+                    "event": "broad_authoritative_handoff", "scanner_id": scanner_id,
                     "run_number": run_number, "symbol": trade.ticker,
-                    "option_symbol": trade.option_symbol, "decision_reason": decision.reason,
+                    "opportunity_id": result.get("_authoritative_entry_id"),
+                    "option_symbol": trade.option_symbol, "disposition": "REJECTED",
+                    "reason": decision.reason,
                 }, sort_keys=True))
                 continue
             position = position_from_trade(
@@ -212,13 +216,21 @@ def run_paper_execution(
                 opened.append(position)
                 position_store.save(positions)
                 LOGGER.info(json.dumps({
-                    "event": "paper_entry_opened", "scanner_id": scanner_id,
+                    "event": "broad_authoritative_handoff", "scanner_id": scanner_id,
                     "run_number": run_number, "position_id": position.trade_id,
+                    "opportunity_id": result.get("_authoritative_entry_id"),
                     "symbol": position.ticker, "option_symbol": position.option_symbol,
                     "quantity": position.quantity, "debit": position.total_entry_cost,
+                    "disposition": "OPENED", "reason": "ELIGIBLE",
                 }, sort_keys=True))
-        except Exception:
-            LOGGER.exception("Paper execution failed safely for %s", (result or {}).get("symbol"))
+        except Exception as exc:
+            LOGGER.exception(json.dumps({
+                "event": "broad_authoritative_handoff", "scanner_id": scanner_id,
+                "run_number": run_number,
+                "opportunity_id": (result or {}).get("_authoritative_entry_id"),
+                "symbol": str((result or {}).get("symbol") or "").upper(),
+                "disposition": "FAILED", "reason": type(exc).__name__,
+            }, sort_keys=True))
     position_store.save(positions)
     LOGGER.info(json.dumps({
         "event": "paper_cycle_completed", "scanner_id": scanner_id,

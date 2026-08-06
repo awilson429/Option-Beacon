@@ -344,8 +344,13 @@ def run_mirror_execution(repository, mirror_repository, candidates, *, enabled, 
         mirror_repository.record_disposition(candidate, event, code=code, detail=detail, contract=contract, now=now)
         opened += code == "MIRROR_OPENED"
         unexecutable += code != "MIRROR_OPENED"
-        LOGGER.info(json.dumps({"event": "mirror_entry_opened" if code == "MIRROR_OPENED" else "mirror_entry_unexecutable",
-                                "opportunity_id": opportunity_id, "reason_code": code}, sort_keys=True))
+        LOGGER.info(json.dumps({
+            "event": "mirror_authoritative_handoff", "scanner_id": scanner_id,
+            "run_number": run_number, "opportunity_id": opportunity_id,
+            "symbol": candidate.get("symbol"),
+            "disposition": "OPENED" if code == "MIRROR_OPENED" else "UNEXECUTABLE",
+            "reason": code,
+        }, sort_keys=True))
     exits = _exit_by_opportunity(repository)
     for row in mirror_repository.rows():
         if row["status"] not in {"OPEN", "EXIT_PENDING"}:

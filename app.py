@@ -4368,8 +4368,10 @@ def render_authoritative_entry_funnel(repository):
 
     labels = {
         "scanned": "Scanned", "valid_results": "Valid Results",
-        "directional_candidates": "Directional", "qualified_setups": "Score-Qualified Setups",
-        "armed": "READY / ARMED (pre-trigger)", "trigger_reached": "Trigger Reached",
+        "directional_candidates": "Directional",
+        "confidence_qualified": "Candidate Confidence >= 65",
+        "trigger_reached": "Trigger Reached",
+        "not_entered": "Not Entered This Cycle",
         "trade_entered": "TRADE_ENTERED",
     }
     columns = st.columns(len(FUNNEL_STAGES))
@@ -4377,11 +4379,13 @@ def render_authoritative_entry_funnel(repository):
         column.metric(labels[stage], int(cycle.get(stage) or 0))
     st.caption(
         f'Latest completed cycle: {cycle.get("completed_at")} · '
-        "Counts are measured by the Railway authoritative worker."
+        "Counts are measured by the Railway authoritative worker. "
+        f'Visible scanner setups >= 90: {int(cycle.get("visible_setup_qualified") or cycle.get("qualified_setups") or 0)}. '
+        "Visible setup and authoritative confidence qualification are separate metrics."
     )
 
     blockers = cycle.get("blocker_counts") or {}
-    st.markdown("#### Top Current Blockers")
+    st.markdown("#### Why Symbols Did Not Enter This Cycle")
     if blockers:
         st.dataframe(pd.DataFrame([
             {"Primary Blocker": reason, "Symbols": count}
@@ -4392,15 +4396,23 @@ def render_authoritative_entry_funnel(repository):
 
     candidate_rows = [{
         "Symbol": row.get("symbol"), "Direction": row.get("direction") or "—",
-        "Score": row.get("score") if row.get("score") is not None else "—",
-        "State": row.get("state") or "—", "Primary Blocker": row.get("primary_blocker") or "ENTERED",
+        "Current Scanner Score": row.get("score") if row.get("score") is not None else "—",
+        "Candidate Confidence": row.get("candidate_confidence") if row.get("candidate_confidence") is not None else "—",
+        "Visible Setup >= 90": "YES" if row.get("visible_setup_qualified") else "NO",
+        "Confidence >= 65": "YES" if row.get("confidence_qualified") else "NO",
+        "Scanner State": row.get("state") or "—",
+        "Lifecycle State": row.get("lifecycle_state") or "—",
+        "Authoritative Disposition": row.get("authoritative_disposition") or "—",
+        "Primary Blocker": row.get("primary_blocker") or "ENTERED",
         "Trigger": row.get("trigger_price") if row.get("trigger_price") is not None else "—",
         "Current Price": row.get("current_price") if row.get("current_price") is not None else "—",
         "Distance to Trigger": (
             f'{float(row["distance_to_trigger_pct"]):+.3f}%'
             if row.get("distance_to_trigger_pct") is not None else "—"
         ),
+        "Candidate Age": f'{float(row["candidate_age_minutes"]):.1f} min' if row.get("candidate_age_minutes") is not None else "—",
         "Last Updated": row.get("last_updated") or "—",
+        "Opportunity ID": row.get("opportunity_id") or "—",
     } for row in symbols if row.get("direction") or row.get("primary_blocker") != "DIRECTION_UNCLEAR"]
     if candidate_rows:
         st.markdown("#### Current Candidate Diagnostics")
