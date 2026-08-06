@@ -88,6 +88,12 @@ def mirror_row(identity, *, at=NOW, status="CLOSED", opened=True, pnl=25.0, code
         "disposition_code": code,
         "realized_pnl": pnl if status == "CLOSED" else None,
         "unrealized_pnl": pnl if status != "CLOSED" and opened else None,
+        "symbol": "ARKG", "expiration": "2026-08-07", "strike": 40,
+        "option_type": "put", "option_symbol": "ARKG260807P00040000",
+        "entry_bid": 1.10, "entry_ask": 1.30, "entry_mid": 1.20,
+        "entry_fill": 1.25, "quantity": 1, "total_debit": 125,
+        "current_mark": 1.40 if status != "CLOSED" else None,
+        "exit_fill": 1.50 if status == "CLOSED" else None,
     }
 
 
@@ -239,6 +245,43 @@ def test_exact_id_join_only_and_trade_table_has_three_system_units():
     markup = authoritative_trades_markup(model)
     assert "AUTH RETURN" in markup
     assert "BROAD PAPER OPTION P&L" in markup and "MIRROR OPTION P&L" in markup
+
+
+def test_opened_mirror_uses_persisted_contract_and_quote_fields_in_trade_table():
+    events = [event("opened", "TRADE_ENTERED", 1, "ARKG")]
+    persisted = mirror_row("opened", status="OPEN", pnl=15)
+    model = trade_comparison_model(
+        events, [], [], [], session_date=NOW.astimezone().date(),
+        mirror_rows=[persisted], mirror_runtime=mirror_runtime(),
+    )
+    row = model["rows"][0]
+    assert row["mirror_contract"] == "ARKG 08/07/26 $40 PUT"
+    assert row["mirror_entry"] == 1.25
+    assert row["mirror_option_price"] == 1.40
+    assert "ARKG260807P00040000" in row["mirror_contract_details"]
+    assert "Entry bid: $1.10" in row["mirror_contract_details"]
+    assert "Current mark: $1.40" in row["mirror_contract_details"]
+    markup = authoritative_trades_markup(model)
+    assert "MIRROR CONTRACT" in markup and "MIRROR ENTRY" in markup
+    assert "ARKG 08/07/26 $40 PUT" in markup
+    assert "Contract details" in markup and "ARKG260807P00040000" in markup
+
+
+def test_closed_mirror_shows_persisted_exit_fill_and_unopened_has_no_contract():
+    events = [event("closed", "TRADE_ENTERED", 1, "ARKG"), event("unexec", "TRADE_ENTERED", 2, "XLE")]
+    model = trade_comparison_model(
+        events, [], [], [], session_date=NOW.astimezone().date(),
+        mirror_rows=[
+            mirror_row("closed", status="CLOSED", pnl=25),
+            mirror_row("unexec", opened=False, status="UNEXECUTABLE", pnl=None, code="MIRROR_NO_VALID_CONTRACT"),
+        ], mirror_runtime=mirror_runtime(),
+    )
+    rows = {row["authoritative_id"]: row for row in model["rows"]}
+    assert rows["closed"]["mirror_option_price"] == 1.50
+    assert "Exit fill: $1.50" in rows["closed"]["mirror_contract_details"]
+    assert rows["unexec"]["mirror_contract"] == "—"
+    assert rows["unexec"]["mirror_entry"] is None
+    assert rows["unexec"]["mirror_contract_details"] is None
 
 
 def test_responsive_three_card_css_and_streamlit_remains_read_only():
