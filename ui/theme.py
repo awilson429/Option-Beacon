@@ -137,6 +137,9 @@ def configure_page():
         .ob-grid-comparison > .ob-desk-panel,.ob-grid-authoritative > .ob-desk-panel,.ob-grid-risk .ob-desk-panel,.ob-grid-positions > .ob-desk-panel {margin:0}
         .ob-risk-stack {display:grid;gap:12px}
         .ob-compact-empty {align-items:center;background:var(--ob-bg-card);border:1px solid var(--ob-border-default);border-radius:8px;display:flex;gap:.75rem;justify-content:space-between;min-height:2.15rem;padding:.38rem .65rem}.ob-compact-empty span {color:var(--ob-text-secondary);font-size:.7rem;font-weight:800}.ob-compact-empty strong {color:var(--ob-text-muted);font-size:.68rem;text-align:right}
+        .ob-open-positions-empty {box-sizing:border-box;min-height:3.25rem;padding:.55rem .78rem}
+        .ob-trade-dashboard.ob-positions-empty {grid-template-areas:"header header" "kpis kpis" "positions positions" "risk risk" "comparison comparison" "authoritative authoritative" "activity activity" "more more"}
+        .ob-trade-dashboard.ob-positions-empty .ob-risk-stack {grid-template-columns:repeat(2,minmax(0,1fr))}
         .ob-performance-anchor {align-items:flex-start;display:flex;flex-direction:column;gap:.12rem;padding:.15rem .35rem .6rem}
         .ob-performance-anchor span {color:var(--ob-text-muted);font-size:.62rem;font-weight:800;letter-spacing:.055em}
         .ob-performance-anchor strong {font-size:1.65rem;line-height:1.1}
@@ -178,6 +181,9 @@ def configure_page():
 
         @media (max-width: 759px) {
             .ob-trade-dashboard {border-radius:9px;gap:9px;grid-template-areas:"header" "kpis" "positions" "risk" "comparison" "authoritative" "activity" "more";grid-template-columns:minmax(0,1fr);padding:9px}
+            .ob-trade-dashboard.ob-positions-empty {grid-template-areas:"header" "kpis" "positions" "risk" "comparison" "authoritative" "activity" "more"}
+            .ob-trade-dashboard.ob-positions-empty .ob-risk-stack {grid-template-columns:minmax(0,1fr)}
+            .ob-open-positions-empty {min-height:3.25rem;width:100%}
             .ob-grid-header {align-items:flex-start;flex-direction:column}.ob-grid-header .ob-desk-status {width:100%}
             .ob-desk-status {align-items:flex-start;flex-direction:column;gap:.38rem}
             .ob-desk-status-pill + .ob-desk-status-pill::before {content:"";margin:0}
