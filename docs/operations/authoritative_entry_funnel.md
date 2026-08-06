@@ -122,3 +122,44 @@ deployed cycle:
 
 This instrumentation changes no threshold, signal, trigger, lifecycle, execution,
 or risk behavior.
+
+## Production-path repair
+
+Railway's configured path is:
+
+`railway.toml` → `python -m optionbeacon.worker.run` → `main()` → persistent
+`run()` loop → imported `optionbeacon.worker.scan_once.run_scan_once()` → locked
+symbol scan and authoritative lifecycle → authoritative funnel finalization → BROAD
+handoff → MIRROR handoff → scanner-health completion → lease release.
+
+The initial implementation eagerly initialized the diagnostic repository alongside
+PAPER/MIRROR configuration, caught initialization failure by replacing the handle
+with `None`, and later guarded persistence with
+`if entry_funnel_repository is not None`. That made a healthy cycle capable of
+skipping the snapshot branch entirely. It also emitted no structured STARTED event
+before initialization and no structured FAILED event, so production could not
+distinguish an unattempted/disabled handle from successful reachability.
+
+The repaired path has one unconditional call after the symbol scan's provider/
+snapshot cleanup and before either BROAD or MIRROR handoff. It always emits
+`authoritative_entry_funnel_started`, lazily initializes the additive tables, reads
+the cycle's authoritative entry events, and emits either exactly one
+`authoritative_entry_funnel_completed` or one
+`authoritative_entry_funnel_failed`. The helper catches every diagnostic exception
+and returns a Boolean; it cannot change the scanner result or bypass BROAD, MIRROR,
+health finalization, or lease release.
+
+The cycle identity remains a deterministic hash of scanner ID, run number, and the
+scanner's durable start timestamp. Repeating the same logical cycle uses SQL
+`ON CONFLICT ... DO UPDATE` for both cycle and symbol rows. Worker restarts with a
+reused run number do not collide because their start timestamps differ.
+
+A newly created candidate remains `AWAITING_AUTHORITATIVE_LIFECYCLE` when its
+current result has reached the trigger but no entry event occurred in that cycle.
+This accurately represents the intentional existing-candidates-first ordering; the
+diagnostic does not promote the candidate or claim a blocked trade. If it enters on
+a later scan, that later cycle records the durable `TRADE_ENTERED` event.
+
+Snapshots from the earlier production zero-trade period cannot be reconstructed
+authoritatively because per-cycle symbol state was not persisted. Recording begins
+with the first successful repaired diagnostic attempt.
