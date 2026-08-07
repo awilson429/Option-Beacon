@@ -117,12 +117,16 @@ def build_session_audit(
             "mirror_exit_reason": mirror.get("authoritative_exit_reason"),
             "mfe": None,
             "mae": None,
+            "peak_option_return_percent": None,
+            "favorable_excursion_given_back_percent": None,
         })
+        trades[-1]["diagnostic_note"] = _diagnostic_note(trades[-1])
     _capital_shares(trades)
     return {"session_date": str(session_date), "trades": trades, "summary": _summary(trades, mirror_rows)}
 
 
 def _summary(trades, all_mirror_rows):
+    opened = [row for row in trades if row["mirror_trade_id"]]
     mirror = [row for row in trades if row["mirror_trade_id"] and row["option_pnl"] is not None]
     winners = [row for row in mirror if row["option_pnl"] > 0]
     losers = [row for row in mirror if row["option_pnl"] < 0]
@@ -130,12 +134,20 @@ def _summary(trades, all_mirror_rows):
     gross_loss = sum(row["option_pnl"] for row in losers)
     cumulative = sum(row["debit"] or 0 for row in mirror)
     peak = _peak_capital([row for row in all_mirror_rows if str(row.get("opportunity_id")) in {item["opportunity_id"] for item in trades}])
+    rejected = [row for row in trades if row["broad_disposition"] == "REJECTED"]
+    rejected_winners = [row for row in rejected if row["authoritative_result"] == "WIN"]
+    rejected_losers = [row for row in rejected if row["authoritative_result"] == "LOSS"]
+    authoritative_winners = [row for row in trades if row["authoritative_result"] == "WIN"]
+    entry_drag = _sum_values(row["entry_fill_penalty"] for row in mirror)
+    exit_drag = _sum_values(row["exit_fill_penalty"] for row in mirror)
     return {
         "authoritative_trades": len(trades),
         "authoritative_wins": sum(row["authoritative_result"] == "WIN" for row in trades),
         "authoritative_losses": sum(row["authoritative_result"] == "LOSS" for row in trades),
         "average_authoritative_return_percent": _average(row["authoritative_return_percent"] for row in trades),
+        "mirror_opened": len(opened), "mirror_closed": len(mirror),
         "mirror_trades": len(mirror), "mirror_wins": len(winners), "mirror_losses": len(losers),
+        "mirror_win_rate_percent": len(winners) / len(mirror) * 100 if mirror else None,
         "gross_profit": gross_profit, "gross_loss": gross_loss, "net_pnl": gross_profit + gross_loss,
         "average_winner_dollars": _average(row["option_pnl"] for row in winners),
         "average_loser_dollars": _average(row["option_pnl"] for row in losers),
@@ -147,9 +159,37 @@ def _summary(trades, all_mirror_rows):
         "cumulative_gross_debit": cumulative, "peak_simultaneous_debit": peak,
         "return_on_peak_percent": (gross_profit + gross_loss) / peak * 100 if peak else None,
         "return_on_cumulative_debit_percent": (gross_profit + gross_loss) / cumulative * 100 if cumulative else None,
+        "total_identifiable_entry_fill_penalty": entry_drag,
+        "total_identifiable_exit_fill_penalty": exit_drag,
         "total_identifiable_fill_penalty": _sum_values(row["total_fill_penalty"] for row in mirror),
         "average_option_return_percent": _average(row["option_return_percent"] for row in mirror),
+        "authoritative_winners_mirror_losers": sum(
+            row["option_pnl"] is not None and row["option_pnl"] < 0 for row in authoritative_winners
+        ),
+        "authoritative_winners_mirror_winners": sum(
+            row["option_pnl"] is not None and row["option_pnl"] > 0 for row in authoritative_winners
+        ),
+        "broad_rejected_authoritative_winners": len(rejected_winners),
+        "broad_rejected_winner_mirror_pnl": _sum_values(row["option_pnl"] for row in rejected_winners),
+        "broad_rejected_authoritative_losers": len(rejected_losers),
+        "broad_rejected_loser_mirror_pnl": _sum_values(row["option_pnl"] for row in rejected_losers),
     }
+
+
+def _diagnostic_note(row):
+    notes = []
+    if row["authoritative_result"] == "WIN" and row["option_pnl"] is not None and row["option_pnl"] < 0:
+        notes.append("Underlying winner converted to option loss")
+    if row["broad_reason"] == "SPREAD_TOO_WIDE":
+        notes.append("BROAD flagged wide spread")
+    if row["broad_reason"] == "CONTRACT_TOO_EXPENSIVE":
+        notes.append("BROAD flagged contract cost")
+    if row["total_fill_penalty"] is not None and row["option_pnl"] is not None:
+        if row["total_fill_penalty"] > abs(row["option_pnl"]):
+            notes.append("Identifiable fill drag exceeded final P&L magnitude")
+    if row["mfe"] is None:
+        notes.append("MFE/peak return not persisted")
+    return "; ".join(notes) or "No persisted anomaly identified"
 
 
 def _peak_capital(rows):

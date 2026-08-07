@@ -34,6 +34,14 @@ def test_exact_join_and_attribution_calculations_preserve_unknowns():
     assert summary["average_loser_dollars"] == -30
     assert summary["cumulative_gross_debit"] == 315
     assert summary["peak_simultaneous_debit"] == 315
+    assert summary["mirror_opened"] == 2 and summary["mirror_closed"] == 2
+    assert summary["total_identifiable_entry_fill_penalty"] == pytest.approx(15)
+    assert summary["total_identifiable_exit_fill_penalty"] == pytest.approx(10)
+    assert summary["authoritative_winners_mirror_winners"] == 1
+    assert summary["authoritative_winners_mirror_losers"] == 0
+    assert summary["broad_rejected_authoritative_winners"] == 1
+    assert first["peak_option_return_percent"] is None
+    assert "MFE/peak return not persisted" in first["diagnostic_note"]
 
 
 def test_no_fuzzy_symbol_join_and_missing_quotes_do_not_become_zero():
