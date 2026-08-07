@@ -120,7 +120,7 @@ def managed_update(position, quote, now, config=ManagedConfig()):
             "protection_armed": protection, "trailing_active": trailing,
             "management_state": "CLOSED" if reason else "TRAILING" if trailing else "PROFIT_PROTECTION_ARMED" if protection else "OPEN",
             "trailing_threshold_pct": trailing_threshold, "stop_pct": stop_pct,
-            "exit_reason": reason, "profit_giveback_pct": max(0, mfe - return_pct) if reason else None}
+            "exit_reason": reason, "profit_giveback_pct": max(0, mfe - return_pct)}
 
 
 class IntradayRepository:
@@ -151,6 +151,8 @@ class IntradayRepository:
                 trailing_threshold_pct REAL, stop_pct REAL, exit_fill REAL, exit_reason TEXT,
                 closed_at TEXT, realized_pnl REAL, realized_return_percent REAL,
                 profit_giveback_pct REAL, fill_model TEXT NOT NULL, config_json TEXT NOT NULL,
+                current_value REAL, unrealized_pnl REAL, peak_return_pct REAL,
+                last_quote_at TEXT, update_status TEXT, last_update_error TEXT,
                 created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
                 UNIQUE(opportunity_id,variant,dte))""",
             """CREATE TABLE IF NOT EXISTS intraday_paper_journal (
@@ -163,6 +165,28 @@ class IntradayRepository:
         )
         with self.repository.connection() as connection:
             for ddl in ddls: self.repository._execute(connection, ddl).close()
+            # Existing experimental databases are upgraded additively and idempotently.
+            additions = (
+                ("current_value", "REAL"), ("unrealized_pnl", "REAL"),
+                ("peak_return_pct", "REAL"), ("last_quote_at", "TEXT"),
+                ("update_status", "TEXT"), ("last_update_error", "TEXT"),
+            )
+            if self.repository.backend == "postgresql":
+                for name, definition in additions:
+                    self.repository._execute(
+                        connection,
+                        f"ALTER TABLE intraday_paper_trades ADD COLUMN IF NOT EXISTS {name} {definition}",
+                    ).close()
+            else:
+                existing = {row["name"] for row in self.repository._fetchall(
+                    connection, "PRAGMA table_info(intraday_paper_trades)"
+                )}
+                for name, definition in additions:
+                    if name not in existing:
+                        self.repository._execute(
+                            connection,
+                            f"ALTER TABLE intraday_paper_trades ADD COLUMN {name} {definition}",
+                        ).close()
 
     def save_signal(self, candidate, state="ARMED"):
         row = asdict(candidate) if hasattr(candidate, "__dataclass_fields__") else dict(candidate)
@@ -223,6 +247,60 @@ class IntradayRepository:
                     pass
         return opened
 
+    def trade(self, trade_id):
+        with self.repository.connection() as connection:
+            return self.repository._fetchone(
+                connection, "SELECT * FROM intraday_paper_trades WHERE trade_id=?", (trade_id,)
+            )
+
+    def journal(self, event_type, *, opportunity_id=None, trade_id=None, now=None, payload=None, dedup_suffix=""):
+        now = now or datetime.now(timezone.utc)
+        encoded = json.dumps(payload or {}, sort_keys=True, default=str)
+        dedup = hashlib.sha256(
+            f"{event_type}|{opportunity_id}|{trade_id}|{utc_iso(now)}|{dedup_suffix}".encode()
+        ).hexdigest()
+        journal_id = hashlib.sha256(f"journal|{dedup}".encode()).hexdigest()
+        with self.repository.connection() as connection:
+            try:
+                self.repository._execute(connection, """INSERT INTO intraday_paper_journal
+                    (journal_id,dedup_key,opportunity_id,trade_id,event_type,event_at,payload_json)
+                    VALUES (?,?,?,?,?,?,?)""", (journal_id, dedup, opportunity_id, trade_id,
+                    event_type, utc_iso(now), encoded)).close()
+                return True
+            except Exception:
+                return False
+
+    def record_update_failure(self, trade_id, error, *, now=None):
+        now = now or datetime.now(timezone.utc)
+        row = self.trade(trade_id)
+        if not row or row.get("status") != "OPEN":
+            return row
+        message = str(error or "Option quote unavailable")[:240]
+        with self.repository.connection() as connection:
+            self.repository._execute(connection, """UPDATE intraday_paper_trades SET
+                update_status='QUOTE_UNAVAILABLE',last_update_error=?,updated_at=?
+                WHERE trade_id=? AND status='OPEN'""", (message, utc_iso(now), trade_id)).close()
+        self.journal("intraday_position_update_failed", opportunity_id=row["opportunity_id"],
+                     trade_id=trade_id, now=now, payload={"reason": message})
+        return self.trade(trade_id)
+
+    @staticmethod
+    def config_for(row):
+        try:
+            values = json.loads(row.get("config_json") or "{}")
+        except (TypeError, ValueError):
+            values = {}
+        allowed = {field: values[field] for field in (
+            "hard_stop_pct", "breakeven_activation_pct", "trailing_activation_pct",
+            "trailing_giveback_pct", "max_hold_minutes", "forced_eod_close",
+        ) if field in values}
+        for field in ("last_entry_time", "forced_exit_time"):
+            value = values.get(field)
+            if isinstance(value, str):
+                try: allowed[field] = time.fromisoformat(value)
+                except ValueError: pass
+        return ManagedConfig(**allowed)
+
     def list_signals(self, limit=100):
         with self.repository.connection() as connection:
             return self.repository._fetchall(connection, "SELECT * FROM intraday_signals ORDER BY updated_at DESC LIMIT ?", (int(limit),))
@@ -238,7 +316,8 @@ class IntradayRepository:
         now = now or datetime.now(timezone.utc)
         with self.repository.connection() as connection:
             row = self.repository._fetchone(connection, "SELECT * FROM intraday_paper_trades WHERE trade_id=? AND variant='INTRADAY_MANAGED'", (trade_id,))
-        if not row or row.get("status") != "OPEN" or not usable_quote(quote): return row
+        if not row or row.get("status") != "OPEN": return row
+        if not usable_quote(quote): return self.record_update_failure(trade_id, "Option quote unavailable", now=now)
         update = managed_update(row, quote, now, config)
         mark, reason = update["current_mark"], update["exit_reason"]
         pnl = (mark - float(row["entry_fill"])) * CONTRACT_MULTIPLIER
@@ -246,14 +325,42 @@ class IntradayRepository:
             self.repository._execute(connection, """UPDATE intraday_paper_trades SET current_mark=?,mfe_pct=?,mae_pct=?,
                 protection_armed=?,trailing_active=?,management_state=?,trailing_threshold_pct=?,stop_pct=?,
                 status=?,exit_fill=?,exit_reason=?,closed_at=?,realized_pnl=?,realized_return_percent=?,
-                profit_giveback_pct=?,updated_at=? WHERE trade_id=?""", (mark, update["mfe_pct"], update["mae_pct"],
+                profit_giveback_pct=?,current_value=?,unrealized_pnl=?,peak_return_pct=?,last_quote_at=?,
+                update_status='CURRENT',last_update_error=NULL,updated_at=? WHERE trade_id=? AND status='OPEN'""",
+                (mark, update["mfe_pct"], update["mae_pct"],
                 1 if update["protection_armed"] else 0, 1 if update["trailing_active"] else 0,
                 update["management_state"], update["trailing_threshold_pct"], update["stop_pct"],
                 "CLOSED" if reason else "OPEN", mark if reason else None, reason,
                 utc_iso(now) if reason else None, pnl if reason else None, update["return_pct"] if reason else None,
-                update["profit_giveback_pct"], utc_iso(now), trade_id)).close()
+                update["profit_giveback_pct"], mark * CONTRACT_MULTIPLIER,
+                0.0 if reason else pnl, update["mfe_pct"], utc_iso(now), utc_iso(now), trade_id)).close()
         with self.repository.connection() as connection:
             return self.repository._fetchone(connection, "SELECT * FROM intraday_paper_trades WHERE trade_id=?", (trade_id,))
+
+    def update_mirror(self, trade_id, quote, *, close_reason=None, now=None):
+        now = now or datetime.now(timezone.utc)
+        row = self.trade(trade_id)
+        if not row or row.get("variant") != "INTRADAY_MIRROR" or row.get("status") != "OPEN":
+            return row
+        if not usable_quote(quote):
+            return self.record_update_failure(trade_id, "Option quote unavailable", now=now)
+        mark = exit_fill(quote["bid"], quote["ask"])
+        entry = float(row["entry_fill"])
+        return_pct = (mark / entry - 1) * 100
+        mfe = max(float(row.get("mfe_pct") or 0), return_pct)
+        mae = min(float(row.get("mae_pct") or 0), return_pct)
+        pnl = (mark - entry) * CONTRACT_MULTIPLIER
+        with self.repository.connection() as connection:
+            self.repository._execute(connection, """UPDATE intraday_paper_trades SET
+                current_mark=?,current_value=?,unrealized_pnl=?,mfe_pct=?,mae_pct=?,peak_return_pct=?,
+                last_quote_at=?,update_status='CURRENT',last_update_error=NULL,status=?,management_state=?,
+                exit_fill=?,exit_reason=?,closed_at=?,realized_pnl=?,realized_return_percent=?,updated_at=?
+                WHERE trade_id=? AND variant='INTRADAY_MIRROR' AND status='OPEN'""", (
+                mark, mark * CONTRACT_MULTIPLIER, 0.0 if close_reason else pnl, mfe, mae, mfe,
+                utc_iso(now), "CLOSED" if close_reason else "OPEN", "CLOSED" if close_reason else "OPEN",
+                mark if close_reason else None, close_reason, utc_iso(now) if close_reason else None,
+                pnl if close_reason else None, return_pct if close_reason else None, utc_iso(now), trade_id)).close()
+        return self.trade(trade_id)
 
     def close_mirror(self, opportunity_id, quote, *, reason="UNDERLYING_SIGNAL_CLOSED", now=None):
         now = now or datetime.now(timezone.utc)
@@ -272,6 +379,24 @@ class IntradayRepository:
     def runtime_state(self):
         with self.repository.connection() as connection:
             return self.repository._fetchone(connection, "SELECT * FROM intraday_runtime_state ORDER BY updated_at DESC LIMIT 1")
+
+    def save_runtime_state(self, scanner_id, *, status, symbols_processed=0, call_count=0,
+                           duration_ms=None, error=None, now=None):
+        now = now or datetime.now(timezone.utc)
+        values = (status, utc_iso(now), int(symbols_processed), int(call_count), duration_ms,
+                  str(error or "")[:240] or None, FILL_MODEL, utc_iso(now))
+        with self.repository.connection() as connection:
+            existing = self.repository._fetchone(connection,
+                "SELECT scanner_id FROM intraday_runtime_state WHERE scanner_id=?", (scanner_id,))
+            if existing:
+                self.repository._execute(connection, """UPDATE intraday_runtime_state SET
+                    status=?,last_cycle_at=?,symbols_processed=?,call_count=?,duration_ms=?,
+                    last_error=?,fill_model=?,updated_at=? WHERE scanner_id=?""", (*values, scanner_id)).close()
+            else:
+                self.repository._execute(connection, """INSERT INTO intraday_runtime_state
+                    (status,last_cycle_at,symbols_processed,call_count,duration_ms,last_error,fill_model,updated_at,scanner_id)
+                    VALUES (?,?,?,?,?,?,?,?,?)""", (*values, scanner_id)).close()
+        return self.runtime_state()
 
     def performance(self):
         rows = self.list_trades(status="CLOSED", limit=10000)

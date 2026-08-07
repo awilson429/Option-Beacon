@@ -37,6 +37,27 @@ One cycle uses two Finnhub candle calls plus up to six Tradier calls when both
 symbols qualify. Start at 60 seconds and measure 429s/latency before considering
 30 seconds. No production scheduling change is included.
 
+Each cycle uses the dedicated `index-intraday-paper` lease and deterministically:
+
+1. reloads every durable open Intraday Mirror and Managed position;
+2. loads SPY and QQQ minute bars;
+3. refreshes immutable option contracts and manages/closes each position independently;
+4. evaluates SPY and QQQ for new setups and triggered entries;
+5. persists `intraday_runtime_state`; and
+6. releases the lease.
+
+Mirror marks and excursions are refreshed every cycle. It closes on an opposing
+underlying context or the 15:55 ET safety exit. Managed positions apply the exact
+persisted experimental configuration. Missing/unusable quotes never manufacture a
+mark or close; the trade remains open with `QUOTE_UNAVAILABLE` and is retried.
+
+Operational events are `intraday_cycle_started`, `intraday_symbol_evaluated`,
+`intraday_setup_detected`, `intraday_setup_armed`, `intraday_triggered`,
+`intraday_paper_opened`, `intraday_position_updated`,
+`intraday_profit_protection_armed`, `intraday_trailing_activated`,
+`intraday_trade_closed`, `intraday_cycle_completed`, and
+`intraday_cycle_failed`. Quote failures emit `intraday_position_update_failed`.
+
 Replay is deterministic for underlying bars through `detect_candidate`; historical
 option execution is intentionally not claimed because historical quote snapshots
 are unavailable. Never synthesize historical option fills.
