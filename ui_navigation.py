@@ -72,6 +72,7 @@ SIDEBAR_CSS = """
 
 CARD_NAVIGATION = (
     "Trade Desk",
+    "SPY / QQQ",
     "Opportunities",
     "Paper Trading",
     "After Hours",
@@ -82,6 +83,7 @@ CARD_NAVIGATION = (
 
 CARD_NAVIGATION_SLUGS = {
     "Trade Desk": "trade-desk",
+    "SPY / QQQ": "spy-qqq",
     "Opportunities": "opportunities",
     "Paper Trading": "paper-trading",
     "After Hours": "after-hours",
@@ -90,7 +92,7 @@ CARD_NAVIGATION_SLUGS = {
     "Developer Tools": "developer-tools",
 }
 
-DESKTOP_NAVIGATION_COLUMNS = 7
+DESKTOP_NAVIGATION_COLUMNS = 8
 
 CARD_NAVIGATION_CSS = """
 <style>
