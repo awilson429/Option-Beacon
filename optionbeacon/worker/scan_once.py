@@ -467,6 +467,10 @@ def run_scan_once(
                 enabled=mirror_is_enabled, scanner_id=scanner_id,
                 run_number=run_number, now=clock(),
                 experiment_start_date=mirror_start_date,
+                underlying_prices={
+                    str(result.get("symbol") or symbol): result.get("price")
+                    for symbol, result in results.items() if isinstance(result, dict)
+                },
             )
         if scan_phase_error is not None:
             completed = clock()

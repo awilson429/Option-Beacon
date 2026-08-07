@@ -19,6 +19,7 @@ TABLES = {
     "authoritative_events": "authoritative_trade_events",
     "opportunities": "opportunities",
     "mirror_rows": "mirror_execution_trades",
+    "mirror_marks": "mirror_execution_marks",
     "paper_trades": "paper_execution_trades",
     "paper_journal": "paper_execution_journal",
 }
@@ -123,6 +124,7 @@ def main():
     audit = build_session_audit(
         rows["authoritative_events"], rows["opportunities"], rows["mirror_rows"],
         rows["paper_trades"], rows["paper_journal"], session_date=session_date,
+        mirror_marks=rows["mirror_marks"],
     )
     audit["source_status"] = {
         "database_transaction": "READ_ONLY",
