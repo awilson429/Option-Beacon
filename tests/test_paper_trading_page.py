@@ -30,9 +30,9 @@ def position():
     return position_from_trade(trade, execution_time=NOW - timedelta(minutes=12), fill_price=1, quantity=2)
 
 
-def test_paper_trading_is_third_top_level_destination_and_navigation_is_responsive():
+def test_paper_trading_follows_intraday_destination_and_navigation_is_responsive():
     assert CARD_NAVIGATION == (
-        "Trade Desk", "Opportunities", "Paper Trading", "After Hours",
+        "Trade Desk", "SPY / QQQ", "Opportunities", "Paper Trading", "After Hours",
         "History", "Tools", "Developer Tools",
     )
     compact = CARD_NAVIGATION_CSS.replace(" ", "").replace("\n", "").lower()

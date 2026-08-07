@@ -206,6 +206,7 @@ from ui_modern_style import (
     modern_style_active,
     render_modern_scorecard,
 )
+from intraday_page import render_intraday_page
 
 
 SYMBOL_GROUPS = DEFAULT_SYMBOL_GROUPS
@@ -4717,7 +4718,10 @@ def main():
 
     active_page = render_card_navigation()
 
-    if active_page == "After Hours":
+    if active_page == "SPY / QQQ":
+        render_intraday_page(trade_state.get("repository"))
+
+    elif active_page == "After Hours":
         render_after_hours(latest_results)
 
     elif active_page == "Opportunities":
