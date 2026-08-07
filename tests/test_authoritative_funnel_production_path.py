@@ -46,6 +46,7 @@ def test_healthy_zero_trade_cycle_persists_exactly_one_snapshot(tmp_path, caplog
             symbol_groups_loader=lambda: ({"Full": ["SPY", "QQQ"]}, "test", ""),
             signal_generator=lambda symbol: valid_result(symbol),
             snapshot_writer=lambda results: None,
+            clock=lambda: NOW,
         )
     cycle = AuthoritativeEntryFunnelRepository(repository, initialize=False).latest_cycle("2026-08-06")
     events = messages(caplog)
@@ -64,6 +65,7 @@ def test_zero_directional_ready_and_trigger_counts_still_persist(tmp_path):
         symbol_groups_loader=lambda: ({"Full": ["SPY"]}, "test", ""),
         signal_generator=lambda symbol: valid_result(symbol, directional=False),
         snapshot_writer=lambda results: None,
+        clock=lambda: NOW,
     ) == 0
     cycle = AuthoritativeEntryFunnelRepository(repository, initialize=False).latest_cycle("2026-08-06")
     assert cycle["directional_candidates"] == 0

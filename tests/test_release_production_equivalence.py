@@ -20,6 +20,7 @@ def test_default_navigation_remains_trade_desk_with_paper_workspace():
     assert active_card_workspace(state) == "Trade Desk"
     assert CARD_NAVIGATION == (
         "Trade Desk",
+        "SPY / QQQ",
         "Opportunities",
         "Paper Trading",
         "After Hours",
