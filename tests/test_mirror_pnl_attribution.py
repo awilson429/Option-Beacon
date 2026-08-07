@@ -64,3 +64,17 @@ def test_analysis_module_contains_no_provider_or_persistence_operations():
     assert "connection.rollback()" in runner
     for forbidden in ("insert ", "update ", "delete ", "create table", "commit("):
         assert forbidden not in runner
+
+
+def test_never_profitable_path_is_explicit_and_has_no_profit_giveback():
+    events = [
+        {"opportunity_id":"a","event_type":"TRADE_ENTERED","event_timestamp":"2026-08-06T14:00:00Z","symbol":"SPY"},
+        {"opportunity_id":"a","event_type":"TRADE_CLOSED","event_timestamp":"2026-08-06T14:02:00Z","realized_return":-1},
+    ]
+    mirror = [{"mirror_trade_id":"m","opportunity_id":"a","opened_at":"2026-08-06T14:00:00Z",
+               "exit_quote_at":"2026-08-06T14:02:00Z","realized_return_percent":-10,"realized_pnl":-10}]
+    marks = [{"mirror_trade_id":"m","observed_at":"2026-08-06T14:01:00Z","return_pct":-5}]
+    row = build_session_audit(events, [], mirror, [], [], session_date=date(2026,8,6),
+                              mirror_marks=marks)["trades"][0]
+    assert row["ever_profitable"] is False
+    assert row["favorable_excursion_given_back_percent"] == 0

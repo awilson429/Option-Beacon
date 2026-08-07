@@ -109,10 +109,38 @@ class MirrorExecutionRepository:
                     experiment_start_date TEXT, fill_model TEXT NOT NULL,
                     last_cycle_at TEXT, last_error TEXT, updated_at TEXT NOT NULL
                 )""",
+                """CREATE TABLE IF NOT EXISTS mirror_execution_marks (
+                    mark_id TEXT PRIMARY KEY, mirror_trade_id TEXT NOT NULL,
+                    opportunity_id TEXT NOT NULL, symbol TEXT NOT NULL, option_symbol TEXT,
+                    observed_at TEXT NOT NULL, underlying_price REAL,
+                    bid REAL, ask REAL, midpoint REAL, conservative_mark REAL,
+                    entry_fill REAL, return_pct REAL, unrealized_pnl REAL,
+                    spread_dollars REAL, spread_percent REAL,
+                    mfe_pct REAL, mae_pct REAL, peak_return_pct REAL,
+                    peak_unrealized_pnl REAL, time_since_entry_seconds REAL,
+                    update_status TEXT NOT NULL,
+                    UNIQUE(mirror_trade_id,observed_at)
+                )""",
             ):
                 self.repository._execute(connection, ddl).close()
+            additions = (
+                ("mfe_pct", "REAL"), ("mae_pct", "REAL"),
+                ("peak_return_pct", "REAL"), ("peak_unrealized_pnl", "REAL"),
+            )
+            if self.repository.backend == "postgresql":
+                for name, definition in additions:
+                    self.repository._execute(connection,
+                        f"ALTER TABLE mirror_execution_trades ADD COLUMN IF NOT EXISTS {name} {definition}").close()
+            else:
+                existing = {row["name"] for row in self.repository._fetchall(
+                    connection, "PRAGMA table_info(mirror_execution_trades)")}
+                for name, definition in additions:
+                    if name not in existing:
+                        self.repository._execute(connection,
+                            f"ALTER TABLE mirror_execution_trades ADD COLUMN {name} {definition}").close()
             self.repository._execute(connection, "CREATE INDEX IF NOT EXISTS idx_mirror_status ON mirror_execution_trades(status)").close()
             self.repository._execute(connection, "CREATE INDEX IF NOT EXISTS idx_mirror_journal_at ON mirror_execution_journal(event_at)").close()
+            self.repository._execute(connection, "CREATE INDEX IF NOT EXISTS idx_mirror_marks_trade_at ON mirror_execution_marks(mirror_trade_id,observed_at)").close()
 
     def save_runtime_state(self, scanner_id, *, enabled, status, experiment_start_date=None, error=None, now=None):
         now = now or datetime.now(timezone.utc)
@@ -140,6 +168,15 @@ class MirrorExecutionRepository:
     def get(self, opportunity_id):
         with self.repository.connection() as connection:
             return self.repository._fetchone(connection, "SELECT * FROM mirror_execution_trades WHERE opportunity_id=?", (opportunity_id,))
+
+    def marks(self, mirror_trade_id=None):
+        query, params = "SELECT * FROM mirror_execution_marks", ()
+        if mirror_trade_id:
+            query += " WHERE mirror_trade_id=?"
+            params = (mirror_trade_id,)
+        query += " ORDER BY observed_at,mark_id"
+        with self.repository.connection() as connection:
+            return self.repository._fetchall(connection, query, params)
 
     def dispositioned_source_signal_ids(self):
         return {row["opportunity_id"] for row in self.rows()}
@@ -186,7 +223,66 @@ class MirrorExecutionRepository:
         self.journal(opportunity_id, trade_id, "mirror_entry_opened" if fill else "mirror_entry_unexecutable", code, now, {"detail": detail})
         return self.get(opportunity_id)
 
-    def update_mark(self, row, quote, now):
+    def _snapshot(self, connection, row, quote, now, *, underlying_price=None,
+                  update_status="CURRENT", conservative_mark=None):
+        observed_at = utc_iso(now)
+        bid = _number((quote or {}).get("bid"))
+        ask = _number((quote or {}).get("ask"))
+        midpoint = (bid + ask) / 2 if bid is not None and ask is not None else None
+        spread = ask - bid if bid is not None and ask is not None else None
+        spread_pct = spread / midpoint * 100 if midpoint else None
+        entry_fill = _number(row.get("entry_fill"))
+        mark = conservative_mark
+        if mark is None and _usable_quote(quote or {}):
+            mark = _exit_fill(bid, ask)
+        return_pct = (mark / entry_fill - 1) * 100 if mark is not None and entry_fill else None
+        pnl = (mark - entry_fill) * int(row.get("quantity") or 1) * int(row.get("contract_multiplier") or 100) if return_pct is not None else None
+        prior_mfe, prior_mae = _number(row.get("mfe_pct")), _number(row.get("mae_pct"))
+        mfe = max(value for value in (prior_mfe, return_pct) if value is not None) if any(value is not None for value in (prior_mfe, return_pct)) else None
+        mae = min(value for value in (prior_mae, return_pct) if value is not None) if any(value is not None for value in (prior_mae, return_pct)) else None
+        prior_peak_pnl = _number(row.get("peak_unrealized_pnl"))
+        peak_pnl = max(value for value in (prior_peak_pnl, pnl) if value is not None) if any(value is not None for value in (prior_peak_pnl, pnl)) else None
+        opened = _aware(row["opened_at"]) if row.get("opened_at") else None
+        elapsed = (now - opened).total_seconds() if opened else None
+        mark_id = hashlib.sha256(f"{row['mirror_trade_id']}|{observed_at}".encode()).hexdigest()
+        cursor = self.repository._execute(connection, """INSERT INTO mirror_execution_marks (
+            mark_id,mirror_trade_id,opportunity_id,symbol,option_symbol,observed_at,
+            underlying_price,bid,ask,midpoint,conservative_mark,entry_fill,return_pct,
+            unrealized_pnl,spread_dollars,spread_percent,mfe_pct,mae_pct,peak_return_pct,
+            peak_unrealized_pnl,time_since_entry_seconds,update_status
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(mirror_trade_id,observed_at) DO NOTHING""", (
+            mark_id,row["mirror_trade_id"],row["opportunity_id"],row["symbol"],row.get("option_symbol"),
+            observed_at,underlying_price,bid,ask,midpoint,mark,entry_fill,return_pct,pnl,
+            spread,spread_pct,mfe,mae,mfe,peak_pnl,elapsed,update_status))
+        inserted = cursor.rowcount > 0
+        cursor.close()
+        if not inserted:
+            existing = self.repository._fetchone(connection,
+                "SELECT * FROM mirror_execution_marks WHERE mirror_trade_id=? AND observed_at=?",
+                (row["mirror_trade_id"], observed_at)) or {}
+            return {"mark_id": existing.get("mark_id"),
+                    "mark": existing.get("conservative_mark"),
+                    "return_pct": existing.get("return_pct"),
+                    "unrealized_pnl": existing.get("unrealized_pnl"),
+                    "mfe_pct": existing.get("mfe_pct"), "mae_pct": existing.get("mae_pct"),
+                    "peak_return_pct": existing.get("peak_return_pct"),
+                    "peak_unrealized_pnl": existing.get("peak_unrealized_pnl"),
+                    "update_status": existing.get("update_status")}
+        if return_pct is not None:
+            self.repository._execute(connection, """UPDATE mirror_execution_trades SET
+                mfe_pct=?,mae_pct=?,peak_return_pct=?,peak_unrealized_pnl=?
+                WHERE mirror_trade_id=?""", (mfe,mae,mfe,peak_pnl,row["mirror_trade_id"])).close()
+        return {"mark_id": mark_id, "mark": mark, "return_pct": return_pct, "unrealized_pnl": pnl,
+                "mfe_pct": mfe, "mae_pct": mae, "peak_return_pct": mfe,
+                "peak_unrealized_pnl": peak_pnl, "update_status": update_status}
+
+    def record_quote_unavailable(self, row, now, *, underlying_price=None):
+        with self.repository.connection() as connection:
+            return self._snapshot(connection, row, None, now, underlying_price=underlying_price,
+                                  update_status="QUOTE_UNAVAILABLE")
+
+    def update_mark(self, row, quote, now, *, underlying_price=None):
         bid, ask = _number(quote.get("bid")), _number(quote.get("ask"))
         mark = _exit_fill(bid, ask)
         value = mark * MIRROR_MULTIPLIER
@@ -195,8 +291,10 @@ class MirrorExecutionRepository:
             self.repository._execute(connection, """UPDATE mirror_execution_trades SET current_bid=?,current_ask=?,
                 current_mark=?,current_value=?,unrealized_pnl=?,last_quote_at=?,updated_at=? WHERE opportunity_id=?""",
                 (bid, ask, mark, value, pnl, utc_iso(now), utc_iso(now), row["opportunity_id"])).close()
+            return self._snapshot(connection, row, quote, now, underlying_price=underlying_price,
+                                  conservative_mark=mark)
 
-    def close(self, row, exit_event, quote, now):
+    def close(self, row, exit_event, quote, now, *, underlying_price=None):
         bid, ask = _number(quote.get("bid")), _number(quote.get("ask"))
         mid, fill = (bid + ask) / 2, _exit_fill(bid, ask)
         value = fill * MIRROR_MULTIPLIER
@@ -211,8 +309,11 @@ class MirrorExecutionRepository:
                 exit_event.get("id"), utc_iso(_aware(exit_event["event_timestamp"])), exit_event.get("exit_reason"),
                 utc_iso(now), bid, ask, mid, fill, value, pnl, return_pct, fill, value, utc_iso(now), row["opportunity_id"],
             )).close()
+            snapshot = self._snapshot(connection, row, quote, now, underlying_price=underlying_price,
+                                      update_status="CLOSED", conservative_mark=fill)
         self.journal(row["opportunity_id"], row["mirror_trade_id"], "mirror_trade_closed", "MIRROR_CLOSED", now,
                      {"authoritative_exit_reason": exit_event.get("exit_reason"), "realized_pnl": pnl})
+        return snapshot
 
     def exit_pending(self, row, exit_event, now, reason):
         with self.repository.connection() as connection:
@@ -313,7 +414,7 @@ def _entry_disposition(candidate, entry_event, provider, now, stale_minutes):
 
 def run_mirror_execution(repository, mirror_repository, candidates, *, enabled, scanner_id,
                          run_number=None, now=None, chain_provider=None, quote_provider=None,
-                         experiment_start_date=None, stale_minutes=60):
+                         experiment_start_date=None, stale_minutes=60, underlying_prices=None):
     """Reconcile entries and authoritative exits exactly once; never place an order."""
     now = now or datetime.now(timezone.utc)
     LOGGER.info(json.dumps({"event": "mirror_cycle_started", "scanner_id": scanner_id,
@@ -324,6 +425,7 @@ def run_mirror_execution(repository, mirror_repository, candidates, *, enabled, 
         return {"status": "DISABLED", "opened": 0, "unexecutable": 0, "closed": 0, "pending": 0}
     provider = chain_provider or TradierOptionChainProvider()
     quote_provider = quote_provider or option_quote
+    underlying_prices = underlying_prices or {}
     entry_events = {event.get("opportunity_id") or event.get("trade_id"): event for event in _entry_events(repository)}
     eligible_entry_ids = {identity for identity, event in entry_events.items()
                           if not experiment_start_date or _aware(event["event_timestamp"]).astimezone(EASTERN).date() >= experiment_start_date}
@@ -357,18 +459,46 @@ def run_mirror_execution(repository, mirror_repository, candidates, *, enabled, 
             continue
         exit_event = exits.get(row["opportunity_id"])
         quote, error = quote_provider(row["option_symbol"])
+        underlying_price = _number(underlying_prices.get(row["symbol"]))
         if exit_event:
             LOGGER.info(json.dumps({"event": "mirror_authoritative_exit_received", "opportunity_id": row["opportunity_id"],
                                     "authoritative_exit_reason": exit_event.get("exit_reason")}, sort_keys=True))
             if error or not quote or not _usable_quote(quote):
+                snapshot = mirror_repository.record_quote_unavailable(
+                    row, now, underlying_price=underlying_price
+                )
+                LOGGER.info(json.dumps({"event": "mirror_position_marked",
+                    "opportunity_id": row["opportunity_id"], "trade_id": row["mirror_trade_id"],
+                    "symbol": row["symbol"], "option_symbol": row["option_symbol"],
+                    **snapshot}, sort_keys=True))
                 mirror_repository.exit_pending(row, exit_event, now, str(error or "Executable exit quote unavailable.")[:240])
                 pending += 1
             else:
-                mirror_repository.close(row, exit_event, quote, now)
+                snapshot = mirror_repository.close(
+                    row, exit_event, quote, now, underlying_price=underlying_price
+                )
+                LOGGER.info(json.dumps({"event": "mirror_position_marked",
+                    "opportunity_id": row["opportunity_id"], "trade_id": row["mirror_trade_id"],
+                    "symbol": row["symbol"], "option_symbol": row["option_symbol"],
+                    **snapshot}, sort_keys=True))
                 closed += 1
         elif not error and quote and _usable_quote(quote):
-            mirror_repository.update_mark(row, quote, now)
+            snapshot = mirror_repository.update_mark(
+                row, quote, now, underlying_price=underlying_price
+            )
             LOGGER.info(json.dumps({"event": "mirror_position_updated", "opportunity_id": row["opportunity_id"]}, sort_keys=True))
+            LOGGER.info(json.dumps({"event": "mirror_position_marked",
+                "opportunity_id": row["opportunity_id"], "trade_id": row["mirror_trade_id"],
+                "symbol": row["symbol"], "option_symbol": row["option_symbol"],
+                **snapshot}, sort_keys=True))
+        else:
+            snapshot = mirror_repository.record_quote_unavailable(
+                row, now, underlying_price=underlying_price
+            )
+            LOGGER.info(json.dumps({"event": "mirror_position_marked",
+                "opportunity_id": row["opportunity_id"], "trade_id": row["mirror_trade_id"],
+                "symbol": row["symbol"], "option_symbol": row["option_symbol"],
+                **snapshot}, sort_keys=True))
     open_state = mirror_repository.rows()
     pending_total = sum(row["status"] == "EXIT_PENDING" for row in open_state)
     status = "DEGRADED" if pending_total or any(code in disposition_codes for code in {

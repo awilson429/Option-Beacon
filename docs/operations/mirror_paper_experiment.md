@@ -65,6 +65,23 @@ Structured events include `mirror_cycle_started`, `mirror_authoritative_handoff`
 `mirror_authoritative_exit_received`, `mirror_trade_closed`,
 `mirror_exit_pending`, and `mirror_cycle_completed`.
 
+## Intratrade telemetry
+
+Each normal MIRROR refresh appends one observation to
+`mirror_execution_marks` for every tracked position. The observation reuses the
+quote and underlying price already obtained by the worker; it does not make an
+additional provider request or alter contract selection, fills, entries, exits,
+or risk behavior. Valid observations persist bid, ask, midpoint, conservative
+liquidation mark, return, unrealized P&L, spread, elapsed time, and the running
+MFE, MAE, and peak-return high-water values. Quote failures append a
+`QUOTE_UNAVAILABLE` observation with price fields left null rather than fabricated.
+
+The table and its index auto-create idempotently. Additive high-water columns on
+`mirror_execution_trades` make MFE/MAE restart-safe. The attribution report uses
+the observations to calculate peak return, giveback, time to peak, time from peak
+to exit, and whether a final loser was previously profitable. Structured per-mark
+events are emitted as `mirror_position_marked`.
+
 ## Capital and drawdown
 
 There is no artificial account cap. Current capital is the sum of entry debits for

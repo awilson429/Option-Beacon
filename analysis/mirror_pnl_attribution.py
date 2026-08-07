@@ -12,7 +12,7 @@ EASTERN = ZoneInfo("America/New_York")
 
 def build_session_audit(
     authoritative_events, opportunities, mirror_rows, paper_trades, paper_journal,
-    *, session_date,
+    *, session_date, mirror_marks=None,
 ):
     """Join a session strictly by opportunity ID and calculate persisted attribution."""
     events = [row for row in authoritative_events if _session(row.get("event_timestamp")) == session_date]
@@ -26,6 +26,9 @@ def build_session_audit(
             exits[identity] = row
     opportunity_by_id = {str(row.get("id")): row for row in opportunities if row.get("id")}
     mirror_by_id = {str(row.get("opportunity_id")): row for row in mirror_rows if row.get("opportunity_id")}
+    marks_by_trade = {}
+    for mark in mirror_marks or []:
+        marks_by_trade.setdefault(str(mark.get("mirror_trade_id") or ""), []).append(mark)
     source_by_trade = {
         str(row.get("trade_id")): str(row.get("source_signal_id") or row.get("opportunity_id"))
         for row in paper_trades if row.get("trade_id")
@@ -44,6 +47,8 @@ def build_session_audit(
         exit_event = exits.get(identity, {})
         opportunity = opportunity_by_id.get(identity, {})
         mirror = mirror_by_id.get(identity, {})
+        marks = sorted(marks_by_trade.get(str(mirror.get("mirror_trade_id") or ""), []),
+                       key=lambda item: _dt(item.get("observed_at")))
         broad = broad_by_source.get(identity)
         quantity = _integer(mirror.get("quantity")) or 0
         multiplier = _integer(mirror.get("contract_multiplier")) or 100
@@ -68,6 +73,7 @@ def build_session_audit(
         if broad:
             broad_disposition = "OPENED" if bool(broad.get("accepted")) else "REJECTED"
             broad_reason = str(broad.get("reason_code") or "UNKNOWN") if not bool(broad.get("accepted")) else "—"
+        path = _path_attribution(mirror, marks)
         trades.append({
             "opportunity_id": identity,
             "symbol": entry.get("symbol"),
@@ -115,10 +121,16 @@ def build_session_audit(
             "broad_disposition": broad_disposition,
             "broad_reason": broad_reason,
             "mirror_exit_reason": mirror.get("authoritative_exit_reason"),
-            "mfe": None,
-            "mae": None,
-            "peak_option_return_percent": None,
-            "favorable_excursion_given_back_percent": None,
+            "mfe": path["mfe"],
+            "mae": path["mae"],
+            "peak_option_return_percent": path["peak_option_return_percent"],
+            "favorable_excursion_given_back_percent": path["giveback_percent"],
+            "time_to_peak_minutes": path["time_to_peak_minutes"],
+            "time_peak_to_exit_minutes": path["time_peak_to_exit_minutes"],
+            "final_loser_was_previously_profitable": path["final_loser_was_previously_profitable"],
+            "winner_gave_back_substantially": path["winner_gave_back_substantially"],
+            "ever_profitable": path["ever_profitable"],
+            "mark_snapshot_count": len(marks),
         })
         trades[-1]["diagnostic_note"] = _diagnostic_note(trades[-1])
     _capital_shares(trades)
@@ -190,6 +202,36 @@ def _diagnostic_note(row):
     if row["mfe"] is None:
         notes.append("MFE/peak return not persisted")
     return "; ".join(notes) or "No persisted anomaly identified"
+
+
+def _path_attribution(mirror, marks):
+    valid = [mark for mark in marks if _number(mark.get("return_pct")) is not None]
+    returns = [_number(mark.get("return_pct")) for mark in valid]
+    persisted_mfe = _number(mirror.get("mfe_pct"))
+    persisted_mae = _number(mirror.get("mae_pct"))
+    peak = max(returns) if returns else persisted_mfe
+    mfe = max(returns) if returns else persisted_mfe
+    mae = min(returns) if returns else persisted_mae
+    final_return = _number(mirror.get("realized_return_percent"))
+    ever_profitable = bool(peak is not None and peak > 0)
+    giveback = max(0.0, peak - final_return) if ever_profitable and final_return is not None else 0.0 if peak is not None and final_return is not None else None
+    peak_mark = next((mark for mark in valid if _number(mark.get("return_pct")) == peak), None)
+    opened = _dt_or_none(mirror.get("opened_at"))
+    peak_at = _dt_or_none((peak_mark or {}).get("observed_at"))
+    exited = _dt_or_none(mirror.get("exit_quote_at"))
+    return {
+        "mfe": mfe, "mae": mae, "peak_option_return_percent": peak,
+        "giveback_percent": giveback,
+        "time_to_peak_minutes": (peak_at - opened).total_seconds() / 60 if peak_at and opened else None,
+        "time_peak_to_exit_minutes": (exited - peak_at).total_seconds() / 60 if exited and peak_at else None,
+        "final_loser_was_previously_profitable": bool(
+            final_return is not None and final_return < 0 and peak is not None and peak > 0
+        ),
+        "winner_gave_back_substantially": bool(
+            final_return is not None and final_return > 0 and giveback is not None and giveback >= 10
+        ),
+        "ever_profitable": ever_profitable,
+    }
 
 
 def _peak_capital(rows):
