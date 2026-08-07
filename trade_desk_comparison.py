@@ -244,11 +244,18 @@ def comparison_markup(model, *, has_previous=False, selected="TODAY"):
         + "".join(f'<div><span>{escape(str(values[index]))}</span><strong>{escape(str(values[index + 1]))}</strong></div>' for index in range(1, len(values), 2))
         + '</div>' for values in metrics
     )
-    participation = (
-        f'<div class="ob-participation"><span>Authoritative Entries <strong>{auth["trades"]}</strong></span>'
-        f'<span>BROAD: Evaluated <strong>{paper["evaluated"]}</strong> · Opened <strong>{paper["opened"]}</strong> · Rejected <strong>{paper["rejected"]}</strong> · Participation <strong>{paper["participation_rate"]:.1f}%</strong></span>'
-        + (f'<span>MIRROR: Evaluated <strong>{mirror["evaluated"]}</strong> · Opened <strong>{mirror["opened"]}</strong> · Unexecutable <strong>{mirror["unexecutable"]}</strong> · Pending <strong>{mirror["pending"]}</strong> · Participation <strong>{mirror["participation_rate"]:.1f}%</strong></span>' if mirror["available"] else '<span>MIRROR: <strong>No MIRROR data for this session</strong></span>')
-        + '</div>'
+    mirror_participation = (
+        f'{mirror["opened"]} / {auth["trades"]}' if mirror["available"] else "—"
+    )
+    experiment_summary = (
+        '<div class="ob-experiment-summary">'
+        '<div class="ob-experiment-metric"><span>PARTICIPATION</span>'
+        f'<div><small>BROAD</small><strong>{paper["opened"]} / {auth["trades"]}</strong></div>'
+        f'<div><small>MIRROR</small><strong>{mirror_participation}</strong></div></div>'
+        '<div class="ob-experiment-metric"><span>OPTION P&amp;L</span>'
+        f'<div><small>BROAD</small><strong>{_money(paper["pnl"])}</strong></div>'
+        f'<div><small>MIRROR</small><strong>{_money(mirror["pnl"]) if mirror["available"] else "—"}</strong></div></div>'
+        '</div>'
     )
     capital = (
         '<div class="ob-mirror-capital"><span>MIRROR CAPITAL DEPLOYED</span>'
@@ -269,7 +276,7 @@ def comparison_markup(model, *, has_previous=False, selected="TODAY"):
     return (
         '<section class="ob-desk-panel"><div class="ob-compare-header"><h3>OptionBeacon vs PAPER vs MIRROR</h3>'
         f'<nav class="ob-session-tabs">{tabs}</nav></div><div class="ob-compare-grid">{columns}</div>'
-        f'{participation}{capital}{missed_block}</section>'
+        f'{experiment_summary}{capital}{missed_block}</section>'
     )
 
 
