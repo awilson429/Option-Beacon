@@ -198,7 +198,36 @@ def test_three_equal_cards_include_persisted_mirror_metrics_and_status():
     assert "OptionBeacon vs PAPER vs MIRROR" in markup
     assert markup.count('class="ob-compare-column"') == 3
     assert "BROAD PAPER" in markup and "MIRROR · ACTIVE" in markup
-    assert "Unexecutable" in markup and "MIRROR: Evaluated" in markup
+    assert 'class="ob-experiment-summary"' in markup
+    assert "PARTICIPATION" in markup and "OPTION P&amp;L" in markup
+    assert "BROAD</small><strong>0 / 2" in markup
+    assert "MIRROR</small><strong>1 / 2" in markup
+    assert "BROAD</small><strong>$+0.00" in markup
+    assert "MIRROR</small><strong>$+34.50" in markup
+    for redundant in (
+        "Authoritative Entries", "BROAD: Evaluated", "MIRROR: Evaluated",
+        "Unexecutable", "Pending",
+    ):
+        assert redundant not in markup
+
+
+def test_compact_experiment_summary_keeps_missing_values_honest_and_capital_visible():
+    model = trade_comparison_model(
+        [event("opened", "TRADE_ENTERED", 1, "ARKG")], [], [], [],
+        session_date=NOW.astimezone().date(),
+        mirror_rows=[mirror_row("opened", status="OPEN", pnl=None)],
+        mirror_runtime=mirror_runtime(),
+    )
+    model["paper"]["pnl"] = None
+    markup = comparison_markup(model, has_previous=True, selected="PREVIOUS")
+    assert markup.count("—") >= 2
+    assert "MIRROR CAPITAL DEPLOYED" in markup
+    assert "Peak" in markup and "Cumulative gross debit" in markup
+    assert "Open contracts" in markup and "Return on peak" in markup
+    assert "No limit" in markup
+    assert "desk_session=TODAY" in markup
+    assert "desk_session=PREVIOUS" in markup
+    assert 'class="ob-session-tab is-active" href="?page=trade-desk&amp;desk_session=PREVIOUS"' in markup
 
 
 def test_mirror_today_and_previous_filter_by_entry_session():
@@ -221,7 +250,9 @@ def test_pre_experiment_session_is_not_interpreted_as_zero_performance():
                                    mirror_rows=[], mirror_runtime=mirror_runtime(start="2026-08-05"))
     assert model["mirror"]["available"] is False
     assert model["rows"][0]["mirror_disposition"] == "NO MIRROR DATA"
-    assert "No MIRROR data for this session" in comparison_markup(model, selected="PREVIOUS")
+    markup = comparison_markup(model, selected="PREVIOUS")
+    assert "MIRROR</small><strong>—" in markup
+    assert "MIRROR</small><strong>$" not in markup
 
 
 @pytest.mark.parametrize("runtime,label", [
@@ -292,6 +323,9 @@ def test_responsive_three_card_css_and_streamlit_remains_read_only():
     css = open("ui/theme.py", encoding="utf-8").read()
     assert "grid-template-columns:repeat(3,minmax(0,1fr))" in css
     assert ".ob-compare-grid {grid-template-columns:minmax(0,1fr)}" in css
+    assert ".ob-experiment-summary {grid-template-columns:minmax(0,1fr)}" in css
+    experiment_css = css[css.index(".ob-experiment-summary"):css.index(".ob-auth-summary")]
+    assert "overflow-x" not in experiment_css
     source = inspect.getsource(app.render_outcome_trade_journal)
     assert "MirrorExecutionRepository" in source
     for forbidden in ("run_mirror_execution", "save_runtime_state", "record_disposition", ".close(", ".update_mark("):
