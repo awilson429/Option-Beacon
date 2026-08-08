@@ -88,6 +88,7 @@ from optionbeacon_snapshot import load_latest_results
 from execution_config import ExecutionConfig
 from paper_execution import paper_account_summary
 from paper_execution_repository import PaperExecutionRepository
+from broad_filter_effectiveness import broad_filter_effectiveness
 from mirror_execution import MirrorExecutionRepository, mirror_summary
 from trade_repository import TradeRepository
 from option_position_tracker import (
@@ -4206,14 +4207,14 @@ def render_paper_trading_page():
     config = local_config
     positions, raw_journal, captures, authoritative_events = [], [], [], []
     worker_health, worker_config_state = None, None
-    mirror_rows, mirror_runtime = [], None
+    mirror_rows, mirror_marks, mirror_runtime = [], [], None
     database_url = dashboard_database_url()
     if database_url:
         try:
             trade_repository = TradeRepository(database_url=database_url, require_durable=True)
             repository = PaperExecutionRepository(trade_repository, initialize=False)
             positions = repository.load()
-            raw_journal = repository.journal_rows(limit=500)
+            raw_journal = repository.journal_rows(limit=5000)
             captures = repository.records()
             authoritative_events = trade_repository.list_trade_events(limit=5000)
             worker_health = trade_repository.get_latest_scan_health()
@@ -4221,9 +4222,10 @@ def render_paper_trading_page():
             mirror_repository = MirrorExecutionRepository(trade_repository, initialize=False)
             try:
                 mirror_rows = mirror_repository.rows()
+                mirror_marks = mirror_repository.marks()
                 mirror_runtime = mirror_repository.runtime_state()
             except Exception:
-                mirror_rows, mirror_runtime = [], None
+                mirror_rows, mirror_marks, mirror_runtime = [], [], None
             if worker_config_state:
                 config = ExecutionConfig.from_resolved_state(
                     worker_config_state.get("resolved_config"), fallback=local_config
@@ -4320,6 +4322,90 @@ def render_paper_trading_page():
         )
         if comparison["trades"]:
             st.dataframe(pd.DataFrame(comparison["trades"]), use_container_width=True, hide_index=True)
+        with st.expander("BROAD FILTER EFFECTIVENESS", expanded=False):
+            analytics_window = st.selectbox(
+                "Analytics window",
+                ("TODAY", "PREVIOUS SESSION", "LAST 5 SESSIONS", "LAST 10 SESSIONS", "ALL MIRROR EXPERIMENT"),
+                index=4,
+                key="broad_filter_effectiveness_window",
+            )
+            effectiveness = broad_filter_effectiveness(
+                authoritative_events, raw_journal, captures, mirror_rows, mirror_marks,
+                mirror_runtime, window=analytics_window, now=now,
+            )
+            st.caption(
+                "Read-only exact-ID attribution · Option P&L uses persisted MIRROR fills · "
+                "LOW SAMPLE means fewer than 10 realized MIRROR trades"
+            )
+            summary_rows = [{
+                    "BROAD REASON": group["reason"], "N": group["n"],
+                    "MIRROR W / L": f'{group["mirror_wins"]} / {group["mirror_losses"]}',
+                    "WIN RATE": group["mirror_win_rate"], "NET P&L": group["net_pnl"],
+                    "PROFIT FACTOR": "∞" if group["profit_factor"] is not None and math.isinf(group["profit_factor"]) else group["profit_factor"],
+                    "AVG RETURN %": group["average_mirror_return"], "AVG MFE %": group["average_mfe"],
+                    "AVG GIVEBACK PTS": group["average_giveback"], "PEAK CAPITAL": group["peak_capital"],
+                    "EFFECTIVENESS": group["effectiveness"] + (" · LOW SAMPLE" if group["low_sample"] else ""),
+                } for group in effectiveness["groups"]]
+            if summary_rows:
+                st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+                largest = effectiveness["insights"]["largest_sample"]
+                insight_parts = [value for value in (
+                    (f'Most protective: {effectiveness["insights"]["most_protective"]["reason"]}'
+                     if effectiveness["insights"]["most_protective"] else None),
+                    (f'Most costly: {effectiveness["insights"]["most_costly"]["reason"]}'
+                     if effectiveness["insights"]["most_costly"] else None),
+                    (f'Largest sufficient sample: {largest["reason"]}' if largest and not largest["low_sample"] else None),
+                ) if value]
+                if insight_parts:
+                    st.caption(" · ".join(insight_parts))
+                st.caption("Accepted vs rejected benchmark")
+                st.dataframe(pd.DataFrame([{
+                    "GROUP": group["reason"], "N": group["n"],
+                    "AUTH WIN RATE %": group["authoritative_win_rate"],
+                    "MIRROR WIN RATE %": group["mirror_win_rate"], "NET P&L": group["net_pnl"],
+                    "PROFIT FACTOR": group["profit_factor"], "AVG RETURN %": group["average_mirror_return"],
+                    "AVG SPREAD %": group["average_entry_spread_percent"],
+                    "AVG DEBIT": group["average_debit"], "PEAK CAPITAL": group["peak_capital"],
+                } for group in effectiveness["comparison"]]), use_container_width=True, hide_index=True)
+                for group in effectiveness["groups"]:
+                    with st.expander(f'{group["reason"]} · N={group["n"]}', expanded=False):
+                        st.caption(
+                            f'Telemetry coverage: {group["telemetry_coverage"]:.1f}%' if group["telemetry_coverage"] is not None
+                            else "Telemetry coverage: unavailable"
+                        )
+                        if group["telemetry_coverage"] == 0:
+                            st.caption("TELEMETRY UNAVAILABLE · historical MFE/MAE is not inferred")
+                        st.caption(
+                            f'Auth winners rejected: {group["authoritative_winners_rejected"]} · '
+                            f'MIRROR W/L: {group["rejected_auth_winner_mirror_wins"]} / {group["rejected_auth_winner_mirror_losses"]} · '
+                            f'Auth losers rejected: {group["authoritative_losers_rejected"]} · '
+                            f'MIRROR W/L: {group["rejected_auth_loser_mirror_wins"]} / {group["rejected_auth_loser_mirror_losses"]}'
+                        )
+                        st.caption(
+                            f'Midpoint P&L: ${group["midpoint_pnl"]:+,.2f} · Actual P&L: ${group["net_pnl"]:+,.2f} · '
+                            f'Total modeled fill drag: ${group["total_fill_drag"]:,.2f} · '
+                            f'Profitable → final loser: {group["profitable_to_final_loser_count"]}'
+                        )
+                        st.caption(
+                            f'Cumulative debit: ${group["cumulative_debit"]:,.2f} · Peak simultaneous capital: ${group["peak_capital"]:,.2f} · '
+                            f'Return on peak: {group["return_on_peak_capital"] if group["return_on_peak_capital"] is not None else "—"} · '
+                            f'Delta coverage: {group["delta_coverage"] if group["delta_coverage"] is not None else "—"}% · '
+                            f'IV coverage: {group["iv_coverage"] if group["iv_coverage"] is not None else "—"}%'
+                        )
+                        st.dataframe(pd.DataFrame([{
+                            "Opportunity ID": trade["opportunity_id"], "Symbol": trade["symbol"],
+                            "Direction": trade["direction"], "Auth Return %": trade["authoritative_return"],
+                            "BROAD Disposition": trade["broad_reason"], "MIRROR Contract": trade["mirror_contract"],
+                            "MIRROR Return %": trade["mirror_return"], "MIRROR P&L": trade["mirror_pnl"],
+                            "MFE %": trade["mfe"], "MAE %": trade["mae"],
+                            "Peak Return %": trade["peak_return"], "Giveback Pts": trade["giveback"],
+                            "Debit": trade["debit"], "Entry Spread %": trade["entry_spread_percent"],
+                            "DTE": trade["dte"], "Moneyness %": trade["moneyness_percent"],
+                            "Delta": trade["delta"] if trade["delta"] is not None else "NOT PERSISTED",
+                            "Open Interest": trade["open_interest"], "Volume": trade["volume"],
+                        } for trade in group["trades"]]), use_container_width=True, hide_index=True)
+            else:
+                st.caption("No persisted MIRROR experiment trades exist in this window.")
 
     funnel = paper_execution_funnel(
         authoritative_events, raw_journal, captures, now
