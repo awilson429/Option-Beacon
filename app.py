@@ -88,6 +88,7 @@ from optionbeacon_snapshot import load_latest_results
 from execution_config import ExecutionConfig
 from paper_execution import paper_account_summary
 from paper_execution_repository import PaperExecutionRepository
+from winner_dna_dashboard import render_winner_dna
 from broad_filter_effectiveness import broad_filter_effectiveness
 from mirror_execution import MirrorExecutionRepository, mirror_summary
 from trade_repository import TradeRepository
@@ -4633,6 +4634,7 @@ def render_developer_tools(trade_state=None):
         st,
         (trade_state or {}).get("repository"),
     )
+    render_winner_dna(st, (trade_state or {}).get("repository"))
     render_authoritative_entry_funnel((trade_state or {}).get("repository"))
 
     st.markdown("### System Status")
