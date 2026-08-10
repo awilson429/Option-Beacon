@@ -92,7 +92,12 @@ from paper_execution_repository import PaperExecutionRepository
 from winner_dna_dashboard import render_winner_dna
 from broad_filter_effectiveness import broad_filter_effectiveness
 from mirror_execution import MirrorExecutionRepository, mirror_summary
-from trade_repository import TradeRepository, projected_trade_event_summaries
+from trade_repository import (
+    TradeRepository,
+    authoritative_session_dates,
+    authoritative_session_event_summaries,
+    projected_trade_event_summaries,
+)
 from option_position_tracker import (
     completed_position_rows,
     open_position_rows,
@@ -3987,14 +3992,10 @@ def render_outcome_trade_journal(
         "Trade Desk event history", (200, 500, 1000, 5000), index=1,
         key="trade_desk_event_history_limit",
     )
-    authoritative_events = (
+    activity_authoritative_events = (
         projected_trade_event_summaries(
             trade_repository, limit=trade_desk_event_limit
-        )
-        if trade_repository else []
-    )
-    activity_authoritative_events = (
-        trade_repository.list_trade_events(limit=50) if trade_repository else []
+        ) if trade_repository else []
     )
     activity_opportunities, activity_funnel_rows = [], []
     if trade_repository:
@@ -4041,7 +4042,10 @@ def render_outcome_trade_journal(
         if paper_available else authoritative_positions_markup(authoritative_open)
     )
     positions_collapsed = not (paper_rows if paper_available else authoritative_open)
-    sessions = available_session_dates(authoritative_events, now)
+    sessions = (
+        authoritative_session_dates(trade_repository, now)
+        if trade_repository else available_session_dates([], now)
+    )
     requested_session = str(st.query_params.get("desk_session", "TODAY")).upper()
     selected_session = (
         "PREVIOUS"
@@ -4051,11 +4055,28 @@ def render_outcome_trade_journal(
     session_date = (
         sessions["previous"] if selected_session == "PREVIOUS" else sessions["today"]
     )
+    authoritative_events = (
+        authoritative_session_event_summaries(trade_repository, session_date)
+        if trade_repository else []
+    )
     comparison = trade_comparison_model(
         authoritative_events, paper_journal, paper_captures, option_positions,
         session_date=session_date, mirror_rows=mirror_rows,
         mirror_runtime=mirror_runtime,
     )
+    persisted_session_entries = {
+        str(event.get("opportunity_id") or event.get("trade_id"))
+        for event in authoritative_events
+        if event.get("event_type") == "TRADE_ENTERED"
+        and (event.get("opportunity_id") or event.get("trade_id"))
+    }
+    LOGGER.info(json.dumps({
+        "event": "trade_desk_session_reconciliation",
+        "session_date": str(session_date),
+        "persisted_authoritative_entries": len(persisted_session_entries),
+        "comparison_authoritative_trades": comparison["authoritative"]["trades"],
+        "reconciled": comparison["authoritative"]["trades"] == len(persisted_session_entries),
+    }, sort_keys=True))
     dashboard = dashboard_shell_markup(
         status=status_strip_markup(status),
         kpis=kpi_row_markup(kpis),
