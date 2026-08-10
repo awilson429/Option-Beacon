@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 import math
 import os
 from datetime import time
@@ -142,6 +143,8 @@ from trade_desk_compact import (
     kpi_row_markup,
     more_stats_markup,
     paper_active_row,
+    paper_ledger_reconciliation,
+    paper_position_provenance,
     paper_position_rows,
     paper_position_events,
     performance_panel_markup,
@@ -179,6 +182,9 @@ from trade_replay import (
     replay_summary,
     replay_symbols,
 )
+
+
+LOGGER = logging.getLogger(__name__)
 from trade_storage import (
     close_position,
     load_closed_positions,
@@ -3962,7 +3968,20 @@ def render_outcome_trade_journal(
     authoritative_open = [
         row for row in authoritative["rows"] if row["Status"] == "OPEN"
     ]
-    paper_rows = paper_position_rows(option_positions, config, now)
+    paper_provenance = paper_position_provenance(paper_captures, paper_journal)
+    paper_rows = paper_position_rows(
+        option_positions, config, now, provenance=paper_provenance
+    )
+    reconciliation = paper_ledger_reconciliation(option_positions, paper_provenance)
+    LOGGER.info(json.dumps({
+        "event": "trade_desk_ledger_reconciliation",
+        **reconciliation,
+    }, sort_keys=True))
+    if reconciliation["unknown_provenance"]:
+        LOGGER.warning(json.dumps({
+            "event": "paper_position_provenance_unknown",
+            "count": reconciliation["unknown_provenance"],
+        }, sort_keys=True))
     summary = journal_summary_metrics(records) if records else None
     trade_desk_event_limit = st.selectbox(
         "Trade Desk event history", (200, 500, 1000, 5000), index=1,

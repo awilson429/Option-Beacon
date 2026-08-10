@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from html import escape
 import math
@@ -97,6 +98,7 @@ def dashboard_kpi_model(scorecard, paper_summary, config, *, paper_available):
     if paper_available:
         return {
             "source": "PAPER",
+            "account_scope": "ALL RECORDED PROFILES / ALL SESSIONS",
             "current_equity": paper_summary["current_equity"],
             "today_pnl": paper_summary["today_pnl"],
             "open_positions": paper_summary["open_positions"],
@@ -157,8 +159,12 @@ def kpi_row_markup(model):
         f'of ${model["max_deployed_capital"]:,.0f} max'
         if model["max_deployed_capital"] is not None else model["source"]
     )
+    paper_scope = (
+        f'{model["source"]} · {model["account_scope"]}'
+        if model.get("account_scope") else model["source"]
+    )
     cards = (
-        ("CURRENT EQUITY", money(model["current_equity"]), model["source"], "neutral"),
+        ("CURRENT EQUITY", money(model["current_equity"]), paper_scope, "neutral"),
         ("OPEN POSITIONS", str(model["open_positions"]), positions_detail, "neutral"),
         ("TODAY'S P&L", money(pnl, signed=True), "Realized + unrealized", pnl_treatment),
         ("DAILY LOSS LEFT", money(model["daily_loss_remaining"]), "Remaining", "neutral"),
@@ -245,15 +251,86 @@ def more_stats_markup(scorecard, paper_summary, *, paper_available):
     )
 
 
-def paper_position_rows(positions, config, now):
+def paper_position_provenance(captures, journal_rows):
+    """Classify PAPER rows from already-loaded bounded capture/journal projections."""
+    captures_by_trade = {
+        str(capture.trade_id): capture for capture in captures
+        if getattr(capture, "trade_id", None)
+    }
+    decisions = {}
+    for journal in sorted(journal_rows, key=lambda row: str(row.get("created_at") or "")):
+        try:
+            metadata = json.loads(journal.get("metadata_json") or "{}")
+        except (TypeError, ValueError):
+            metadata = {}
+        if metadata.get("journal_type") not in (None, "ENTRY_DECISION"):
+            continue
+        decisions[str(journal.get("trade_id"))] = (journal, metadata)
+    result = {}
+    for trade_id, capture in captures_by_trade.items():
+        journal, metadata = decisions.get(trade_id, ({}, {}))
+        profile = str(metadata.get("simulation_profile") or "").upper()
+        lane = (
+            "BROAD PAPER" if profile == "BROAD" else
+            "SAFE PAPER" if profile == "SAFE" else
+            "LEGACY PAPER" if capture else
+            "UNKNOWN PROVENANCE"
+        )
+        result[trade_id] = {
+            "lane": lane,
+            "simulation_profile": profile or "LEGACY_UNLABELED",
+            "source_signal_id": str(getattr(capture, "source_signal_id", "") or ""),
+            "source_strategy": str(getattr(capture, "source", "") or "UNKNOWN"),
+            "execution_mode": str(getattr(capture, "execution_type", "") or "PAPER"),
+            "scanner_id": str(journal.get("scanner_id") or "UNKNOWN"),
+            "authoritative_association": "SOURCE ID RECORDED" if getattr(capture, "source_signal_id", None) else "UNKNOWN",
+        }
+    return result
+
+
+def paper_ledger_reconciliation(positions, provenance):
+    open_positions = [position for position in positions if position.status == "OPEN"]
+    lanes = {}
+    identities = {}
+    unknown = 0
+    for position in open_positions:
+        details = provenance.get(str(position.trade_id)) or {
+            "lane": "UNKNOWN PROVENANCE", "source_signal_id": "",
+        }
+        lane = details["lane"]
+        lanes[lane] = lanes.get(lane, 0) + 1
+        unknown += int(lane == "UNKNOWN PROVENANCE")
+        source = details.get("source_signal_id")
+        if source:
+            identities[(lane, source)] = identities.get((lane, source), 0) + 1
+    return {
+        "total_paper_open": len(open_positions),
+        "broad_open": lanes.get("BROAD PAPER", 0),
+        "other_legacy_open": sum(count for lane, count in lanes.items()
+                                 if lane not in {"BROAD PAPER", "UNKNOWN PROVENANCE"}),
+        "unknown_provenance": unknown,
+        "duplicate_source_identities": sum(count - 1 for count in identities.values() if count > 1),
+        "lane_counts": dict(sorted(lanes.items())),
+    }
+
+
+def paper_position_rows(positions, config, now, provenance=None):
+    provenance = provenance or {}
     rows = []
     for position in sorted(
         (item for item in positions if item.status == "OPEN"),
         key=lambda item: item.entry_time, reverse=True,
     ):
         row = paper_active_row(position, now)
+        source = provenance.get(str(position.trade_id)) or {
+            "lane": "UNKNOWN PROVENANCE", "simulation_profile": "UNKNOWN",
+            "source_signal_id": "", "scanner_id": "UNKNOWN",
+            "source_strategy": "UNKNOWN", "execution_mode": position.execution_mode,
+            "authoritative_association": "UNKNOWN",
+        }
         rows.append({
             **row,
+            **source,
             "type": str(position.option_type or position.direction).upper(),
             "strike_exp": f'{position.strike:g} {position.expiration}',
             "stop": position.entry_mid * (1 + config.stop_loss_percent / 100),
@@ -267,9 +344,10 @@ def paper_position_rows(positions, config, now):
 def positions_table_markup(rows):
     if not rows:
         return compact_empty_markup(
-            "Open Positions", "0", extra_class="ob-open-positions-empty"
+            "Open Positions · PAPER ACCOUNT — ALL RECORDED PROFILES", "0",
+            extra_class="ob-open-positions-empty"
         )
-    headers = ("SYMBOL", "TYPE", "CONTRACT", "ENTRY", "CURRENT", "P&L $", "P&L %", "HOLD", "STATUS", "DETAILS")
+    headers = ("SOURCE / LANE", "SYMBOL", "TYPE", "CONTRACT", "ENTRY", "CURRENT", "P&L $", "P&L %", "HOLD", "STATUS", "DETAILS")
     head = "".join(f"<th>{escape(value)}</th>" for value in headers)
     body = []
     for row in rows:
@@ -277,10 +355,14 @@ def positions_table_markup(rows):
         detail = (
             f'Qty {row["quantity"]} · Strike/expiry {row["strike_exp"]} · Stop ${row["stop"]:.2f} · '
             f'Target ${row["target"]:.2f} · MFE {row["mfe"]:+.2f}% · MAE {row["mae"]:+.2f}% · '
-            f'Score {row["score"] if row["score"] is not None else "—"}'
+            f'Score {row["score"] if row["score"] is not None else "—"} · '
+            f'Source signal {row["source_signal_id"] or "UNKNOWN"} · Profile {row["simulation_profile"]} · '
+            f'Worker {row["scanner_id"]} · Strategy {row["source_strategy"]} · '
+            f'Execution {row["execution_mode"]} · Association {row["authoritative_association"]}'
         )
         body.append(
             '<tr>'
+            f'<td><strong>{escape(row["lane"])}</strong></td>'
             f'<td><strong>{escape(row["symbol"])}</strong></td><td>{escape(row["type"])}</td>'
             f'<td>{escape(row["contract"])}</td><td>${row["entry"]:.2f}</td><td>${row["current"]:.2f}</td>'
             f'<td class="ob-value-{treatment}">${row["pnl_dollars"]:+,.2f}</td>'
@@ -289,7 +371,9 @@ def positions_table_markup(rows):
             f'<td><details><summary>View</summary><div>{escape(detail)}</div></details></td></tr>'
         )
     table = f'<div class="ob-position-scroll"><table class="ob-position-table"><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table></div>'
-    return panel_markup("Open Positions", table)
+    scope = ('<p class="ob-ledger-scope">Account scope across all recorded PAPER profiles and sessions. '
+             'The comparison below is separately restricted to the selected authoritative session.</p>')
+    return panel_markup("Open Positions · PAPER ACCOUNT — ALL RECORDED PROFILES", scope + table)
 
 
 def activity_panel_markup(rows, *, show_title=True):

@@ -222,6 +222,15 @@ def run_paper_execution(
                     "quantity": position.quantity, "debit": position.total_entry_cost,
                     "disposition": "OPENED", "reason": "ELIGIBLE",
                 }, sort_keys=True))
+                LOGGER.info(json.dumps({
+                    "event": "paper_position_opened", "scanner_id": scanner_id,
+                    "run_number": run_number, "execution_lane": "BROAD PAPER",
+                    "simulation_profile": config.simulation_profile,
+                    "position_id": position.trade_id,
+                    "source_signal_id": trade.source_signal_id,
+                    "opportunity_id": result.get("_authoritative_entry_id"),
+                    "symbol": position.ticker, "option_symbol": position.option_symbol,
+                }, sort_keys=True))
         except Exception as exc:
             LOGGER.exception(json.dumps({
                 "event": "broad_authoritative_handoff", "scanner_id": scanner_id,

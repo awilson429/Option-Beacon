@@ -112,6 +112,7 @@ def test_authoritative_daily_summary_and_paper_metrics_remain_separate():
     assert model["authoritative"]["average_return"] == pytest.approx((.88 + .76 - .41) / 3)
     assert {key: value for key, value in model["paper"].items() if key != "participation_rate"} == {
         "evaluated": 2, "opened": 1, "rejected": 1, "pending": 1,
+        "accepted_position_missing": 0,
         "closed": 1, "wins": 1, "losses": 0, "pnl": 42.5,
     }
     assert model["paper"]["participation_rate"] == pytest.approx(100 / 3)
