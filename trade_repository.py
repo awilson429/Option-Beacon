@@ -9,7 +9,7 @@ import os
 import sqlite3
 import time
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -53,7 +53,7 @@ def repository_event_api_status(repository) -> dict:
 
 
 def projected_trade_event_summaries(repository, *, limit=500, event_type=None,
-                                    start_at=None, end_at=None):
+                                    event_types=None, start_at=None, end_at=None):
     """Compatibility-safe projected event read for mixed deployment restarts.
 
     A coherent deployment delegates to the class API. The fallback intentionally
@@ -62,8 +62,13 @@ def projected_trade_event_summaries(repository, *, limit=500, event_type=None,
     """
     method = getattr(repository, "list_trade_event_summaries", None)
     if callable(method):
-        return method(limit=limit, event_type=event_type,
-                      start_at=start_at, end_at=end_at)
+        options = {
+            "limit": limit, "event_type": event_type,
+            "start_at": start_at, "end_at": end_at,
+        }
+        if event_types:
+            options["event_types"] = event_types
+        return method(**options)
     LOGGER.error(json.dumps({
         "event": "trade_repository_event_api_compatibility_fallback",
         **repository_event_api_status(repository),
@@ -75,6 +80,10 @@ def projected_trade_event_summaries(repository, *, limit=500, event_type=None,
     clauses, params = [], []
     if event_type:
         clauses.append("event_type=?"); params.append(str(event_type))
+    if event_types:
+        values = tuple(str(value) for value in event_types)
+        clauses.append(f"event_type IN ({','.join('?' for _ in values)})")
+        params.extend(values)
     if start_at is not None:
         clauses.append("event_timestamp>=?"); params.append(utc_iso(start_at))
     if end_at is not None:
@@ -86,6 +95,49 @@ def projected_trade_event_summaries(repository, *, limit=500, event_type=None,
     with repository.connection() as connection:
         rows = repository._fetchall(connection, query, tuple(params))
     return [repository._decode_trade_event(row) for row in rows]
+
+
+def authoritative_session_bounds(session_date, timezone_name="America/New_York"):
+    """Return one local calendar session as an exclusive UTC interval."""
+    value = session_date if isinstance(session_date, date) else date.fromisoformat(str(session_date))
+    local = ZoneInfo(timezone_name)
+    start = datetime.combine(value, datetime.min.time(), tzinfo=local)
+    return start.astimezone(UTC), (start + timedelta(days=1)).astimezone(UTC)
+
+
+def authoritative_session_event_summaries(repository, session_date):
+    """Read a complete projected session after applying SQL time predicates."""
+    start_at, end_exclusive = authoritative_session_bounds(session_date)
+    end_inclusive = end_exclusive - timedelta(microseconds=1)
+    event_types = ("TRADE_ENTERED", "TRADE_CLOSED")
+    count = repository.count_trade_events(
+        event_types=event_types, start_at=start_at, end_at=end_inclusive
+    )
+    if not count:
+        return []
+    return projected_trade_event_summaries(
+        repository, limit=count, event_types=event_types,
+        start_at=start_at, end_at=end_inclusive,
+    )
+
+
+def authoritative_session_dates(repository, now):
+    """Return today and the latest earlier ET date containing an authoritative entry."""
+    current = now if isinstance(now, datetime) else datetime.fromisoformat(str(now))
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=UTC)
+    today = current.astimezone(ZoneInfo("America/New_York")).date()
+    today_start, _ = authoritative_session_bounds(today)
+    previous_entry = projected_trade_event_summaries(
+        repository, limit=1, event_type="TRADE_ENTERED",
+        end_at=today_start - timedelta(microseconds=1),
+    )
+    previous = (
+        parse_utc(previous_entry[0]["event_timestamp"])
+        .astimezone(ZoneInfo("America/New_York")).date()
+        if previous_entry else None
+    )
+    return {"today": today, "previous": previous}
 
 
 def database_connect_timeout_seconds(value=None) -> int:
@@ -901,7 +953,7 @@ class TradeRepository:
             ]
 
     def list_trade_event_summaries(self, *, limit=500, event_type=None,
-                                   start_at=None, end_at=None) -> list[dict]:
+                                   event_types=None, start_at=None, end_at=None) -> list[dict]:
         """Return projected lifecycle fields with optional server-side bounds."""
         query = """SELECT id,trade_id,opportunity_id,symbol,direction,setup,event_type,
             event_timestamp,underlying_price,entry_price,exit_price,current_return,
@@ -910,6 +962,10 @@ class TradeRepository:
         clauses, params = [], []
         if event_type:
             clauses.append("event_type=?"); params.append(str(event_type))
+        if event_types:
+            values = tuple(str(value) for value in event_types)
+            clauses.append(f"event_type IN ({','.join('?' for _ in values)})")
+            params.extend(values)
         if start_at is not None:
             clauses.append("event_timestamp>=?"); params.append(utc_iso(start_at))
         if end_at is not None:
@@ -921,10 +977,15 @@ class TradeRepository:
         with self.connection() as connection:
             return [self._decode_trade_event(row) for row in self._fetchall(connection, query, tuple(params))]
 
-    def count_trade_events(self, *, event_type=None, start_at=None, end_at=None) -> int:
+    def count_trade_events(self, *, event_type=None, event_types=None,
+                           start_at=None, end_at=None) -> int:
         query, clauses, params = "SELECT COUNT(*) AS count FROM authoritative_trade_events", [], []
         if event_type:
             clauses.append("event_type=?"); params.append(str(event_type))
+        if event_types:
+            values = tuple(str(value) for value in event_types)
+            clauses.append(f"event_type IN ({','.join('?' for _ in values)})")
+            params.extend(values)
         if start_at is not None:
             clauses.append("event_timestamp>=?"); params.append(utc_iso(start_at))
         if end_at is not None:
