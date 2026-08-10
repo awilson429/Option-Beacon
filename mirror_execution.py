@@ -177,7 +177,8 @@ class MirrorExecutionRepository:
             spread_dollars,spread_percent,open_interest,option_volume,total_debit,
             entry_event_at,opened_at,status,disposition_code,exit_quote_at,
             exit_bid,exit_ask,exit_mid,exit_fill,realized_pnl,
-            realized_return_percent,updated_at,metadata_json
+            realized_return_percent,authoritative_exit_reason,mfe_pct,mae_pct,
+            peak_return_pct,peak_unrealized_pnl,updated_at,metadata_json
             FROM mirror_execution_trades WHERE opportunity_id IN ({placeholders})
             ORDER BY entry_event_at,opportunity_id LIMIT ?"""
         with self.repository.connection() as connection:
@@ -215,6 +216,26 @@ class MirrorExecutionRepository:
             query += " AND observed_at>=?"
             params.append(utc_iso(observed_after) if isinstance(observed_after, datetime) else str(observed_after))
         query += " GROUP BY mirror_trade_id ORDER BY mirror_trade_id"
+        with self.repository.connection() as connection:
+            return self.repository._fetchall(connection, query, tuple(params))
+
+    def analytics_marks(self, mirror_trade_ids, *, observed_after=None, limit=20000):
+        """Return bounded persisted marks for exact MIRROR trade identities."""
+        identities = sorted({str(value) for value in mirror_trade_ids if value})
+        if not identities:
+            return []
+        placeholders = ",".join("?" for _ in identities)
+        query = f"""SELECT mark_id,mirror_trade_id,opportunity_id,symbol,option_symbol,
+            observed_at,underlying_price,bid,ask,midpoint,conservative_mark,entry_fill,
+            return_pct,unrealized_pnl,spread_dollars,spread_percent,mfe_pct,mae_pct,
+            peak_return_pct,peak_unrealized_pnl,time_since_entry_seconds,update_status
+            FROM mirror_execution_marks WHERE mirror_trade_id IN ({placeholders})"""
+        params = list(identities)
+        if observed_after is not None:
+            query += " AND observed_at>=?"
+            params.append(utc_iso(observed_after) if isinstance(observed_after, datetime) else str(observed_after))
+        query += " ORDER BY observed_at,mark_id LIMIT ?"
+        params.append(int(limit))
         with self.repository.connection() as connection:
             return self.repository._fetchall(connection, query, tuple(params))
 

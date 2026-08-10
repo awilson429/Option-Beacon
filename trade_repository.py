@@ -1500,9 +1500,14 @@ class TradeRepository:
             row = self._fetchone(connection, "SELECT * FROM intelligence_setup_snapshots WHERE opportunity_id=?", (opportunity_id,))
         return self._decode_intelligence(row, "snapshot_json", "snapshot")
 
-    def list_intelligence_snapshots(self, *, limit=5000):
+    def list_intelligence_snapshots(self, *, limit=5000, start_at=None):
         with self.connection() as connection:
-            rows = self._fetchall(connection, "SELECT opportunity_id,snapshot_json,schema_version,created_at FROM intelligence_setup_snapshots ORDER BY created_at DESC,opportunity_id ASC LIMIT ?", (int(limit),))
+            query = "SELECT opportunity_id,snapshot_json,schema_version,created_at FROM intelligence_setup_snapshots"
+            params = []
+            if start_at is not None:
+                query += " WHERE created_at>=?"; params.append(utc_iso(start_at))
+            query += " ORDER BY created_at DESC,opportunity_id ASC LIMIT ?"; params.append(int(limit))
+            rows = self._fetchall(connection, query, tuple(params))
         return [self._decode_intelligence(row, "snapshot_json", "snapshot") for row in rows]
 
     def upsert_intelligence_outcome(self, opportunity_id, outcome, *, schema_version=1):
@@ -1520,9 +1525,14 @@ class TradeRepository:
             row = self._fetchone(connection, "SELECT * FROM intelligence_outcome_labels WHERE opportunity_id=?", (opportunity_id,))
         return self._decode_intelligence(row, "outcome_json", "outcome")
 
-    def list_intelligence_outcomes(self, *, limit=5000):
+    def list_intelligence_outcomes(self, *, limit=5000, start_at=None):
         with self.connection() as connection:
-            rows = self._fetchall(connection, "SELECT opportunity_id,outcome_json,schema_version,updated_at FROM intelligence_outcome_labels ORDER BY updated_at DESC,opportunity_id ASC LIMIT ?", (int(limit),))
+            query = "SELECT opportunity_id,outcome_json,schema_version,updated_at FROM intelligence_outcome_labels"
+            params = []
+            if start_at is not None:
+                query += " WHERE updated_at>=?"; params.append(utc_iso(start_at))
+            query += " ORDER BY updated_at DESC,opportunity_id ASC LIMIT ?"; params.append(int(limit))
+            rows = self._fetchall(connection, query, tuple(params))
         return [self._decode_intelligence(row, "outcome_json", "outcome") for row in rows]
 
     def record_intelligence_shadow_event(self, event_type, payload, *, opportunity_id=None, model_version=None):

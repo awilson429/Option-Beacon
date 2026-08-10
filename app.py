@@ -90,6 +90,7 @@ from execution_config import ExecutionConfig
 from paper_execution import paper_account_summary
 from paper_execution_repository import PaperExecutionRepository
 from winner_dna_dashboard import render_winner_dna
+from option_translation_autopsy_dashboard import render_option_translation_autopsy
 from broad_filter_effectiveness import broad_filter_effectiveness
 from mirror_execution import MirrorExecutionRepository, mirror_summary
 from trade_repository import (
@@ -4689,6 +4690,7 @@ def render_developer_tools(trade_state=None):
         (trade_state or {}).get("repository"),
     )
     render_winner_dna(st, (trade_state or {}).get("repository"))
+    render_option_translation_autopsy(st, (trade_state or {}).get("repository"))
     render_authoritative_entry_funnel((trade_state or {}).get("repository"))
 
     st.markdown("### System Status")
