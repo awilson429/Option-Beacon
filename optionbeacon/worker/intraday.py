@@ -10,10 +10,12 @@ import argparse
 import json
 import logging
 import os
+import re
 import time
 from datetime import datetime, timedelta, timezone
+from urllib.error import HTTPError
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 from finnhub_universe import FINNHUB_BASE_URL, finnhub_api_key
@@ -30,9 +32,43 @@ SCANNER_ID = "index-intraday-paper"
 DEFAULT_INTERVAL_SECONDS = 60
 
 
+class ProviderRequestFailure(RuntimeError):
+    def __init__(self, provider, stage, symbol, endpoint_path, *, http_status=None,
+                 exception_class="ProviderError"):
+        super().__init__(f"{provider} request failed during {stage}")
+        self.provider = provider
+        self.stage = stage
+        self.symbol = symbol
+        self.endpoint_path = endpoint_path
+        self.http_status = http_status
+        self.exception_class = exception_class
+
+
 def _event(event, **fields):
     LOGGER.info(json.dumps({"event": event, "scanner_id": SCANNER_ID, **fields},
                            sort_keys=True, default=str))
+
+
+def _status_from_error(error):
+    status = getattr(error, "code", None)
+    if status is not None:
+        return int(status)
+    match = re.search(r"HTTP Error\s+(\d{3})", str(error), re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def _provider_failure(provider, stage, symbol, endpoint_path, error):
+    status = _status_from_error(error)
+    exception_class = "HTTPError" if isinstance(error, str) and status else type(error).__name__
+    failure = error if isinstance(error, ProviderRequestFailure) else ProviderRequestFailure(
+        provider, stage, symbol, endpoint_path,
+        http_status=status, exception_class=exception_class,
+    )
+    _event("intraday_provider_request_failed", provider=failure.provider,
+           stage=failure.stage, symbol=failure.symbol,
+           endpoint_path=failure.endpoint_path, http_status=failure.http_status,
+           exception_class=failure.exception_class)
+    return failure
 
 
 def _quote_result(provider, option_symbol):
@@ -70,6 +106,9 @@ def _manage_positions(ledger, positions, bars, quote_provider, now):
                 calls += 1
             quote, error = quote_cache[contract]
             if error or not quote:
+                if error:
+                    _provider_failure("Tradier", "option_quote", position["symbol"],
+                                      "/markets/quotes", error)
                 ledger.record_update_failure(trade_id, error or "Option quote unavailable", now=now)
                 _event("intraday_position_update_failed", opportunity_id=position["opportunity_id"],
                        trade_id=trade_id, symbol=position["symbol"], execution_variant=variant,
@@ -129,8 +168,16 @@ def finnhub_minute_bars(symbol, *, now=None, lookback_minutes=240):
     params = {"symbol": symbol, "resolution": "1",
               "from": int((now - timedelta(minutes=lookback_minutes)).timestamp()),
               "to": int(now.timestamp()), "token": finnhub_api_key()}
-    with urlopen(f"{FINNHUB_BASE_URL}/stock/candle?{urlencode(params)}", timeout=10) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+    request = Request(f"{FINNHUB_BASE_URL}/stock/candle?{urlencode(params)}",
+                      headers={"User-Agent": "OptionBeacon/1.0"})
+    try:
+        with urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        raise ProviderRequestFailure(
+            "Finnhub", "minute_bars", symbol, "/stock/candle",
+            http_status=exc.code, exception_class=type(exc).__name__,
+        ) from exc
     return [{"timestamp": datetime.fromtimestamp(stamp, timezone.utc).astimezone(EASTERN),
              "open": opened, "high": high, "low": low, "close": close, "volume": volume}
             for stamp, opened, high, low, close, volume in zip(payload.get("t", []), payload.get("o", []),
@@ -146,11 +193,26 @@ def run_intraday_cycle(repository, *, bar_provider=finnhub_minute_bars,
         return 0
     ledger = None
     calls = 0
+    failure_stage = "intraday_repository_initialization"
     try:
         ledger = IntradayRepository(repository)
         _event("intraday_cycle_started")
+        failure_stage = "open_positions_query"
         open_positions = ledger.list_trades(status="OPEN", limit=10000)
-        bars = {symbol: bar_provider(symbol, now=now) for symbol in UNIVERSE}; calls += 2
+        failure_stage = "minute_bars"
+        bars = {}
+        provider_failures = []
+        for symbol in UNIVERSE:
+            calls += 1
+            try:
+                bars[symbol] = bar_provider(symbol, now=now)
+            except Exception as exc:
+                provider_failures.append(_provider_failure(
+                    "Finnhub", "minute_bars", symbol, "/stock/candle", exc
+                ))
+        if provider_failures:
+            raise provider_failures[0]
+        failure_stage = "position_management"
         calls += _manage_positions(ledger, open_positions, bars, quote_provider, now)
         for symbol, peer in (("SPY", "QQQ"), ("QQQ", "SPY")):
             candidate = detect_candidate(symbol, bars[symbol], bars[peer], now=now)
@@ -173,15 +235,22 @@ def run_intraday_cycle(repository, *, bar_provider=finnhub_minute_bars,
             ledger.transition_signal(candidate.opportunity_id, "ARMED", "TRIGGERED")
             _event("intraday_triggered", opportunity_id=candidate.opportunity_id,
                    symbol=symbol, setup=candidate.setup, direction=candidate.direction)
+            failure_stage = "option_expirations"
             expirations, error = option_expirations(symbol); calls += 1
-            if error: continue
+            if error:
+                raise _provider_failure("Tradier", "option_expirations", symbol,
+                                        "/markets/options/expirations", error)
             chains = []
             for expiration in expirations:
                 try: dte = (datetime.fromisoformat(expiration).date() - now.astimezone(EASTERN).date()).days
                 except ValueError: continue
                 if dte in (0, 1):
+                    failure_stage = "option_chain"
                     rows, chain_error = option_chain(symbol, expiration); calls += 1
-                    if not chain_error: chains.extend(rows)
+                    if chain_error:
+                        raise _provider_failure("Tradier", "option_chain", symbol,
+                                                "/markets/options/chains", chain_error)
+                    chains.extend(rows)
             opened_any = False
             for contract in select_contracts(chains, candidate.option_type, candidate.price, now.astimezone(EASTERN).date()):
                 opened = ledger.open_variants(candidate, contract, now=now, config=ManagedConfig())
@@ -204,15 +273,27 @@ def run_intraday_cycle(repository, *, bar_provider=finnhub_minute_bars,
         return 0
     except Exception as exc:
         duration = (time.perf_counter() - started) * 1000
+        failure = exc if isinstance(exc, ProviderRequestFailure) else None
         if ledger is not None:
             try:
                 ledger.save_runtime_state(SCANNER_ID, status="ERROR", symbols_processed=0,
                                           call_count=calls, duration_ms=duration,
-                                          error=type(exc).__name__, now=now)
+                                          error=(failure.exception_class if failure
+                                                 else type(exc).__name__), now=now)
             except Exception:
                 LOGGER.exception("Could not persist intraday runtime failure state")
-        LOGGER.exception(json.dumps({"event": "intraday_cycle_failed", "scanner_id": SCANNER_ID,
-                                     "error": type(exc).__name__}, sort_keys=True))
+        failure_payload = json.dumps({
+            "event": "intraday_cycle_failed", "scanner_id": SCANNER_ID,
+            "error": failure.exception_class if failure else type(exc).__name__,
+            "failure_stage": failure.stage if failure else failure_stage,
+            "provider": failure.provider if failure else None,
+            "http_status": failure.http_status if failure else None,
+        }, sort_keys=True)
+        if failure:
+            # HTTPError tracebacks include the requested URL, which contains Finnhub's token.
+            LOGGER.error(failure_payload)
+        else:
+            LOGGER.exception(failure_payload)
         return 1
     finally:
         repository.release_scan_lock(SCANNER_ID, owner)
