@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import sqlite3
+import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,6 +21,7 @@ DEFAULT_DB_CONNECT_TIMEOUT_SECONDS = 10
 MIN_DB_CONNECT_TIMEOUT_SECONDS = 1
 MAX_DB_CONNECT_TIMEOUT_SECONDS = 60
 UTC = timezone.utc
+LOGGER = logging.getLogger(__name__)
 
 
 def verbose_storage_diagnostics_enabled(value=None) -> bool:
@@ -27,6 +30,11 @@ def verbose_storage_diagnostics_enabled(value=None) -> bool:
         if value is None
         else value
     )
+    return str(raw or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def query_egress_diagnostics_enabled(value=None) -> bool:
+    raw = os.getenv("OPTIONBEACON_QUERY_EGRESS_DIAGNOSTICS", "false") if value is None else value
     return str(raw or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
@@ -205,9 +213,22 @@ class TradeRepository:
         return dict(row) if row else None
 
     def _fetchall(self, connection, query, params=()):
+        started = time.perf_counter()
         cursor = self._execute(connection, query, params)
         rows = [dict(row) for row in cursor.fetchall()]
         cursor.close()
+        if query_egress_diagnostics_enabled():
+            normalized = " ".join(str(query).split())
+            LOGGER.info(json.dumps({
+                "event": "database_read_result",
+                "query_fingerprint": hashlib.sha256(normalized.encode()).hexdigest()[:12],
+                "operation": normalized.split(" ", 1)[0].upper() if normalized else "UNKNOWN",
+                "rows_returned": len(rows),
+                "approx_result_bytes": sum(
+                    len(str(key)) + len(str(value)) for row in rows for key, value in row.items()
+                ),
+                "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+            }, sort_keys=True))
         return rows
 
     def _table_columns(self, connection, table_name):
@@ -1339,7 +1360,7 @@ class TradeRepository:
 
     def list_intelligence_snapshots(self, *, limit=5000):
         with self.connection() as connection:
-            rows = self._fetchall(connection, "SELECT * FROM intelligence_setup_snapshots ORDER BY created_at DESC,opportunity_id ASC LIMIT ?", (int(limit),))
+            rows = self._fetchall(connection, "SELECT opportunity_id,snapshot_json,schema_version,created_at FROM intelligence_setup_snapshots ORDER BY created_at DESC,opportunity_id ASC LIMIT ?", (int(limit),))
         return [self._decode_intelligence(row, "snapshot_json", "snapshot") for row in rows]
 
     def upsert_intelligence_outcome(self, opportunity_id, outcome, *, schema_version=1):
@@ -1359,7 +1380,7 @@ class TradeRepository:
 
     def list_intelligence_outcomes(self, *, limit=5000):
         with self.connection() as connection:
-            rows = self._fetchall(connection, "SELECT * FROM intelligence_outcome_labels ORDER BY updated_at DESC,opportunity_id ASC LIMIT ?", (int(limit),))
+            rows = self._fetchall(connection, "SELECT opportunity_id,outcome_json,schema_version,updated_at FROM intelligence_outcome_labels ORDER BY updated_at DESC,opportunity_id ASC LIMIT ?", (int(limit),))
         return [self._decode_intelligence(row, "outcome_json", "outcome") for row in rows]
 
     def record_intelligence_shadow_event(self, event_type, payload, *, opportunity_id=None, model_version=None):

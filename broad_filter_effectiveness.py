@@ -221,7 +221,8 @@ def broad_filter_effectiveness(authoritative_events, broad_journal, broad_captur
         reason = str(decision.get("reason_code") or "UNKNOWN DISPOSITION")
         accepted = bool((decision or {}).get("accepted")) or reason in ACCEPTED_REASONS
         marks = marks_by_trade.get(str((mirror or {}).get("mirror_trade_id")), [])
-        valid_marks = [mark for mark in marks if _number(mark.get("return_pct")) is not None]
+        valid_marks = [mark for mark in marks if _number(mark.get("return_pct")) is not None
+                       or (_number(mark.get("valid_mark_count")) or 0) > 0]
         peak_values = [_number(mark.get("peak_return_pct")) for mark in valid_marks]
         mfe_values = [_number(mark.get("mfe_pct")) for mark in valid_marks]
         mae_values = [_number(mark.get("mae_pct")) for mark in valid_marks]

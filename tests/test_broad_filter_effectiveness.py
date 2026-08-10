@@ -204,5 +204,6 @@ def test_analytics_and_streamlit_are_read_only_and_have_no_provider_calls():
         assert forbidden not in analytics_source
     for forbidden in ("record_disposition(", "update_mark(", "run_mirror_execution(", ".save("):
         assert forbidden not in ui_source
-    assert "mirror_repository.marks()" in ui_source
+    assert "mirror_repository.mark_summaries(" in ui_source
+    assert "mirror_repository.marks()" not in ui_source
     assert "BROAD FILTER EFFECTIVENESS" in ui_source

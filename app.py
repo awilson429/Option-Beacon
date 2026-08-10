@@ -233,7 +233,6 @@ def logo_source():
 
 def is_market_open_now():
     now = eastern_now()
-
     try:
         import pandas_market_calendars as mcal
 
@@ -4204,6 +4203,10 @@ def render_paper_trading_page():
         "Authoritative simulated account, positions, trade history, and execution decisions.",
     )
     now = eastern_now()
+    paper_history_limit = st.selectbox(
+        "PAPER history rows", (100, 500, 1000, 5000), index=1,
+        key="paper_history_row_limit",
+    )
     local_config = ExecutionConfig()
     config = local_config
     positions, raw_journal, captures, authoritative_events = [], [], [], []
@@ -4215,15 +4218,17 @@ def render_paper_trading_page():
             trade_repository = TradeRepository(database_url=database_url, require_durable=True)
             repository = PaperExecutionRepository(trade_repository, initialize=False)
             positions = repository.load()
-            raw_journal = repository.journal_rows(limit=5000)
+            raw_journal = repository.journal_rows(limit=paper_history_limit)
             captures = repository.records()
-            authoritative_events = trade_repository.list_trade_events(limit=5000)
+            authoritative_events = trade_repository.list_trade_events(limit=paper_history_limit)
             worker_health = trade_repository.get_latest_scan_health()
             worker_config_state = repository.get_runtime_config()
             mirror_repository = MirrorExecutionRepository(trade_repository, initialize=False)
             try:
                 mirror_rows = mirror_repository.rows()
-                mirror_marks = mirror_repository.marks()
+                mirror_marks = mirror_repository.mark_summaries(
+                    row.get("mirror_trade_id") for row in mirror_rows if row.get("opened_at")
+                )
                 mirror_runtime = mirror_repository.runtime_state()
             except Exception:
                 mirror_rows, mirror_marks, mirror_runtime = [], [], None

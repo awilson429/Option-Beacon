@@ -230,7 +230,7 @@ def analyze_winner_dna(snapshot_rows, outcome_rows, *, mirror_rows=(), mirror_ma
     source_by_trade = {str(capture.trade_id): str(capture.source_signal_id) for capture in broad_captures}
     broad = {}
     for decision in sorted(broad_journal, key=lambda row: str(row.get("created_at") or "")):
-        source = source_by_trade.get(str(decision.get("trade_id")))
+        source = decision.get("source_signal_id") or source_by_trade.get(str(decision.get("trade_id")))
         if source and source not in broad:
             broad[source] = decision.get("reason_code")
     enriched = []
@@ -255,7 +255,11 @@ def analyze_winner_dna(snapshot_rows, outcome_rows, *, mirror_rows=(), mirror_ma
             "mirror_dte": _number(mirror.get("dte")),
             "mirror_opened_at": mirror.get("opened_at"),
             "mirror_closed_at": mirror.get("exit_quote_at"),
-            "mirror_marks_available": any(_number(mark.get("return_pct")) is not None for mark in mirror_marks_for_trade),
+            "mirror_marks_available": any(
+                (_number(mark.get("valid_mark_count")) or 0) > 0
+                or _number(mark.get("return_pct")) is not None
+                for mark in mirror_marks_for_trade
+            ),
             "broad_disposition": broad.get(identity),
         })
     thresholds = outcome_thresholds(enriched)
