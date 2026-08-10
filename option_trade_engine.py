@@ -279,6 +279,11 @@ def capture_qualified_signal(
     signal_id = source_signal_id(result)
     existing = repository.find_source_signal(signal_id)
     if existing is not None:
+        LOGGER.info(json.dumps({
+            "event": "paper_position_duplicate_prevented",
+            "execution_lane": "PAPER", "source_signal_id": signal_id,
+            "trade_id": existing.trade_id,
+        }, sort_keys=True))
         return existing
 
     created = now or _signal_timestamp(result)

@@ -61,6 +61,8 @@ def trade_comparison_model(
         metadata = _json(journal.get("metadata_json"))
         if metadata.get("journal_type") not in (None, "ENTRY_DECISION"):
             continue
+        if str(metadata.get("simulation_profile") or "").upper() != "BROAD":
+            continue
         source_id = source_by_paper_trade.get(str(journal.get("trade_id")))
         if source_id in entries:
             decisions.setdefault(source_id, journal)
@@ -90,13 +92,14 @@ def trade_comparison_model(
             else "OPEN"
         )
         decision = decisions.get(identity)
+        paper_trade_id = paper_trade_by_source.get(identity)
+        position = positions_by_trade.get(paper_trade_id)
         disposition = (
-            "OPENED" if decision and bool(decision.get("accepted"))
+            "OPENED" if decision and bool(decision.get("accepted")) and position
+            else "ACCEPTED — POSITION MISSING" if decision and bool(decision.get("accepted"))
             else "REJECTED" if decision
             else "PENDING"
         )
-        paper_trade_id = paper_trade_by_source.get(identity)
-        position = positions_by_trade.get(paper_trade_id)
         paper_pnl = _paper_pnl(position)
         metadata = _json((decision or {}).get("metadata_json"))
         risk_state = _json((decision or {}).get("risk_state_json"))
@@ -113,7 +116,8 @@ def trade_comparison_model(
             "paper_disposition": disposition,
             "paper_reason": (
                 str(decision.get("reason_code") or "UNKNOWN")
-                if disposition == "REJECTED" else "—"
+                if disposition == "REJECTED" else
+                "POSITION_NOT_PERSISTED" if disposition == "ACCEPTED — POSITION MISSING" else "—"
             ),
             "paper_pnl": paper_pnl,
             "authoritative_score": entry.get("rule_score"),
@@ -127,7 +131,8 @@ def trade_comparison_model(
     losses = [row for row in closed if row["auth_result"] == "LOSS"]
     opened = [row for row in rows if row["paper_disposition"] == "OPENED"]
     rejected = [row for row in rows if row["paper_disposition"] == "REJECTED"]
-    evaluated = opened + rejected
+    accepted_missing = [row for row in rows if row["paper_disposition"] == "ACCEPTED — POSITION MISSING"]
+    evaluated = opened + rejected + accepted_missing
     missed = [row for row in wins if row["paper_disposition"] != "OPENED"]
     paper_closed = [
         positions_by_trade.get(paper_trade_by_source.get(row["authoritative_id"]))
@@ -201,6 +206,7 @@ def trade_comparison_model(
         "paper": {
             "evaluated": len(evaluated), "opened": len(opened),
             "rejected": len(rejected), "pending": len(rows) - len(evaluated),
+            "accepted_position_missing": len(accepted_missing),
             "participation_rate": len(opened) / len(rows) * 100 if rows else 0.0,
             "closed": len(paper_closed), "wins": paper_wins, "losses": paper_losses,
             "pnl": sum(_paper_pnl(item) for item in paper_matched),
@@ -274,7 +280,7 @@ def comparison_markup(model, *, has_previous=False, selected="TODAY"):
         f'<strong>{missed["count"]}</strong><small>Avg auth underlying return {_percent(missed["average_return"])} · {escape(reasons)}</small></div>'
     )
     return (
-        '<section class="ob-desk-panel"><div class="ob-compare-header"><h3>OptionBeacon vs PAPER vs MIRROR</h3>'
+        '<section class="ob-desk-panel"><div class="ob-compare-header"><h3>SESSION COMPARISON — OptionBeacon vs PAPER vs MIRROR · BROAD PAPER ONLY</h3>'
         f'<nav class="ob-session-tabs">{tabs}</nav></div><div class="ob-compare-grid">{columns}</div>'
         f'{experiment_summary}{capital}{missed_block}</section>'
     )
