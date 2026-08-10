@@ -20,12 +20,12 @@ def http_403(url):
     return HTTPError(url, 403, "Forbidden", {}, None)
 
 
-def test_finnhub_403_identifies_both_symbols_and_fails_closed(tmp_path, caplog):
+def test_tradier_minute_bar_403_identifies_both_symbols_and_fails_closed(tmp_path, caplog):
     repository = TradeRepository(tmp_path / "state.db")
-    secret = "secret-finnhub-token"
+    secret = "secret-tradier-token"
 
     def denied(symbol, **kwargs):
-        raise http_403(f"https://finnhub.io/api/v1/stock/candle?token={secret}&symbol={symbol}")
+        raise http_403(f"https://api.tradier.com/v1/markets/timesales?symbol={symbol}&x={secret}")
 
     with caplog.at_level(logging.INFO):
         result = worker.run_intraday_cycle(repository, bar_provider=denied, now=NOW)
@@ -34,37 +34,56 @@ def test_finnhub_403_identifies_both_symbols_and_fails_closed(tmp_path, caplog):
     failures = [row for row in payloads if row["event"] == "intraday_provider_request_failed"]
     assert [(row["provider"], row["stage"], row["symbol"], row["endpoint_path"],
              row["http_status"], row["exception_class"]) for row in failures] == [
-        ("Finnhub", "minute_bars", "SPY", "/stock/candle", 403, "HTTPError"),
-        ("Finnhub", "minute_bars", "QQQ", "/stock/candle", 403, "HTTPError"),
+        ("Tradier", "minute_bars", "SPY", "/markets/timesales", 403, "HTTPError"),
+        ("Tradier", "minute_bars", "QQQ", "/markets/timesales", 403, "HTTPError"),
     ]
     cycle = next(row for row in payloads if row["event"] == "intraday_cycle_failed")
     assert (cycle["failure_stage"], cycle["provider"], cycle["http_status"]) == (
-        "minute_bars", "Finnhub", 403
+        "minute_bars", "Tradier", 403
     )
     assert result == 1
     assert secret not in caplog.text
     assert not any(row["event"] == "intraday_symbol_evaluated" for row in payloads)
 
 
-def test_real_finnhub_request_403_never_logs_token(tmp_path, monkeypatch, caplog):
+def test_real_tradier_request_403_never_logs_token(tmp_path, monkeypatch, caplog):
     repository = TradeRepository(tmp_path / "state.db")
     secret = "real-request-secret-token"
-    monkeypatch.setattr(worker, "finnhub_api_key", lambda: secret)
-
-    def denied(request, timeout):
-        raise http_403(request.full_url)
-
-    monkeypatch.setattr(worker, "urlopen", denied)
+    monkeypatch.setattr(worker, "time_sales", lambda *args, **kwargs: (
+        [], f"Tradier request failed: HTTP Error 403: {secret}"
+    ))
     with caplog.at_level(logging.INFO):
         result = worker.run_intraday_cycle(repository, now=NOW)
 
     assert result == 1
     assert secret not in caplog.text
-    assert "token=" not in caplog.text
     failures = [row for row in events(caplog)
                 if row["event"] == "intraday_provider_request_failed"]
     assert len(failures) == 2
-    assert all(row["endpoint_path"] == "/stock/candle" for row in failures)
+    assert all(row["endpoint_path"] == "/markets/timesales" for row in failures)
+
+
+def test_tradier_minute_bar_429_and_timeout_events_are_explicit(
+        tmp_path, monkeypatch, caplog):
+    repository = TradeRepository(tmp_path / "state.db")
+    responses = iter([
+        ([], "Tradier request failed: HTTP Error 429: Too Many Requests"),
+        ([], "Tradier request failed: operation timed out"),
+    ])
+    monkeypatch.setattr(worker, "time_sales", lambda *args, **kwargs: next(responses))
+
+    with caplog.at_level(logging.INFO):
+        result = worker.run_intraday_cycle(repository, now=NOW)
+
+    failures = [row for row in events(caplog)
+                if row["event"] == "intraday_provider_request_failed"]
+    assert [(row["symbol"], row["http_status"], row["exception_class"])
+            for row in failures] == [
+        ("SPY", 429, "HTTPError"), ("QQQ", None, "TimeoutError")
+    ]
+    assert result == 1
+    assert not any(row["event"] == "intraday_symbol_evaluated"
+                   for row in events(caplog))
 
 
 def test_tradier_403_is_sanitized_and_fails_before_contract_selection(

@@ -56,6 +56,7 @@ def _get_json(path, params=None, timeout=8):
     request = Request(url, headers=_headers())
     started = time.perf_counter()
     operation = {
+        "/markets/timesales": "minute_bars",
         "/markets/options/expirations": "option_expirations",
         "/markets/options/chains": "option_chain",
         "/markets/quotes": "option_quote",
@@ -84,6 +85,19 @@ def _as_list(value):
     if isinstance(value, list):
         return value
     return [value]
+
+
+def time_sales(symbol, start, end, *, interval="1min", session_filter="open"):
+    """Return raw Tradier chart bars through the shared authenticated transport."""
+    payload, error = _get_json(
+        "/markets/timesales",
+        {"symbol": symbol, "interval": interval, "start": start, "end": end,
+         "session_filter": session_filter},
+    )
+    if error:
+        return [], error
+    series = (payload or {}).get("series") or {}
+    return _as_list(series.get("data")), ""
 
 
 @lru_cache(maxsize=256)

@@ -13,17 +13,13 @@ import os
 import re
 import time
 from datetime import datetime, timedelta, timezone
-from urllib.error import HTTPError
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
-from finnhub_universe import FINNHUB_BASE_URL, finnhub_api_key
 from intraday_execution import IntradayRepository, ManagedConfig, select_contracts
 from intraday_strategy import UNIVERSE, detect_candidate, market_context, trigger_crossed
 from optionbeacon.worker.logging_config import configure_worker_logging
 from trade_state_service import repository_for_runtime
-from tradier_options import option_chain, option_expirations, option_quote
+from tradier_options import option_chain, option_expirations, option_quote, time_sales
 
 
 LOGGER = logging.getLogger(__name__)
@@ -163,28 +159,56 @@ def _manage_positions(ledger, positions, bars, quote_provider, now):
     return calls
 
 
-def finnhub_minute_bars(symbol, *, now=None, lookback_minutes=240):
+def tradier_minute_bars(symbol, *, now=None, lookback_minutes=240):
     now = now or datetime.now(timezone.utc)
-    params = {"symbol": symbol, "resolution": "1",
-              "from": int((now - timedelta(minutes=lookback_minutes)).timestamp()),
-              "to": int(now.timestamp()), "token": finnhub_api_key()}
-    request = Request(f"{FINNHUB_BASE_URL}/stock/candle?{urlencode(params)}",
-                      headers={"User-Agent": "OptionBeacon/1.0"})
-    try:
-        with urlopen(request, timeout=10) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
+    local_end = now.astimezone(EASTERN)
+    local_start = (now - timedelta(minutes=lookback_minutes)).astimezone(EASTERN)
+    rows, error = time_sales(
+        symbol, local_start.strftime("%Y-%m-%d %H:%M"),
+        local_end.strftime("%Y-%m-%d %H:%M"), interval="1min", session_filter="open",
+    )
+    if error:
+        status = _status_from_error(error)
+        exception_class = ("HTTPError" if status else "TimeoutError"
+                           if "timed out" in str(error).lower() else "ProviderError")
         raise ProviderRequestFailure(
-            "Finnhub", "minute_bars", symbol, "/stock/candle",
-            http_status=exc.code, exception_class=type(exc).__name__,
-        ) from exc
-    return [{"timestamp": datetime.fromtimestamp(stamp, timezone.utc).astimezone(EASTERN),
-             "open": opened, "high": high, "low": low, "close": close, "volume": volume}
-            for stamp, opened, high, low, close, volume in zip(payload.get("t", []), payload.get("o", []),
-            payload.get("h", []), payload.get("l", []), payload.get("c", []), payload.get("v", []))]
+            "Tradier", "minute_bars", symbol, "/markets/timesales",
+            http_status=status, exception_class=exception_class,
+        )
+    normalized = []
+    seen = set()
+    required = ("timestamp", "open", "high", "low", "close", "volume")
+    for row in rows:
+        if not isinstance(row, dict) or any(row.get(field) is None for field in required):
+            raise ProviderRequestFailure(
+                "Tradier", "minute_bars", symbol, "/markets/timesales",
+                exception_class="ProviderDataError",
+            )
+        try:
+            stamp = datetime.fromtimestamp(float(row["timestamp"]), timezone.utc).astimezone(EASTERN)
+            bar = {"timestamp": stamp, **{field: float(row[field])
+                   for field in ("open", "high", "low", "close", "volume")}}
+        except (TypeError, ValueError, OSError, OverflowError) as exc:
+            raise ProviderRequestFailure(
+                "Tradier", "minute_bars", symbol, "/markets/timesales",
+                exception_class="ProviderDataError",
+            ) from exc
+        if stamp in seen:
+            raise ProviderRequestFailure(
+                "Tradier", "minute_bars", symbol, "/markets/timesales",
+                exception_class="ProviderDataError",
+            )
+        seen.add(stamp)
+        normalized.append(bar)
+    if not normalized:
+        raise ProviderRequestFailure(
+            "Tradier", "minute_bars", symbol, "/markets/timesales",
+            exception_class="ProviderDataUnavailable",
+        )
+    return sorted(normalized, key=lambda bar: bar["timestamp"])
 
 
-def run_intraday_cycle(repository, *, bar_provider=finnhub_minute_bars,
+def run_intraday_cycle(repository, *, bar_provider=tradier_minute_bars,
                        quote_provider=option_quote, now=None):
     now = now or datetime.now(timezone.utc)
     started = time.perf_counter()
@@ -208,7 +232,7 @@ def run_intraday_cycle(repository, *, bar_provider=finnhub_minute_bars,
                 bars[symbol] = bar_provider(symbol, now=now)
             except Exception as exc:
                 provider_failures.append(_provider_failure(
-                    "Finnhub", "minute_bars", symbol, "/stock/candle", exc
+                    "Tradier", "minute_bars", symbol, "/markets/timesales", exc
                 ))
         if provider_failures:
             raise provider_failures[0]
@@ -290,7 +314,7 @@ def run_intraday_cycle(repository, *, bar_provider=finnhub_minute_bars,
             "http_status": failure.http_status if failure else None,
         }, sort_keys=True)
         if failure:
-            # HTTPError tracebacks include the requested URL, which contains Finnhub's token.
+            # Provider tracebacks can expose credential-bearing request details.
             LOGGER.error(failure_payload)
         else:
             LOGGER.exception(failure_payload)
