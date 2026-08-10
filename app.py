@@ -91,7 +91,7 @@ from paper_execution_repository import PaperExecutionRepository
 from winner_dna_dashboard import render_winner_dna
 from broad_filter_effectiveness import broad_filter_effectiveness
 from mirror_execution import MirrorExecutionRepository, mirror_summary
-from trade_repository import TradeRepository
+from trade_repository import TradeRepository, projected_trade_event_summaries
 from option_position_tracker import (
     completed_position_rows,
     open_position_rows,
@@ -3969,7 +3969,9 @@ def render_outcome_trade_journal(
         key="trade_desk_event_history_limit",
     )
     authoritative_events = (
-        trade_repository.list_trade_event_summaries(limit=trade_desk_event_limit)
+        projected_trade_event_summaries(
+            trade_repository, limit=trade_desk_event_limit
+        )
         if trade_repository else []
     )
     activity_authoritative_events = (
