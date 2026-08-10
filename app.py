@@ -3964,9 +3964,16 @@ def render_outcome_trade_journal(
     ]
     paper_rows = paper_position_rows(option_positions, config, now)
     summary = journal_summary_metrics(records) if records else None
+    trade_desk_event_limit = st.selectbox(
+        "Trade Desk event history", (200, 500, 1000, 5000), index=1,
+        key="trade_desk_event_history_limit",
+    )
     authoritative_events = (
-        trade_repository.list_trade_events(limit=5000)
+        trade_repository.list_trade_event_summaries(limit=trade_desk_event_limit)
         if trade_repository else []
+    )
+    activity_authoritative_events = (
+        trade_repository.list_trade_events(limit=50) if trade_repository else []
     )
     activity_opportunities, activity_funnel_rows = [], []
     if trade_repository:
@@ -3983,7 +3990,7 @@ def render_outcome_trade_journal(
         except Exception:
             activity_opportunities, activity_funnel_rows = [], []
     events = enrich_authoritative_activity_events(
-        [*authoritative_events, *paper_position_events(option_positions)],
+        [*activity_authoritative_events, *paper_position_events(option_positions)],
         activity_opportunities, activity_funnel_rows, now=now,
     )
 

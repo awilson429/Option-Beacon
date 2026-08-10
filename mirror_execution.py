@@ -375,7 +375,7 @@ class MirrorExecutionRepository:
 
 
 def _entry_events(repository):
-    return [event for event in repository.list_trade_events(limit=5000) if event.get("event_type") == "TRADE_ENTERED"]
+    return repository.list_trade_event_summaries(limit=5000, event_type="TRADE_ENTERED")
 
 
 def pending_mirror_entries(repository, latest_results, mirror_repository):
@@ -419,7 +419,7 @@ def pending_mirror_entries(repository, latest_results, mirror_repository):
 
 def _exit_by_opportunity(repository):
     return {event.get("opportunity_id") or event.get("trade_id"): event
-            for event in repository.list_trade_events(limit=5000) if event.get("event_type") == "TRADE_CLOSED"}
+            for event in repository.list_trade_event_summaries(limit=5000, event_type="TRADE_CLOSED")}
 
 
 def _entry_disposition(candidate, entry_event, provider, now, stale_minutes):

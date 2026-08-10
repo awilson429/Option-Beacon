@@ -3,14 +3,25 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 
 import pandas as pd
 
 from intraday_execution import IntradayRepository
+from optionbeacon.worker.database_diagnostics import sanitize_database_diagnostic_text
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def intraday_dashboard_model(repository):
     ledger = IntradayRepository(repository, initialize=False)
+    status = ledger.table_status()
+    if not status["initialized"]:
+        return {"symbols": {"SPY": None, "QQQ": None}, "setups": [],
+                "mirror": [], "managed": [], "performance": {}, "runtime": None,
+                "persistence_state": "NOT_INITIALIZED", **status}
     signals = ledger.list_signals()
     open_trades = ledger.list_trades(status="OPEN")
     latest = {}
@@ -22,7 +33,8 @@ def intraday_dashboard_model(repository):
             "setups": [row for row in signals if row.get("state") in {"SETUP_DETECTED", "ARMED", "TRIGGERED"}],
             "mirror": [row for row in open_trades if row.get("variant") == "INTRADAY_MIRROR"],
             "managed": [row for row in open_trades if row.get("variant") == "INTRADAY_MANAGED"],
-            "performance": ledger.performance(), "runtime": ledger.runtime_state()}
+            "performance": ledger.performance(), "runtime": ledger.runtime_state(),
+            "persistence_state": "AVAILABLE", **status}
 
 
 def render_intraday_page(repository, st_module=None):
@@ -33,8 +45,28 @@ def render_intraday_page(repository, st_module=None):
     try:
         model = intraday_dashboard_model(repository)
     except Exception as exc:
-        st_module.warning(f"Intraday persistence is not available yet: {type(exc).__name__}")
+        cause = exc.__cause__ or exc
+        record = {
+            "event": "intraday_repository_unavailable",
+            "failure_stage": "read_probe",
+            "exception_class": type(cause).__name__,
+            "sanitized_message": sanitize_database_diagnostic_text(str(cause))[:240],
+            "database_url_present": bool(os.getenv("DATABASE_URL", "").strip()),
+            "repository_construction_succeeded": repository is not None,
+            "schema_read_probe_succeeded": False,
+        }
+        LOGGER.exception(json.dumps(record, sort_keys=True))
+        st_module.warning("Intraday persistence is temporarily unavailable. See sanitized application logs.")
         return
+    if model["persistence_state"] == "NOT_INITIALIZED":
+        LOGGER.info(json.dumps({
+            "event": "intraday_repository_not_initialized",
+            "database_url_present": bool(os.getenv("DATABASE_URL", "").strip()),
+            "repository_construction_succeeded": repository is not None,
+            "schema_read_probe_succeeded": True,
+            "missing_tables": model["missing_tables"],
+        }, sort_keys=True))
+        st_module.info("Intraday storage has not been initialized by the worker yet.")
     columns = st_module.columns(2)
     for column, symbol in zip(columns, ("SPY", "QQQ")):
         row = model["symbols"].get(symbol)
