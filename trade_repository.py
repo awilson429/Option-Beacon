@@ -952,6 +952,28 @@ class TradeRepository:
                 for row in self._fetchall(connection, query, tuple(params))
             ]
 
+    def opportunity_activity_summaries(self, opportunity_ids) -> list[dict]:
+        """Project only fields required to enrich an exact set of activity events."""
+        identities = sorted({str(value) for value in opportunity_ids if value})
+        if not identities:
+            return []
+        placeholders = ",".join("?" for _ in identities)
+        with self.connection() as connection:
+            return self._fetchall(connection, f"""SELECT id,direction,signal_timestamp,
+                state,confidence,entry_reference FROM opportunities
+                WHERE id IN ({placeholders})""", tuple(identities))
+
+    def list_outcome_payloads(self, *, limit=5000, active_only=False):
+        """Project only immutable identity and lifecycle payload required for decoding."""
+        query = "SELECT id,metadata_json FROM opportunities"
+        params = []
+        if active_only:
+            query += " WHERE state IN ('CANDIDATE','OPEN')"
+        query += " ORDER BY signal_timestamp DESC,id DESC LIMIT ?"
+        params.append(int(limit))
+        with self.connection() as connection:
+            return [self._decode(row) for row in self._fetchall(connection, query, tuple(params))]
+
     def list_trade_event_summaries(self, *, limit=500, event_type=None,
                                    event_types=None, start_at=None, end_at=None) -> list[dict]:
         """Return projected lifecycle fields with optional server-side bounds."""

@@ -165,6 +165,35 @@ class MirrorExecutionRepository:
         with self.repository.connection() as connection:
             return self.repository._fetchall(connection, "SELECT * FROM mirror_execution_trades ORDER BY entry_event_at,created_at")
 
+    def open_rows(self):
+        """Return only lifecycle-active rows for the worker hot path."""
+        with self.repository.connection() as connection:
+            return self.repository._fetchall(connection, """SELECT mirror_trade_id,opportunity_id,
+                symbol,option_symbol,quantity,contract_multiplier,total_debit,entry_fill,opened_at,
+                status,mfe_pct,mae_pct,peak_unrealized_pnl FROM mirror_execution_trades
+                WHERE status IN ('OPEN','EXIT_PENDING') ORDER BY opened_at,mirror_trade_id""")
+
+    def status_count(self, status):
+        with self.repository.connection() as connection:
+            row = self.repository._fetchone(connection,
+                "SELECT COUNT(*) AS count FROM mirror_execution_trades WHERE status=?", (status,))
+        return int((row or {}).get("count") or 0)
+
+    def disposition_count(self):
+        with self.repository.connection() as connection:
+            row = self.repository._fetchone(connection, "SELECT COUNT(*) AS count FROM mirror_execution_trades")
+        return int((row or {}).get("count") or 0)
+
+    def comparison_rows(self, opportunity_ids):
+        identities = sorted({str(value) for value in opportunity_ids if value})
+        if not identities:
+            return []
+        placeholders = ",".join("?" for _ in identities)
+        with self.repository.connection() as connection:
+            return self.repository._fetchall(connection, f"""SELECT opportunity_id,
+                disposition_code,option_symbol,realized_pnl FROM mirror_execution_trades
+                WHERE opportunity_id IN ({placeholders})""", tuple(identities))
+
     def analytics_rows(self, opportunity_ids, *, limit=5000):
         """Project only analytics columns for exact authoritative IDs."""
         identities = sorted({str(value) for value in opportunity_ids if value})[:int(limit)]
@@ -240,7 +269,10 @@ class MirrorExecutionRepository:
             return self.repository._fetchall(connection, query, tuple(params))
 
     def dispositioned_source_signal_ids(self):
-        return {row["opportunity_id"] for row in self.rows()}
+        with self.repository.connection() as connection:
+            rows = self.repository._fetchall(connection,
+                "SELECT opportunity_id FROM mirror_execution_trades")
+        return {row["opportunity_id"] for row in rows}
 
     def record_disposition(self, candidate, event, *, code, detail, contract=None, now=None):
         now = now or datetime.now(timezone.utc)
@@ -399,13 +431,13 @@ def _entry_events(repository):
     return repository.list_trade_event_summaries(limit=5000, event_type="TRADE_ENTERED")
 
 
-def pending_mirror_entries(repository, latest_results, mirror_repository):
+def pending_mirror_entries(repository, latest_results, mirror_repository, *, entry_events=None):
     """Project every undisposed authoritative entry, isolating malformed payloads."""
     by_symbol = {str((result or {}).get("symbol") or symbol).upper(): result
                  for symbol, result in (latest_results or {}).items()} if isinstance(latest_results, dict) else {}
     disposed = mirror_repository.dispositioned_source_signal_ids()
     candidates = []
-    for event in reversed(_entry_events(repository)):
+    for event in reversed(entry_events if entry_events is not None else _entry_events(repository)):
         opportunity_id = event.get("opportunity_id") or event.get("trade_id")
         if not opportunity_id or opportunity_id in disposed:
             continue
@@ -475,7 +507,8 @@ def _entry_disposition(candidate, entry_event, provider, now, stale_minutes):
 
 def run_mirror_execution(repository, mirror_repository, candidates, *, enabled, scanner_id,
                          run_number=None, now=None, chain_provider=None, quote_provider=None,
-                         experiment_start_date=None, stale_minutes=60, underlying_prices=None):
+                         experiment_start_date=None, stale_minutes=60, underlying_prices=None,
+                         entry_events=None, exit_events=None):
     """Reconcile entries and authoritative exits exactly once; never place an order."""
     now = now or datetime.now(timezone.utc)
     LOGGER.info(json.dumps({"event": "mirror_cycle_started", "scanner_id": scanner_id,
@@ -487,7 +520,8 @@ def run_mirror_execution(repository, mirror_repository, candidates, *, enabled, 
     provider = chain_provider or TradierOptionChainProvider()
     quote_provider = quote_provider or option_quote
     underlying_prices = underlying_prices or {}
-    entry_events = {event.get("opportunity_id") or event.get("trade_id"): event for event in _entry_events(repository)}
+    entry_events = {event.get("opportunity_id") or event.get("trade_id"): event for event in
+                    (entry_events if entry_events is not None else _entry_events(repository))}
     eligible_entry_ids = {identity for identity, event in entry_events.items()
                           if not experiment_start_date or _aware(event["event_timestamp"]).astimezone(EASTERN).date() >= experiment_start_date}
     existing_ids = mirror_repository.dispositioned_source_signal_ids()
@@ -514,8 +548,9 @@ def run_mirror_execution(repository, mirror_repository, candidates, *, enabled, 
             "disposition": "OPENED" if code == "MIRROR_OPENED" else "UNEXECUTABLE",
             "reason": code,
         }, sort_keys=True))
-    exits = _exit_by_opportunity(repository)
-    for row in mirror_repository.rows():
+    exits = {event.get("opportunity_id") or event.get("trade_id"): event for event in
+             (exit_events if exit_events is not None else _exit_by_opportunity(repository).values())}
+    for row in mirror_repository.open_rows():
         if row["status"] not in {"OPEN", "EXIT_PENDING"}:
             continue
         exit_event = exits.get(row["opportunity_id"])
@@ -560,8 +595,7 @@ def run_mirror_execution(repository, mirror_repository, candidates, *, enabled, 
                 "opportunity_id": row["opportunity_id"], "trade_id": row["mirror_trade_id"],
                 "symbol": row["symbol"], "option_symbol": row["option_symbol"],
                 **snapshot}, sort_keys=True))
-    open_state = mirror_repository.rows()
-    pending_total = sum(row["status"] == "EXIT_PENDING" for row in open_state)
+    pending_total = mirror_repository.status_count("EXIT_PENDING")
     status = "DEGRADED" if pending_total or any(code in disposition_codes for code in {
         "MIRROR_PROVIDER_FAILURE", "MIRROR_AUTHORITATIVE_DATA_FAILURE"
     }) else "ACTIVE"
@@ -570,7 +604,7 @@ def run_mirror_execution(repository, mirror_repository, candidates, *, enabled, 
     result = {"status": status, "opened": opened, "unexecutable": unexecutable,
               "closed": closed, "pending": pending_total, "entries_received": len(eligible_entry_ids),
               "already_disposed": already_disposed,
-              "dispositions_total": len(mirror_repository.dispositioned_source_signal_ids())}
+              "dispositions_total": mirror_repository.disposition_count()}
     LOGGER.info(json.dumps({"event": "mirror_cycle_completed", "scanner_id": scanner_id, **result}, sort_keys=True))
     return result
 

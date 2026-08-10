@@ -283,13 +283,14 @@ def refresh_option_positions(
     force_close_end_of_day: bool = False,
     synchronize_new_captures: bool = True,
     quote_failure_callback=None,
+    initial_positions=None,
 ) -> list[PaperOptionPosition]:
     """Synchronize captures and quote only OPEN option symbols."""
     position_store = position_store or OptionPositionStore()
     trade_ledger = trade_ledger or OptionTradeLedger(DEFAULT_LEDGER_FILE)
     provider = provider or TradierOptionQuoteProvider()
     checked_at = current_time or datetime.now(timezone.utc)
-    positions = position_store.load()
+    positions = list(initial_positions) if initial_positions is not None else position_store.load()
     if synchronize_new_captures:
         positions = synchronize_captures(positions, trade_ledger.records())
     quote_cache: dict[str, dict | None] = {}

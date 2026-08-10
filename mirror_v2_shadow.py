@@ -114,7 +114,25 @@ class MirrorV2Repository:
             return self.repository._fetchone(connection, "SELECT * FROM mirror_v2_shadow_trades WHERE opportunity_id=?", (opportunity_id,))
 
     def dispositioned_source_signal_ids(self):
-        return {row["opportunity_id"] for row in self.rows()}
+        with self.repository.connection() as connection:
+            rows = self.repository._fetchall(connection,
+                "SELECT opportunity_id FROM mirror_v2_shadow_trades")
+        return {row["opportunity_id"] for row in rows}
+
+    def open_rows(self):
+        with self.repository.connection() as connection:
+            return self.repository._fetchall(connection, """SELECT v2_trade_id,opportunity_id,
+                symbol,option_symbol,entry_fill,total_debit,mfe_percent,mae_percent,status
+                FROM mirror_v2_shadow_trades WHERE status='OPEN' ORDER BY opened_at,opportunity_id""")
+
+    def pending_comparison_rows(self):
+        """Only comparisons not yet terminal need worker-cycle refresh."""
+        with self.repository.connection() as connection:
+            return self.repository._fetchall(connection, """SELECT t.*
+                FROM mirror_v2_shadow_trades t
+                LEFT JOIN mirror_v2_shadow_comparisons c ON c.opportunity_id=t.opportunity_id
+                WHERE c.opportunity_id IS NULL OR c.authoritative_outcome='OPEN'
+                ORDER BY t.created_at,t.opportunity_id""")
 
     def comparisons(self):
         with self.repository.connection() as connection:
@@ -280,7 +298,7 @@ def evaluate_v2_contracts(candidate, event, provider, now, stale_minutes=60):
 
 def run_mirror_v2_shadow(repository, v2_repository, candidates, *, enabled, scanner_id, now=None,
                          chain_provider=None, quote_provider=None, control_repository=None,
-                         experiment_start_date=None):
+                         experiment_start_date=None, entry_events=None, exit_events=None):
     now = now or datetime.now(timezone.utc)
     LOGGER.info(json.dumps({"event": "mirror_v2_shadow_cycle_started", "scanner_id": scanner_id,
                             "enabled": enabled}, sort_keys=True))
@@ -291,7 +309,8 @@ def run_mirror_v2_shadow(repository, v2_repository, candidates, *, enabled, scan
     provider = chain_provider or CachedChainProvider()
     quote_provider = quote_provider or option_quote
     entries = {e.get("opportunity_id") or e.get("trade_id"): e for e in
-               repository.list_trade_event_summaries(limit=5000, event_type="TRADE_ENTERED")}
+               (entry_events if entry_events is not None else
+                repository.list_trade_event_summaries(limit=5000, event_type="TRADE_ENTERED"))}
     taken = rejected = closed = 0
     for candidate in candidates or []:
         identity = candidate.get("_authoritative_entry_id")
@@ -307,8 +326,9 @@ def run_mirror_v2_shadow(repository, v2_repository, candidates, *, enabled, scan
             "opportunity_id": identity, "symbol": candidate.get("symbol"),
             "decision": evaluation["decision"], "reasons": evaluation["reasons"]}, sort_keys=True))
     exits = {e.get("opportunity_id") or e.get("trade_id"): e for e in
-             repository.list_trade_event_summaries(limit=5000, event_type="TRADE_CLOSED")}
-    for row in v2_repository.rows():
+             (exit_events if exit_events is not None else
+              repository.list_trade_event_summaries(limit=5000, event_type="TRADE_CLOSED"))}
+    for row in v2_repository.open_rows():
         if row["status"] != "OPEN":
             continue
         quote, _error = quote_provider(row["option_symbol"])
@@ -321,8 +341,11 @@ def run_mirror_v2_shadow(repository, v2_repository, candidates, *, enabled, scan
             closed += 1
         LOGGER.info(json.dumps({"event": "mirror_v2_shadow_position_closed" if reason else "mirror_v2_shadow_position_marked",
             "scanner_id": scanner_id, "opportunity_id": row["opportunity_id"], "exit_reason": reason}, sort_keys=True))
-    controls = {r["opportunity_id"]: r for r in (control_repository.rows() if control_repository else [])}
-    for row in v2_repository.rows():
+    comparison_rows = v2_repository.pending_comparison_rows()
+    controls = {r["opportunity_id"]: r for r in
+                (control_repository.comparison_rows(r["opportunity_id"] for r in comparison_rows)
+                 if control_repository else [])}
+    for row in comparison_rows:
         outcome = exits.get(row["opportunity_id"])
         result = "WIN" if outcome and _number(outcome.get("realized_return")) is not None and float(outcome["realized_return"]) > 0 else "LOSS" if outcome else "OPEN"
         v2_repository.save_comparison(row, controls.get(row["opportunity_id"]), result, now)
