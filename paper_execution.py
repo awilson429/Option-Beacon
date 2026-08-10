@@ -39,10 +39,9 @@ def pending_authoritative_entries(repository, latest_results, paper_repository, 
     }
     candidates = []
     dispositioned = paper_repository.dispositioned_source_signal_ids()
-    events = [
-        event for event in repository.list_trade_events(limit=limit)
-        if event.get("event_type") == "TRADE_ENTERED"
-    ]
+    events = repository.list_trade_event_summaries(
+        limit=limit, event_type="TRADE_ENTERED"
+    )
     for event in reversed(events):
         opportunity_id = event.get("opportunity_id") or event.get("trade_id")
         if not opportunity_id or opportunity_id in dispositioned:

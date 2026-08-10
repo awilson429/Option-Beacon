@@ -85,12 +85,10 @@ def record_authoritative_entry_funnel(
     try:
         diagnostics = AuthoritativeEntryFunnelRepository(repository)
         stage = "authoritative_entry_query"
-        entered_events = [
-            event for event in repository.list_trade_events(limit=5000)
-            if event.get("event_type") == "TRADE_ENTERED"
-            and event.get("event_timestamp") >= started_at.isoformat()
-            and event.get("event_timestamp") <= completed_at.isoformat()
-        ]
+        entered_events = repository.list_trade_event_summaries(
+            limit=500, event_type="TRADE_ENTERED",
+            start_at=started_at, end_at=completed_at,
+        )
         stage = "persistence"
         record = diagnostics.save_cycle(
             scanner_id=scanner_id, run_number=run_number,
@@ -425,11 +423,9 @@ def run_scan_once(
             paper_candidates = pending_authoritative_entries(
                 repository, results, paper_repository
             )
-            authoritative_entries_generated = len([
-                event for event in repository.list_trade_events(limit=5000)
-                if event.get("event_type") == "TRADE_ENTERED"
-                and event.get("event_timestamp") >= started.isoformat()
-            ])
+            authoritative_entries_generated = repository.count_trade_events(
+                event_type="TRADE_ENTERED", start_at=started,
+            )
         LOGGER.info(json.dumps({
             "event": "paper_authoritative_handoff", "scanner_id": scanner_id,
             "run_number": run_number,

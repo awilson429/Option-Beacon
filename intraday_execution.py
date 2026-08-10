@@ -188,6 +188,27 @@ class IntradayRepository:
                             f"ALTER TABLE intraday_paper_trades ADD COLUMN {name} {definition}",
                         ).close()
 
+    def table_status(self):
+        """Read-only availability probe for worker-owned intraday tables."""
+        expected = ("intraday_signals", "intraday_paper_trades",
+                    "intraday_paper_journal", "intraday_runtime_state")
+        with self.repository.connection() as connection:
+            if self.repository.backend == "postgresql":
+                rows = self.repository._fetchall(connection, """
+                    SELECT name FROM unnest(ARRAY[?,?,?,?]) AS name
+                    WHERE to_regclass('public.' || name) IS NOT NULL
+                """, expected)
+                present = {row["name"] for row in rows}
+            else:
+                placeholders = ",".join("?" for _ in expected)
+                rows = self.repository._fetchall(connection,
+                    f"SELECT name FROM sqlite_master WHERE type='table' AND name IN ({placeholders})",
+                    expected)
+                present = {row["name"] for row in rows}
+        missing = [name for name in expected if name not in present]
+        return {"initialized": not missing, "present_tables": sorted(present),
+                "missing_tables": missing}
+
     def save_signal(self, candidate, state="ARMED"):
         row = asdict(candidate) if hasattr(candidate, "__dataclass_fields__") else dict(candidate)
         now = utc_iso()
@@ -399,11 +420,20 @@ class IntradayRepository:
         return self.runtime_state()
 
     def performance(self):
-        rows = self.list_trades(status="CLOSED", limit=10000)
+        with self.repository.connection() as connection:
+            rows = self.repository._fetchall(connection, """SELECT variant,
+                COUNT(*) AS trades,
+                SUM(CASE WHEN realized_pnl>0 THEN 1 ELSE 0 END) AS wins,
+                COALESCE(SUM(realized_pnl),0) AS realized_pnl,
+                COALESCE(AVG(realized_return_percent),0) AS average_return
+                FROM intraday_paper_trades WHERE status='CLOSED'
+                GROUP BY variant ORDER BY variant""")
+        by_variant = {row["variant"]: row for row in rows}
         result = {}
         for variant in ("INTRADAY_MIRROR", "INTRADAY_MANAGED"):
-            group = [row for row in rows if row["variant"] == variant]
-            pnl = sum(float(row.get("realized_pnl") or 0) for row in group)
-            result[variant] = {"trades": len(group), "wins": sum(float(row.get("realized_pnl") or 0) > 0 for row in group),
-                               "realized_pnl": pnl, "average_return": sum(float(row.get("realized_return_percent") or 0) for row in group) / len(group) if group else 0}
+            row = by_variant.get(variant) or {}
+            result[variant] = {"trades": int(row.get("trades") or 0),
+                               "wins": int(row.get("wins") or 0),
+                               "realized_pnl": float(row.get("realized_pnl") or 0),
+                               "average_return": float(row.get("average_return") or 0)}
         return result

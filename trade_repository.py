@@ -854,6 +854,41 @@ class TradeRepository:
                 for row in self._fetchall(connection, query, tuple(params))
             ]
 
+    def list_trade_event_summaries(self, *, limit=500, event_type=None,
+                                   start_at=None, end_at=None) -> list[dict]:
+        """Return projected lifecycle fields with optional server-side bounds."""
+        query = """SELECT id,trade_id,opportunity_id,symbol,direction,setup,event_type,
+            event_timestamp,underlying_price,entry_price,exit_price,current_return,
+            realized_return,exit_reason,rule_score,description
+            FROM authoritative_trade_events"""
+        clauses, params = [], []
+        if event_type:
+            clauses.append("event_type=?"); params.append(str(event_type))
+        if start_at is not None:
+            clauses.append("event_timestamp>=?"); params.append(utc_iso(start_at))
+        if end_at is not None:
+            clauses.append("event_timestamp<=?"); params.append(utc_iso(end_at))
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY event_timestamp DESC,id DESC LIMIT ?"
+        params.append(int(limit))
+        with self.connection() as connection:
+            return [self._decode_trade_event(row) for row in self._fetchall(connection, query, tuple(params))]
+
+    def count_trade_events(self, *, event_type=None, start_at=None, end_at=None) -> int:
+        query, clauses, params = "SELECT COUNT(*) AS count FROM authoritative_trade_events", [], []
+        if event_type:
+            clauses.append("event_type=?"); params.append(str(event_type))
+        if start_at is not None:
+            clauses.append("event_timestamp>=?"); params.append(utc_iso(start_at))
+        if end_at is not None:
+            clauses.append("event_timestamp<=?"); params.append(utc_iso(end_at))
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        with self.connection() as connection:
+            row = self._fetchone(connection, query, tuple(params))
+        return int((row or {}).get("count") or 0)
+
     def _list_trades(self, status) -> list[dict]:
         with self.connection() as connection:
             return [
