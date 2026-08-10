@@ -93,6 +93,7 @@ from winner_dna_dashboard import render_winner_dna
 from option_translation_autopsy_dashboard import render_option_translation_autopsy
 from broad_filter_effectiveness import broad_filter_effectiveness
 from mirror_execution import MirrorExecutionRepository, mirror_summary
+from mirror_v2_shadow import MirrorV2Repository, mirror_v2_summary
 from trade_repository import (
     TradeRepository,
     authoritative_session_dates,
@@ -4262,6 +4263,7 @@ def render_paper_trading_page():
     positions, raw_journal, captures, authoritative_events = [], [], [], []
     worker_health, worker_config_state = None, None
     mirror_rows, mirror_marks, mirror_runtime = [], [], None
+    mirror_v2_rows, mirror_v2_comparisons = [], []
     database_url = dashboard_database_url()
     if database_url:
         try:
@@ -4282,6 +4284,12 @@ def render_paper_trading_page():
                 mirror_runtime = mirror_repository.runtime_state()
             except Exception:
                 mirror_rows, mirror_marks, mirror_runtime = [], [], None
+            try:
+                mirror_v2_repository = MirrorV2Repository(trade_repository, initialize=False)
+                mirror_v2_rows = mirror_v2_repository.rows()
+                mirror_v2_comparisons = mirror_v2_repository.comparisons()
+            except Exception:
+                mirror_v2_rows, mirror_v2_comparisons = [], []
             if worker_config_state:
                 config = ExecutionConfig.from_resolved_state(
                     worker_config_state.get("resolved_config"), fallback=local_config
@@ -4314,7 +4322,9 @@ def render_paper_trading_page():
         unsafe_allow_html=True,
     )
 
-    broad_tab, mirror_tab, compare_tab = st.tabs(["BROAD", "MIRROR", "COMPARE"])
+    broad_tab, mirror_tab, v2_tab, compare_tab = st.tabs(
+        ["BROAD", "MIRROR CONTROL", "MIRROR V2 SHADOW", "COMPARE"]
+    )
     with broad_tab:
         st.caption("Existing risk-filtered PAPER portfolio. Its policy and ledger are unchanged.")
     with mirror_tab:
@@ -4362,6 +4372,27 @@ def render_paper_trading_page():
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         else:
             st.caption("No MIRROR dispositions have been recorded. Historical sessions are MIRROR NOT RUNNING.")
+    with v2_tab:
+        v2_metrics = mirror_v2_summary(mirror_v2_rows, mirror_v2_comparisons)
+        st.warning("RESEARCH ONLY — forward shadow experiment. No broker orders and no automatic promotion.")
+        st.caption("Fixed rules: reliable bid/ask · spread ≤12.5% · near-ATM ≤0.5% · +10% target / -10% stop")
+        columns = st.columns(6)
+        for column, (label, value) in zip(columns, (
+            ("Evaluated", v2_metrics["evaluated"]), ("Accepted", v2_metrics["accepted"]),
+            ("Rejected", v2_metrics["rejected"]), ("Completed", v2_metrics["completed"]),
+            ("Wins / Losses", f'{v2_metrics["winners"]} / {v2_metrics["losses"]}'),
+            ("Net P&L", f'${v2_metrics["net_pnl"]:+,.2f}'),
+        )):
+            column.metric(label, value)
+        if mirror_v2_comparisons:
+            st.caption(
+                f'Sessions: {v2_metrics["sessions"]} · Participation: '
+                f'{v2_metrics["participation_percent"]:.1f}% · '
+                f'Authoritative winners rejected: {v2_metrics["winner_destruction"]}'
+            )
+            st.dataframe(pd.DataFrame(mirror_v2_comparisons), use_container_width=True, hide_index=True)
+        else:
+            st.caption("No forward MIRROR V2 decisions have been recorded.")
     with compare_tab:
         comparison = portfolio_comparison(
             authoritative_events, raw_journal, captures, positions, mirror_rows

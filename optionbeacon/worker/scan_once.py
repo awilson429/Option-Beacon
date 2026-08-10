@@ -40,6 +40,13 @@ from mirror_execution import (
     pending_mirror_entries,
     run_mirror_execution,
 )
+from mirror_v2_shadow import (
+    CachedChainProvider,
+    MirrorV2Repository,
+    mirror_v2_enabled,
+    mirror_v2_experiment_start,
+    run_mirror_v2_shadow,
+)
 from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable
 from trade_state_service import (
     list_trade_outcomes,
@@ -224,6 +231,17 @@ def run_scan_once(
             paper_config = ExecutionConfig.from_environment()
             mirror_repository = MirrorExecutionRepository(repository)
             mirror_is_enabled = mirror_enabled()
+            mirror_v2_repository = MirrorV2Repository(repository)
+            mirror_v2_is_enabled = mirror_v2_enabled()
+            mirror_v2_start_date = mirror_v2_experiment_start()
+            if mirror_v2_is_enabled and mirror_v2_start_date is None:
+                prior_v2_state = mirror_v2_repository.runtime_state()
+                try:
+                    mirror_v2_start_date = datetime.fromisoformat(
+                        str((prior_v2_state or {}).get("experiment_start_date"))
+                    ).date()
+                except (TypeError, ValueError):
+                    mirror_v2_start_date = clock().astimezone(ZoneInfo("America/New_York")).date()
             mirror_start_date = mirror_experiment_start()
             if mirror_is_enabled and mirror_start_date is None:
                 prior_mirror_state = mirror_repository.runtime_state()
@@ -453,20 +471,31 @@ def run_scan_once(
             )
         stage = "mirror_execution"
         lease.ensure_owned()
+        shared_chain_provider = CachedChainProvider() if (mirror_is_enabled or mirror_v2_is_enabled) else None
         with performance.measure("mirror_handoff_query"):
             mirror_candidates = pending_mirror_entries(
                 repository, results, mirror_repository
             ) if mirror_is_enabled else []
+            mirror_v2_candidates = pending_mirror_entries(
+                repository, results, mirror_v2_repository
+            ) if mirror_v2_is_enabled else []
         with performance.measure("mirror_cycle"):
             run_mirror_execution(
                 repository, mirror_repository, mirror_candidates,
                 enabled=mirror_is_enabled, scanner_id=scanner_id,
                 run_number=run_number, now=clock(),
+                chain_provider=shared_chain_provider,
                 experiment_start_date=mirror_start_date,
                 underlying_prices={
                     str(result.get("symbol") or symbol): result.get("price")
                     for symbol, result in results.items() if isinstance(result, dict)
                 },
+            )
+            run_mirror_v2_shadow(
+                repository, mirror_v2_repository, mirror_v2_candidates,
+                enabled=mirror_v2_is_enabled, scanner_id=scanner_id, now=clock(),
+                chain_provider=shared_chain_provider, control_repository=mirror_repository,
+                experiment_start_date=mirror_v2_start_date,
             )
         if scan_phase_error is not None:
             completed = clock()
