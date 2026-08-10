@@ -14,7 +14,8 @@ def test_production_fingerprint_is_mapped_and_removed_from_unconditional_caller(
     app = open("app.py", encoding="utf-8").read()
     desk = app[app.index("def render_outcome_trade_journal("):app.index("def render_live_session_opportunity(")]
     assert "list_trade_events(limit=5000)" not in desk
-    assert "list_trade_event_summaries(limit=trade_desk_event_limit)" in desk
+    assert "projected_trade_event_summaries(" in desk
+    assert "limit=trade_desk_event_limit" in desk
     assert "Trade Desk event history" in desk
 
 

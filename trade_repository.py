@@ -42,6 +42,52 @@ class RepositoryUnavailable(RuntimeError):
     """Raised when authoritative storage cannot be reached."""
 
 
+REQUIRED_EVENT_READ_API = ("list_trade_event_summaries", "count_trade_events")
+
+
+def repository_event_api_status(repository) -> dict:
+    """Describe the real runtime repository contract without touching storage."""
+    missing = [name for name in REQUIRED_EVENT_READ_API if not callable(getattr(repository, name, None))]
+    return {"available": not missing, "missing": missing,
+            "repository_class": type(repository).__name__}
+
+
+def projected_trade_event_summaries(repository, *, limit=500, event_type=None,
+                                    start_at=None, end_at=None):
+    """Compatibility-safe projected event read for mixed deployment restarts.
+
+    A coherent deployment delegates to the class API. The fallback intentionally
+    repeats the same bounded explicit-column projection and never restores the
+    legacy full-row event query.
+    """
+    method = getattr(repository, "list_trade_event_summaries", None)
+    if callable(method):
+        return method(limit=limit, event_type=event_type,
+                      start_at=start_at, end_at=end_at)
+    LOGGER.error(json.dumps({
+        "event": "trade_repository_event_api_compatibility_fallback",
+        **repository_event_api_status(repository),
+    }, sort_keys=True))
+    query = """SELECT id,trade_id,opportunity_id,symbol,direction,setup,event_type,
+        event_timestamp,underlying_price,entry_price,exit_price,current_return,
+        realized_return,exit_reason,rule_score,description
+        FROM authoritative_trade_events"""
+    clauses, params = [], []
+    if event_type:
+        clauses.append("event_type=?"); params.append(str(event_type))
+    if start_at is not None:
+        clauses.append("event_timestamp>=?"); params.append(utc_iso(start_at))
+    if end_at is not None:
+        clauses.append("event_timestamp<=?"); params.append(utc_iso(end_at))
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
+    query += " ORDER BY event_timestamp DESC,id DESC LIMIT ?"
+    params.append(int(limit))
+    with repository.connection() as connection:
+        rows = repository._fetchall(connection, query, tuple(params))
+    return [repository._decode_trade_event(row) for row in rows]
+
+
 def database_connect_timeout_seconds(value=None) -> int:
     raw = (
         os.getenv(
