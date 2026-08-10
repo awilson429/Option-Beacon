@@ -3618,7 +3618,9 @@ def _render_pre_unified_trade_desk(
     activity_opportunities, activity_funnel_rows = [], []
     if trade_repository:
         try:
-            activity_opportunities = trade_repository.list_opportunities(limit=5000)
+            activity_opportunities = trade_repository.opportunity_activity_summaries(
+                event.get("opportunity_id") for event in authoritative_events
+            )
             funnel_repository = AuthoritativeEntryFunnelRepository(
                 trade_repository, initialize=False
             )
@@ -3808,7 +3810,9 @@ def _render_pre_shell_unified_trade_desk(
     activity_opportunities, activity_funnel_rows = [], []
     if trade_repository:
         try:
-            activity_opportunities = trade_repository.list_opportunities(limit=5000)
+            activity_opportunities = trade_repository.opportunity_activity_summaries(
+                event.get("opportunity_id") for event in authoritative_events
+            )
             funnel_repository = AuthoritativeEntryFunnelRepository(
                 trade_repository, initialize=False
             )
@@ -3922,8 +3926,11 @@ def render_outcome_trade_journal(
                 trade_repository, initialize=False
             )
             option_positions = paper_repository.load()
-            paper_captures = paper_repository.records()
-            paper_journal = paper_repository.journal_rows(limit=5000)
+            open_paper_trade_ids = {
+                position.trade_id for position in option_positions if position.status == "OPEN"
+            }
+            paper_captures = paper_repository.records_for_trade_ids(open_paper_trade_ids)
+            paper_journal = paper_repository.journal_for_trade_ids(open_paper_trade_ids)
             worker_config_state = paper_repository.get_runtime_config()
             try:
                 mirror_repository = MirrorExecutionRepository(
@@ -3990,10 +3997,14 @@ def render_outcome_trade_journal(
             "count": reconciliation["unknown_provenance"],
         }, sort_keys=True))
     summary = journal_summary_metrics(records) if records else None
-    trade_desk_event_limit = st.selectbox(
-        "Trade Desk event history", (200, 500, 1000, 5000), index=1,
-        key="trade_desk_event_history_limit",
-    )
+    trade_desk_event_limit = 200
+    with st.expander("Advanced activity history", expanded=False):
+        if st.checkbox("Load extended Trade Desk event history", value=False,
+                       key="trade_desk_load_extended_events"):
+            trade_desk_event_limit = st.selectbox(
+                "Trade Desk event history", (500, 1000, 5000), index=0,
+                key="trade_desk_event_history_limit",
+            )
     activity_authoritative_events = (
         projected_trade_event_summaries(
             trade_repository, limit=trade_desk_event_limit
@@ -4002,7 +4013,9 @@ def render_outcome_trade_journal(
     activity_opportunities, activity_funnel_rows = [], []
     if trade_repository:
         try:
-            activity_opportunities = trade_repository.list_opportunities(limit=5000)
+            activity_opportunities = trade_repository.opportunity_activity_summaries(
+                event.get("opportunity_id") for event in activity_authoritative_events
+            )
             funnel_repository = AuthoritativeEntryFunnelRepository(
                 trade_repository, initialize=False
             )
@@ -4061,6 +4074,23 @@ def render_outcome_trade_journal(
         authoritative_session_event_summaries(trade_repository, session_date)
         if trade_repository else []
     )
+    if paper_available and authoritative_events:
+        session_source_ids = {
+            str(event.get("opportunity_id") or event.get("trade_id"))
+            for event in authoritative_events
+            if event.get("opportunity_id") or event.get("trade_id")
+        }
+        session_captures = paper_repository.records_for_source_signal_ids(session_source_ids)
+        session_journal = paper_repository.analytics_decisions(
+            session_source_ids, limit=max(1, len(session_source_ids) * 4)
+        )
+        captures_by_trade = {capture.trade_id: capture for capture in [*paper_captures, *session_captures]}
+        paper_captures = list(captures_by_trade.values())
+        journal_by_id = {
+            str(row.get("journal_id") or f'{row.get("trade_id")}:{row.get("created_at")}'): row
+            for row in [*paper_journal, *session_journal]
+        }
+        paper_journal = list(journal_by_id.values())
     comparison = trade_comparison_model(
         authoritative_events, paper_journal, paper_captures, option_positions,
         session_date=session_date, mirror_rows=mirror_rows,
@@ -4255,7 +4285,7 @@ def render_paper_trading_page():
     )
     now = eastern_now()
     paper_history_limit = st.selectbox(
-        "PAPER history rows", (100, 500, 1000, 5000), index=1,
+        "PAPER history rows", (100, 500, 1000, 5000), index=0,
         key="paper_history_row_limit",
     )
     local_config = ExecutionConfig()
@@ -4271,7 +4301,7 @@ def render_paper_trading_page():
             repository = PaperExecutionRepository(trade_repository, initialize=False)
             positions = repository.load()
             raw_journal = repository.journal_rows(limit=paper_history_limit)
-            captures = repository.records()
+            captures = repository.records(limit=paper_history_limit)
             authoritative_events = trade_repository.list_trade_events(limit=paper_history_limit)
             worker_health = trade_repository.get_latest_scan_health()
             worker_config_state = repository.get_runtime_config()

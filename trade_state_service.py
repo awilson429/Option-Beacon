@@ -171,6 +171,7 @@ def process_scanner_result(
     eod_exit_time=DEFAULT_EOD_EXIT_TIME_ET,
     scanner_id=None,
     run_number=None,
+    outcome_records=None,
 ) -> int:
     """Advance authoritative outcomes directly from one stable scanner result."""
     symbol = str((result or {}).get("symbol") or "").upper()
@@ -181,7 +182,8 @@ def process_scanner_result(
     timestamp = _result_timestamp(result)
     lifecycle_timestamp = current_timestamp or timestamp
     changed = 0
-    for record in list_trade_outcomes(repository):
+    records = outcome_records if outcome_records is not None else list_trade_outcomes(repository)
+    for record in records:
         if record.symbol.upper() != symbol or record.exit_time is not None:
             continue
         prior_entry_time = record.entry_time
@@ -267,6 +269,8 @@ def process_scanner_result(
             repository, result, candidate, source_version=source_version
         )
         _persist_outcome_label(repository, candidate)
+        if outcome_records is not None:
+            outcome_records.append(candidate)
         changed += 1
     return changed
 
@@ -290,9 +294,15 @@ def _persist_outcome_label(repository, record):
         LOGGER.exception("Could not persist intelligence outcome %s", record.trade_id)
 
 
-def list_trade_outcomes(repository: TradeRepository, *, limit=5000) -> list[TradeOutcome]:
+def list_trade_outcomes(repository: TradeRepository, *, limit=5000,
+                        active_only=False) -> list[TradeOutcome]:
     records = []
-    for opportunity in repository.list_opportunities(limit=limit):
+    payload_reader = getattr(repository, "list_outcome_payloads", None)
+    opportunities = (
+        payload_reader(limit=limit, active_only=active_only)
+        if callable(payload_reader) else repository.list_opportunities(limit=limit)
+    )
+    for opportunity in opportunities:
         payload = (opportunity.get("metadata") or {}).get("trade_outcome")
         if not payload:
             continue

@@ -326,6 +326,13 @@ class IntradayRepository:
         with self.repository.connection() as connection:
             return self.repository._fetchall(connection, "SELECT * FROM intraday_signals ORDER BY updated_at DESC LIMIT ?", (int(limit),))
 
+    def active_signal_states(self):
+        """Project only signals whose lifecycle may close after position management."""
+        with self.repository.connection() as connection:
+            return self.repository._fetchall(connection, """SELECT opportunity_id,state
+                FROM intraday_signals WHERE state IN ('PAPER_OPENED','MANAGED')
+                ORDER BY updated_at""")
+
     def list_trades(self, *, status=None, limit=500):
         sql, params = "SELECT * FROM intraday_paper_trades", []
         if status: sql += " WHERE status=?"; params.append(status)

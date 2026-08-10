@@ -78,7 +78,7 @@ def _safe_funnel_error_message(exc):
 
 def record_authoritative_entry_funnel(
     *, repository, scanner_id, run_number, started_at, completed_at,
-    symbols, monotonic=time.perf_counter,
+    symbols, monotonic=time.perf_counter, candidate_records=None,
 ):
     """Attempt exactly one failure-isolated snapshot for one scanner-cycle identity."""
     attempt_started = monotonic()
@@ -101,7 +101,8 @@ def record_authoritative_entry_funnel(
             scanner_id=scanner_id, run_number=run_number,
             started_at=started_at, completed_at=completed_at,
             symbols=symbols, entered_events=entered_events,
-            candidate_records=list_trade_outcomes(repository),
+            candidate_records=(candidate_records if candidate_records is not None
+                               else list_trade_outcomes(repository)),
         )
         LOGGER.info(json.dumps({
             "event": "authoritative_entry_funnel_completed",
@@ -213,6 +214,7 @@ def run_scan_once(
     failed_symbols = []
     funnel_symbols = []
     provider_summary = None
+    cycle_outcomes = None
     scan_phase_error = None
     stage = "market_data_cycle_start"
     LOGGER.info(
@@ -277,9 +279,10 @@ def run_scan_once(
                 groups, source, universe_error = symbol_groups_loader()
             stage = "authoritative_open_trade_loading"
             with performance.measure("authoritative_open_trade_loading"):
+                cycle_outcomes = list_trade_outcomes(repository, active_only=True)
                 open_records = [
                     record
-                    for record in list_trade_outcomes(repository)
+                    for record in cycle_outcomes
                     if record.entry_time is not None and record.exit_time is None
                 ]
             open_symbols = {record.symbol.upper() for record in open_records}
@@ -369,6 +372,7 @@ def run_scan_once(
                                     repository, result, source_version=build["commit"],
                                     current_timestamp=clock(), eod_exit_time=eod_exit_time,
                                     scanner_id=scanner_id, run_number=run_number,
+                                    outcome_records=cycle_outcomes,
                                 )
                         symbol_completed_at = clock()
                         symbol_record = timing.finish(
@@ -432,14 +436,17 @@ def run_scan_once(
                 repository=repository, scanner_id=scanner_id,
                 run_number=run_number, started_at=started,
                 completed_at=funnel_completed_at, symbols=funnel_symbols,
-                monotonic=monotonic,
+                monotonic=monotonic, candidate_records=cycle_outcomes,
             )
 
         stage = "authoritative_entry_query"
         lease.ensure_owned()
         with performance.measure("paper_handoff_query"):
+            shared_entry_events = repository.list_trade_event_summaries(
+                limit=5000, event_type="TRADE_ENTERED"
+            )
             paper_candidates = pending_authoritative_entries(
-                repository, results, paper_repository
+                repository, results, paper_repository, entry_events=shared_entry_events
             )
             authoritative_entries_generated = repository.count_trade_events(
                 event_type="TRADE_ENTERED", start_at=started,
@@ -473,11 +480,14 @@ def run_scan_once(
         lease.ensure_owned()
         shared_chain_provider = CachedChainProvider() if (mirror_is_enabled or mirror_v2_is_enabled) else None
         with performance.measure("mirror_handoff_query"):
+            shared_exit_events = repository.list_trade_event_summaries(
+                limit=5000, event_type="TRADE_CLOSED"
+            ) if (mirror_is_enabled or mirror_v2_is_enabled) else []
             mirror_candidates = pending_mirror_entries(
-                repository, results, mirror_repository
+                repository, results, mirror_repository, entry_events=shared_entry_events
             ) if mirror_is_enabled else []
             mirror_v2_candidates = pending_mirror_entries(
-                repository, results, mirror_v2_repository
+                repository, results, mirror_v2_repository, entry_events=shared_entry_events
             ) if mirror_v2_is_enabled else []
         with performance.measure("mirror_cycle"):
             run_mirror_execution(
@@ -486,6 +496,7 @@ def run_scan_once(
                 run_number=run_number, now=clock(),
                 chain_provider=shared_chain_provider,
                 experiment_start_date=mirror_start_date,
+                entry_events=shared_entry_events, exit_events=shared_exit_events,
                 underlying_prices={
                     str(result.get("symbol") or symbol): result.get("price")
                     for symbol, result in results.items() if isinstance(result, dict)
@@ -496,6 +507,7 @@ def run_scan_once(
                 enabled=mirror_v2_is_enabled, scanner_id=scanner_id, now=clock(),
                 chain_provider=shared_chain_provider, control_repository=mirror_repository,
                 experiment_start_date=mirror_v2_start_date,
+                entry_events=shared_entry_events, exit_events=shared_exit_events,
             )
         if scan_phase_error is not None:
             completed = clock()

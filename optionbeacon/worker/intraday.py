@@ -151,8 +151,8 @@ def _manage_positions(ledger, positions, bars, quote_provider, now):
                    trade_id=trade_id, symbol=position["symbol"], execution_variant=variant,
                    contract=contract, reason=type(exc).__name__)
     # Close strategy opportunities only after both independently managed variants are closed.
-    open_opportunities = {row["opportunity_id"] for row in ledger.list_trades(status="OPEN", limit=10000)}
-    for signal in ledger.list_signals(limit=10000):
+    open_opportunities = {row["opportunity_id"] for row in ledger.list_trades(status="OPEN", limit=500)}
+    for signal in ledger.active_signal_states():
         if signal["opportunity_id"] not in open_opportunities and signal.get("state") in {"PAPER_OPENED", "MANAGED"}:
             ledger.transition_signal(signal["opportunity_id"], signal["state"], "CLOSED",
                                      reason="ALL_PAPER_VARIANTS_CLOSED", now=now)
@@ -222,7 +222,7 @@ def run_intraday_cycle(repository, *, bar_provider=tradier_minute_bars,
         ledger = IntradayRepository(repository)
         _event("intraday_cycle_started")
         failure_stage = "open_positions_query"
-        open_positions = ledger.list_trades(status="OPEN", limit=10000)
+        open_positions = ledger.list_trades(status="OPEN", limit=500)
         failure_stage = "minute_bars"
         bars = {}
         provider_failures = []

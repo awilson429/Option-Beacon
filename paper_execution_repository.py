@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
+from zoneinfo import ZoneInfo
 
 from option_position_tracker import PaperOptionPosition, _deserialize, _serialize
 from option_trade_engine import PaperOptionTrade
@@ -117,9 +118,47 @@ class PaperExecutionRepository:
         return row
 
     # OptionTradeLedger-compatible API
-    def records(self):
+    def records(self, limit=None):
+        query = "SELECT contract_metadata_json FROM paper_execution_trades ORDER BY created_at DESC"
+        params = ()
+        if limit is not None:
+            query += " LIMIT ?"
+            params = (int(limit),)
         with self.repository.connection() as connection:
-            rows = self.repository._fetchall(connection, "SELECT contract_metadata_json FROM paper_execution_trades ORDER BY created_at")
+            rows = self.repository._fetchall(connection, query, params)
+        records = []
+        for row in rows:
+            try:
+                values = json.loads(row["contract_metadata_json"])["capture"]
+                values["created_timestamp"] = parse_utc(values["created_timestamp"])
+                records.append(PaperOptionTrade(**values))
+            except Exception:
+                continue
+        return records
+
+    def records_for_trade_ids(self, trade_ids):
+        identities = sorted({str(value) for value in trade_ids if value})
+        if not identities:
+            return []
+        placeholders = ",".join("?" for _ in identities)
+        return self._capture_rows(
+            f"SELECT contract_metadata_json FROM paper_execution_trades WHERE trade_id IN ({placeholders})",
+            tuple(identities),
+        )
+
+    def records_for_source_signal_ids(self, source_signal_ids):
+        identities = sorted({str(value) for value in source_signal_ids if value})
+        if not identities:
+            return []
+        placeholders = ",".join("?" for _ in identities)
+        return self._capture_rows(
+            f"SELECT contract_metadata_json FROM paper_execution_trades WHERE source_signal_id IN ({placeholders})",
+            tuple(identities),
+        )
+
+    def _capture_rows(self, query, params):
+        with self.repository.connection() as connection:
+            rows = self.repository._fetchall(connection, query, params)
         records = []
         for row in rows:
             try:
@@ -164,9 +203,35 @@ class PaperExecutionRepository:
         return record
 
     # OptionPositionStore-compatible API
-    def load(self):
+    def load(self, limit=None):
+        query = "SELECT metadata_json FROM paper_execution_positions ORDER BY opened_at DESC"
+        params = ()
+        if limit is not None:
+            query += " LIMIT ?"
+            params = (int(limit),)
         with self.repository.connection() as connection:
-            rows = self.repository._fetchall(connection, "SELECT metadata_json FROM paper_execution_positions ORDER BY opened_at")
+            rows = self.repository._fetchall(connection, query, params)
+        positions = []
+        for row in rows:
+            try:
+                positions.append(_deserialize(json.loads(row["metadata_json"])["position"]))
+            except Exception:
+                continue
+        return positions
+
+    def load_operational(self, now=None):
+        """Load open plus current-Eastern-session positions for worker risk state."""
+        checked = now or datetime.now(timezone.utc)
+        if checked.tzinfo is None:
+            checked = checked.replace(tzinfo=timezone.utc)
+        eastern = ZoneInfo("America/New_York")
+        session_start = datetime.combine(checked.astimezone(eastern).date(), time.min,
+                                         tzinfo=eastern).astimezone(timezone.utc)
+        with self.repository.connection() as connection:
+            rows = self.repository._fetchall(connection, """SELECT metadata_json
+                FROM paper_execution_positions
+                WHERE status='OPEN' OR last_updated_at>=?
+                ORDER BY opened_at""", (utc_iso(session_start),))
         positions = []
         for row in rows:
             try:
@@ -261,6 +326,17 @@ class PaperExecutionRepository:
     def journal_rows(self, limit=200):
         with self.repository.connection() as connection:
             return self.repository._fetchall(connection, "SELECT * FROM paper_execution_journal ORDER BY created_at DESC LIMIT ?", (limit,))
+
+    def journal_for_trade_ids(self, trade_ids):
+        identities = sorted({str(value) for value in trade_ids if value})
+        if not identities:
+            return []
+        placeholders = ",".join("?" for _ in identities)
+        with self.repository.connection() as connection:
+            return self.repository._fetchall(connection, f"""SELECT journal_id,scanner_id,
+                run_number,trade_id,accepted,reason_code,created_at,metadata_json
+                FROM paper_execution_journal WHERE trade_id IN ({placeholders})
+                ORDER BY created_at,journal_id""", tuple(identities))
 
     def analytics_decisions(self, opportunity_ids, *, limit=5000):
         """Return projected BROAD entry decisions for exact authoritative IDs."""

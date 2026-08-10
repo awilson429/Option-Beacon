@@ -2,8 +2,10 @@ import inspect
 from datetime import datetime, timedelta, timezone
 
 from mirror_execution import MirrorExecutionRepository
+from mirror_v2_shadow import MirrorV2Repository
 from paper_execution_repository import PaperExecutionRepository
 from trade_repository import TradeRepository, query_egress_diagnostics_enabled
+from trade_state_service import process_scanner_result
 
 
 NOW = datetime(2026, 8, 10, 14, tzinfo=timezone.utc)
@@ -103,3 +105,43 @@ def test_streamlit_paths_add_no_writes_or_trading_hooks():
     sources = open("winner_dna_dashboard.py", encoding="utf-8").read() + open("selectivity_dashboard.py", encoding="utf-8").read()
     for forbidden in (".save(", ".append(", "record_disposition(", "update_mark(", "run_mirror_execution(", "evaluate_execution("):
         assert forbidden not in sources
+
+
+def test_authoritative_worker_reuses_one_projected_outcome_snapshot_per_cycle():
+    repository_source = inspect.getsource(TradeRepository.list_outcome_payloads)
+    process_source = inspect.getsource(process_scanner_result)
+    worker_source = open("optionbeacon/worker/scan_once.py", encoding="utf-8").read()
+    assert "SELECT id,metadata_json" in repository_source
+    assert "SELECT *" not in repository_source
+    assert "active_only=True" in worker_source
+    assert "outcome_records=cycle_outcomes" in worker_source
+    assert "outcome_records if outcome_records is not None" in process_source
+
+
+def test_worker_hot_paths_do_not_reconstruct_full_mirror_ledgers():
+    control_open = inspect.getsource(MirrorExecutionRepository.open_rows)
+    control_ids = inspect.getsource(MirrorExecutionRepository.dispositioned_source_signal_ids)
+    v2_open = inspect.getsource(MirrorV2Repository.open_rows)
+    v2_ids = inspect.getsource(MirrorV2Repository.dispositioned_source_signal_ids)
+    for source in (control_open, control_ids, v2_open, v2_ids):
+        assert "SELECT *" not in source
+    assert "status IN ('OPEN','EXIT_PENDING')" in control_open
+    assert "status='OPEN'" in v2_open
+
+
+def test_trade_desk_and_intraday_default_reads_are_bounded_and_deferred():
+    app_source = open("app.py", encoding="utf-8").read()
+    intraday_worker = open("optionbeacon/worker/intraday.py", encoding="utf-8").read()
+    assert "list_opportunities(limit=5000)" not in app_source
+    assert app_source.index("Load extended Trade Desk event history") < app_source.index(
+        '"Trade Desk event history", (500, 1000, 5000)'
+    )
+    assert "limit=10000" not in intraday_worker
+    assert "active_signal_states()" in intraday_worker
+
+
+def test_paper_worker_uses_server_filtered_operational_state():
+    source = inspect.getsource(PaperExecutionRepository.load_operational)
+    assert "status='OPEN' OR last_updated_at>=?" in source
+    assert "SELECT metadata_json" in source
+    assert "SELECT *" not in source

@@ -28,7 +28,8 @@ class AuthoritativeEntryProjectionError(RuntimeError):
     """Raised when a durable entry cannot be projected without inventing data."""
 
 
-def pending_authoritative_entries(repository, latest_results, paper_repository, *, limit=5000):
+def pending_authoritative_entries(repository, latest_results, paper_repository, *, limit=5000,
+                                  entry_events=None):
     """Project durable TRADE_ENTERED events into PAPER candidates exactly once."""
     by_symbol = {
         str((result or {}).get("symbol") or symbol).upper(): result
@@ -39,9 +40,8 @@ def pending_authoritative_entries(repository, latest_results, paper_repository, 
     }
     candidates = []
     dispositioned = paper_repository.dispositioned_source_signal_ids()
-    events = repository.list_trade_event_summaries(
-        limit=limit, event_type="TRADE_ENTERED"
-    )
+    events = (entry_events if entry_events is not None else
+              repository.list_trade_event_summaries(limit=limit, event_type="TRADE_ENTERED"))
     for event in reversed(events):
         opportunity_id = event.get("opportunity_id") or event.get("trade_id")
         if not opportunity_id or opportunity_id in dispositioned:
@@ -256,7 +256,9 @@ def refresh_paper_positions(
     scanner_id=None, run_number=None,
 ):
     """Restore and refresh durable positions before the underlying scan starts."""
-    previous = {position.trade_id: position for position in position_store.load()}
+    loader = getattr(position_store, "load_operational", None)
+    restored = loader(now) if callable(loader) else position_store.load()
+    previous = {position.trade_id: position for position in restored}
     LOGGER.info(json.dumps({
         "event": "paper_state_restored", "scanner_id": scanner_id,
         "run_number": run_number,
@@ -278,6 +280,7 @@ def refresh_paper_positions(
                 scanner_id=scanner_id, run_number=run_number,
             )
         ) if journal is not None and hasattr(journal, "append_refresh_failure") else None,
+        initial_positions=restored,
     )
     LOGGER.info(json.dumps({
         "event": "paper_positions_refreshed", "scanner_id": scanner_id,
