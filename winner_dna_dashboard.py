@@ -15,22 +15,37 @@ def render_winner_dna(st, repository):
         if repository is None:
             st.warning("Authoritative intelligence storage is unavailable.")
             return None
-        mirrors, marks, journal, captures = [], [], [], []
+        history_limit = st.selectbox(
+            "Winner DNA history limit", (100, 500, 1000, 5000), index=1,
+            key="winner_dna_history_limit",
+        )
+        if not st.checkbox("Load Winner DNA analytics", value=False, key="load_winner_dna"):
+            st.caption("Analytics are query-on-demand to avoid transferring historical rows on unrelated reruns.")
+            return None
+        snapshots = repository.list_intelligence_snapshots(limit=history_limit)
+        outcomes = repository.list_intelligence_outcomes(limit=history_limit)
+        opportunity_ids = {
+            str((wrapped.get("snapshot") or wrapped).get("opportunity_id"))
+            for wrapped in snapshots if (wrapped.get("snapshot") or wrapped).get("opportunity_id")
+        }
+        mirrors, marks, journal = [], [], []
         try:
             mirror_repository = MirrorExecutionRepository(repository, initialize=False)
-            mirrors, marks = mirror_repository.rows(), mirror_repository.marks()
+            mirrors = mirror_repository.analytics_rows(opportunity_ids, limit=history_limit)
+            marks = mirror_repository.mark_summaries(
+                row.get("mirror_trade_id") for row in mirrors if row.get("opened_at")
+            )
         except Exception:
             pass
         try:
             paper_repository = PaperExecutionRepository(repository, initialize=False)
-            journal, captures = paper_repository.journal_rows(limit=5000), paper_repository.records()
+            journal = paper_repository.analytics_decisions(opportunity_ids, limit=history_limit)
         except Exception:
             pass
         report = analyze_winner_dna(
-            repository.list_intelligence_snapshots(limit=5000),
-            repository.list_intelligence_outcomes(limit=5000),
+            snapshots, outcomes,
             mirror_rows=mirrors, mirror_marks=marks,
-            broad_journal=journal, broad_captures=captures,
+            broad_journal=journal, broad_captures=(),
         )
         coverage = report["coverage"]
         st.markdown("#### Data Coverage")

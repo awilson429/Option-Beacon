@@ -165,6 +165,24 @@ class MirrorExecutionRepository:
         with self.repository.connection() as connection:
             return self.repository._fetchall(connection, "SELECT * FROM mirror_execution_trades ORDER BY entry_event_at,created_at")
 
+    def analytics_rows(self, opportunity_ids, *, limit=5000):
+        """Project only analytics columns for exact authoritative IDs."""
+        identities = sorted({str(value) for value in opportunity_ids if value})[:int(limit)]
+        if not identities:
+            return []
+        placeholders = ",".join("?" for _ in identities)
+        query = f"""SELECT mirror_trade_id,opportunity_id,symbol,direction,option_symbol,
+            option_type,strike,expiration,dte,quantity,contract_multiplier,
+            underlying_entry_price,entry_bid,entry_ask,entry_mid,entry_fill,
+            spread_dollars,spread_percent,open_interest,option_volume,total_debit,
+            entry_event_at,opened_at,status,disposition_code,exit_quote_at,
+            exit_bid,exit_ask,exit_mid,exit_fill,realized_pnl,
+            realized_return_percent,updated_at,metadata_json
+            FROM mirror_execution_trades WHERE opportunity_id IN ({placeholders})
+            ORDER BY entry_event_at,opportunity_id LIMIT ?"""
+        with self.repository.connection() as connection:
+            return self.repository._fetchall(connection, query, (*identities, int(limit)))
+
     def get(self, opportunity_id):
         with self.repository.connection() as connection:
             return self.repository._fetchone(connection, "SELECT * FROM mirror_execution_trades WHERE opportunity_id=?", (opportunity_id,))
@@ -177,6 +195,28 @@ class MirrorExecutionRepository:
         query += " ORDER BY observed_at,mark_id"
         with self.repository.connection() as connection:
             return self.repository._fetchall(connection, query, params)
+
+    def mark_summaries(self, mirror_trade_ids, *, observed_after=None):
+        """Return one telemetry summary per requested trade without transferring raw marks."""
+        identities = sorted({str(value) for value in mirror_trade_ids if value})
+        if not identities:
+            return []
+        placeholders = ",".join("?" for _ in identities)
+        query = f"""SELECT mirror_trade_id,
+            COUNT(return_pct) AS valid_mark_count,
+            MAX(mfe_pct) AS mfe_pct,MIN(mae_pct) AS mae_pct,
+            MAX(peak_return_pct) AS peak_return_pct,
+            MAX(peak_unrealized_pnl) AS peak_unrealized_pnl,
+            MIN(observed_at) AS first_observed_at,MAX(observed_at) AS last_observed_at
+            FROM mirror_execution_marks
+            WHERE mirror_trade_id IN ({placeholders})"""
+        params = list(identities)
+        if observed_after is not None:
+            query += " AND observed_at>=?"
+            params.append(utc_iso(observed_after) if isinstance(observed_after, datetime) else str(observed_after))
+        query += " GROUP BY mirror_trade_id ORDER BY mirror_trade_id"
+        with self.repository.connection() as connection:
+            return self.repository._fetchall(connection, query, tuple(params))
 
     def dispositioned_source_signal_ids(self):
         return {row["opportunity_id"] for row in self.rows()}

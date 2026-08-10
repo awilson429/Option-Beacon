@@ -17,9 +17,16 @@ def render_selectivity_analysis(st, repository):
     if repository is None:
         st.warning("Authoritative intelligence storage is unavailable.")
         return None
+    history_limit = st.selectbox(
+        "Selectivity history limit", (100, 500, 1000, 5000), index=1,
+        key="selectivity_history_limit",
+    )
+    if not st.checkbox("Load Selectivity analytics", value=False, key="load_selectivity_analytics"):
+        st.caption("Query-on-demand: no historical intelligence rows are loaded while this analysis is idle.")
+        return None
     report = analyze_selectivity(
-        repository.list_intelligence_snapshots(limit=5000),
-        repository.list_intelligence_outcomes(limit=5000),
+        repository.list_intelligence_snapshots(limit=history_limit),
+        repository.list_intelligence_outcomes(limit=history_limit),
     )
     overview = report["overview"]
     columns = st.columns(5)

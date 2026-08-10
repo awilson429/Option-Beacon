@@ -262,6 +262,21 @@ class PaperExecutionRepository:
         with self.repository.connection() as connection:
             return self.repository._fetchall(connection, "SELECT * FROM paper_execution_journal ORDER BY created_at DESC LIMIT ?", (limit,))
 
+    def analytics_decisions(self, opportunity_ids, *, limit=5000):
+        """Return projected BROAD entry decisions for exact authoritative IDs."""
+        identities = sorted({str(value) for value in opportunity_ids if value})[:int(limit)]
+        if not identities:
+            return []
+        placeholders = ",".join("?" for _ in identities)
+        query = f"""SELECT t.source_signal_id,j.trade_id,j.accepted,j.reason_code,
+            j.created_at,j.metadata_json
+            FROM paper_execution_journal j
+            JOIN paper_execution_trades t ON t.trade_id=j.trade_id
+            WHERE t.source_signal_id IN ({placeholders})
+            ORDER BY j.created_at,j.journal_id LIMIT ?"""
+        with self.repository.connection() as connection:
+            return self.repository._fetchall(connection, query, (*identities, int(limit)))
+
     def has_disposition(self, opportunity_id):
         """Return whether an authoritative entry already has an audited PAPER decision."""
         return opportunity_id in self.dispositioned_source_signal_ids()
