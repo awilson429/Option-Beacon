@@ -3916,6 +3916,8 @@ def render_outcome_trade_journal(
     mirror_rows = []
     mirror_runtime = None
     mirror_repository = None
+    paper_repository = None
+    paper_failure_stage = "repository_init"
 
     database_url = dashboard_database_url()
     if database_url:
@@ -3926,13 +3928,25 @@ def render_outcome_trade_journal(
             paper_repository = PaperExecutionRepository(
                 trade_repository, initialize=False
             )
+            paper_failure_stage = "account_positions_load"
             option_positions = paper_repository.load()
             open_paper_trade_ids = {
                 position.trade_id for position in option_positions if position.status == "OPEN"
             }
+            paper_failure_stage = "open_trade_captures_load"
             paper_captures = paper_repository.records_for_trade_ids(open_paper_trade_ids)
+            paper_failure_stage = "open_trade_journal_load"
             paper_journal = paper_repository.journal_for_trade_ids(open_paper_trade_ids)
-            worker_config_state = paper_repository.get_runtime_config()
+            paper_available = True
+            try:
+                worker_config_state = paper_repository.get_runtime_config()
+            except Exception as exc:
+                LOGGER.error(json.dumps({
+                    "event": "trade_desk_paper_config_failed",
+                    "failure_stage": "runtime_config_load",
+                    "exception_class": type(exc).__name__,
+                    "repository": "PaperExecutionRepository.get_runtime_config",
+                }, sort_keys=True), exc_info=True)
             try:
                 mirror_repository = MirrorExecutionRepository(
                     trade_repository, initialize=False
@@ -3941,11 +3955,28 @@ def render_outcome_trade_journal(
             except Exception:
                 mirror_rows, mirror_runtime = [], None
             if worker_config_state:
-                config = ExecutionConfig.from_resolved_state(
-                    worker_config_state.get("resolved_config"), fallback=local_config
-                )
-            paper_available = True
-        except Exception:
+                try:
+                    config = ExecutionConfig.from_resolved_state(
+                        worker_config_state.get("resolved_config"), fallback=local_config
+                    )
+                except Exception as exc:
+                    LOGGER.error(json.dumps({
+                        "event": "trade_desk_paper_config_failed",
+                        "failure_stage": "runtime_config_decode",
+                        "exception_class": type(exc).__name__,
+                        "repository": "ExecutionConfig.from_resolved_state",
+                    }, sort_keys=True), exc_info=True)
+        except Exception as exc:
+            LOGGER.error(json.dumps({
+                "event": "trade_desk_paper_state_failed",
+                "failure_stage": paper_failure_stage,
+                "exception_class": type(exc).__name__,
+                "repository": "PaperExecutionRepository",
+                "query_fingerprint": (
+                    "1bb26692a7bc" if paper_failure_stage == "account_positions_load" else None
+                ),
+                "row_count": None,
+            }, sort_keys=True), exc_info=True)
             st.warning(
                 "PAPER account state is temporarily unavailable; authoritative "
                 "trade metrics remain visible."
@@ -4074,41 +4105,62 @@ def render_outcome_trade_journal(
         authoritative_session_event_summaries(trade_repository, session_date)
         if trade_repository else []
     )
-    if paper_available and authoritative_events:
+    session_positions = []
+    if paper_repository is not None and authoritative_events:
         session_source_ids = {
             str(event.get("opportunity_id") or event.get("trade_id"))
             for event in authoritative_events
             if event.get("opportunity_id") or event.get("trade_id")
         }
-        session_captures = paper_repository.records_for_source_signal_ids(session_source_ids)
-        session_trade_ids = {
-            str(capture.trade_id) for capture in session_captures if capture.trade_id
-        }
-        session_positions = paper_repository.positions_for_trade_ids(session_trade_ids)
-        session_journal = paper_repository.analytics_decisions(
-            session_source_ids, limit=max(1, len(session_source_ids) * 4)
-        )
-        captures_by_trade = {capture.trade_id: capture for capture in [*paper_captures, *session_captures]}
-        paper_captures = list(captures_by_trade.values())
-        journal_by_id = {
-            str(row.get("journal_id") or f'{row.get("trade_id")}:{row.get("created_at")}'): row
-            for row in [*paper_journal, *session_journal]
-        }
-        paper_journal = list(journal_by_id.values())
-        positions_by_trade = {
-            str(position.trade_id): position
-            for position in [*option_positions, *session_positions]
-        }
-        option_positions = list(positions_by_trade.values())
-        if mirror_repository is not None:
-            mirror_rows = mirror_repository.analytics_rows(
-                session_source_ids, limit=max(1, len(session_source_ids))
+        try:
+            session_captures = paper_repository.records_for_source_signal_ids(session_source_ids)
+            session_trade_ids = {
+                str(capture.trade_id) for capture in session_captures if capture.trade_id
+            }
+            session_positions = paper_repository.positions_for_trade_ids(session_trade_ids)
+            session_journal = paper_repository.analytics_decisions(
+                session_source_ids, limit=max(1, len(session_source_ids) * 4)
             )
+            captures_by_trade = {capture.trade_id: capture for capture in [*paper_captures, *session_captures]}
+            paper_captures = list(captures_by_trade.values())
+            paper_journal = [*paper_journal, *session_journal]
+            positions_by_trade = {
+                str(position.trade_id): position
+                for position in [*option_positions, *session_positions]
+            }
+            option_positions = list(positions_by_trade.values())
+        except Exception as exc:
+            LOGGER.error(json.dumps({
+                "event": "trade_desk_session_paper_failed",
+                "failure_stage": "exact_id_session_reconciliation",
+                "exception_class": type(exc).__name__,
+                "repository": "PaperExecutionRepository",
+            }, sort_keys=True), exc_info=True)
+        if mirror_repository is not None:
+            try:
+                mirror_rows = mirror_repository.analytics_rows(
+                    session_source_ids, limit=max(1, len(session_source_ids))
+                )
+            except Exception as exc:
+                LOGGER.error(json.dumps({
+                    "event": "trade_desk_session_mirror_failed",
+                    "failure_stage": "exact_id_session_reconciliation",
+                    "exception_class": type(exc).__name__,
+                    "repository": "MirrorExecutionRepository.analytics_rows",
+                }, sort_keys=True), exc_info=True)
     comparison = trade_comparison_model(
         authoritative_events, paper_journal, paper_captures, option_positions,
         session_date=session_date, mirror_rows=mirror_rows,
         mirror_runtime=mirror_runtime,
     )
+    if paper_available:
+        LOGGER.info(json.dumps({
+            "event": "trade_desk_paper_state_loaded",
+            "open_positions": sum(position.status == "OPEN" for position in option_positions),
+            "account_positions_loaded": len(option_positions),
+            "session_paper_positions": len(session_positions),
+            "broad_session_positions": comparison["paper"]["opened"],
+        }, sort_keys=True))
     persisted_session_entries = {
         str(event.get("opportunity_id") or event.get("trade_id"))
         for event in authoritative_events
@@ -4117,9 +4169,12 @@ def render_outcome_trade_journal(
     }
     LOGGER.info(json.dumps({
         "event": "trade_desk_session_reconciliation",
-        "session_date": str(session_date),
-        "persisted_authoritative_entries": len(persisted_session_entries),
-        "comparison_authoritative_trades": comparison["authoritative"]["trades"],
+        "session_date_et": str(session_date),
+        "authoritative_session_trades": comparison["authoritative"]["trades"],
+        "broad_opened": comparison["paper"]["opened"],
+        "broad_closed": comparison["paper"]["closed"],
+        "mirror_opened": comparison["mirror"]["opened"],
+        "mirror_closed": comparison["mirror"]["closed"],
         "reconciled": comparison["authoritative"]["trades"] == len(persisted_session_entries),
     }, sort_keys=True))
     dashboard = dashboard_shell_markup(
