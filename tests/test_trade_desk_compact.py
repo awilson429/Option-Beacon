@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from html import unescape
 
 from option_position_tracker import position_from_trade
 from option_trade_engine import PaperOptionTrade
@@ -97,6 +98,11 @@ def test_unified_kpis_prioritize_paper_and_fallback_without_fabrication():
     assert fallback["source"] == "AUTHORITATIVE"
     assert fallback["open_positions"] == 3
     assert fallback["current_equity"] is None
+    fallback_markup = kpi_row_markup(fallback)
+    rendered = unescape(fallback_markup)
+    assert rendered.count("—") == 4
+    assert "Ã" not in rendered and "â€”" not in rendered
+    assert "&#8212;" in fallback_markup
 
 
 def test_risk_status_uses_authoritative_limits_and_semantic_thresholds():
@@ -370,6 +376,44 @@ def test_trade_desk_sources_contain_no_malformed_utf8_artifacts():
     assert "â€”" not in source
     assert "âˆž" not in source
     assert "Â" not in source
+
+
+def test_production_sources_contain_no_known_mojibake_patterns():
+    from pathlib import Path
+    suspicious = (
+        "\u00c3", "\u00c2", "\u00e2\u20ac", "\ufffd",
+    )
+    offenders = []
+    for path in Path(".").rglob("*"):
+        if not path.is_file() or path.suffix not in {".py", ".html", ".css", ".js"}:
+            continue
+        if "tests" in path.parts or ".codex-test-deps" in path.parts or ".git" in path.parts:
+            continue
+        text = path.read_text(encoding="utf-8", errors="strict")
+        if any(pattern in text for pattern in suspicious):
+            offenders.append(str(path))
+    assert offenders == []
+
+
+def test_trade_desk_paper_failures_are_observable_and_session_reads_are_independent():
+    from pathlib import Path
+    source = Path("app.py").read_text(encoding="utf-8")
+    start = source.index("def render_outcome_trade_journal(")
+    end = source.index("def render_live_session_opportunity(", start)
+    desk = source[start:end]
+    assert '"event": "trade_desk_paper_state_loaded"' in desk
+    assert '"event": "trade_desk_paper_state_failed"' in desk
+    assert '"event": "trade_desk_session_reconciliation"' in desk
+    assert "exc_info=True" in desk
+    assert "if paper_repository is not None and authoritative_events" in desk
+    assert "if paper_available and authoritative_events" not in desk
+    for field in (
+        "failure_stage", "exception_class", "repository", "query_fingerprint",
+        "account_positions_loaded", "session_paper_positions",
+        "authoritative_session_trades", "broad_opened", "broad_closed",
+        "mirror_opened", "mirror_closed", "session_date_et",
+    ):
+        assert field in desk
 
 
 def test_more_stats_collapses_secondary_metrics_without_redundancy():

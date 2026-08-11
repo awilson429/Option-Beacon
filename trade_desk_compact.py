@@ -146,7 +146,7 @@ def risk_status_model(paper_summary, config, *, paper_available):
 def kpi_row_markup(model):
     def money(value, *, signed=False):
         if value is None:
-            return "—"
+            return None
         return f'${value:+,.2f}' if signed else f'${value:,.2f}'
 
     pnl = model["today_pnl"]
@@ -173,7 +173,7 @@ def kpi_row_markup(model):
     body = "".join(
         f'<div class="ob-desk-kpi ob-value-{treatment}">'
         f'<div class="ob-desk-kpi-label">{escape(label)}</div>'
-        f'<div class="ob-desk-kpi-value">{escape(value)}</div>'
+        f'<div class="ob-desk-kpi-value">{"&#8212;" if value is None else escape(value)}</div>'
         f'<div class="ob-desk-kpi-detail">{escape(detail)}</div></div>'
         for label, value, detail, treatment in cards
     )
