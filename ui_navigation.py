@@ -75,10 +75,8 @@ CARD_NAVIGATION = (
     "SPY / QQQ",
     "Opportunities",
     "Paper Trading",
-    "After Hours",
-    "History",
-    "Tools",
-    "Developer Tools",
+    "Strategy Lab",
+    "Advanced",
 )
 
 CARD_NAVIGATION_SLUGS = {
@@ -86,13 +84,11 @@ CARD_NAVIGATION_SLUGS = {
     "SPY / QQQ": "spy-qqq",
     "Opportunities": "opportunities",
     "Paper Trading": "paper-trading",
-    "After Hours": "after-hours",
-    "History": "history",
-    "Tools": "tools",
-    "Developer Tools": "developer-tools",
+    "Strategy Lab": "strategy-lab",
+    "Advanced": "advanced",
 }
 
-DESKTOP_NAVIGATION_COLUMNS = 8
+DESKTOP_NAVIGATION_COLUMNS = 6
 
 CARD_NAVIGATION_CSS = """
 <style>

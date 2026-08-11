@@ -127,10 +127,8 @@ def test_workspace_routing_isolated_by_selected_page():
         ("Trade Desk", "render_outcome_trade_journal("),
         ("Opportunities", "render_top_opportunities("),
         ("Paper Trading", "render_paper_trading_page()"),
-        ("After Hours", "render_after_hours("),
-        ("History", "render_coach_timeline()"),
-        ("Tools", "render_scanner_health("),
-        ("Developer Tools", "render_developer_tools(trade_state)"),
+        ("Strategy Lab", "render_strategy_lab(trade_state, latest_results)"),
+        ("Advanced", "render_advanced("),
     ):
         assert f'active_page == "{page}"' in source
         assert renderer in source

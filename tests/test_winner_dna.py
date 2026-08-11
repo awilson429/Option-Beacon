@@ -135,4 +135,4 @@ def test_no_provider_calls_writes_or_trading_behavior_hooks():
         assert forbidden not in analytics
     for forbidden in (".save(", ".append(", "record_disposition(", "update_mark(", "run_mirror_execution("):
         assert forbidden not in dashboard
-    assert "render_winner_dna" in inspect.getsource(app.render_developer_tools)
+    assert "render_winner_dna" in inspect.getsource(app.render_strategy_lab)

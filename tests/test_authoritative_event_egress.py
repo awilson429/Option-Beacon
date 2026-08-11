@@ -16,7 +16,7 @@ def test_production_fingerprint_is_mapped_and_removed_from_unconditional_caller(
     assert "list_trade_events(limit=5000)" not in desk
     assert "projected_trade_event_summaries(" in desk
     assert "limit=trade_desk_event_limit" in desk
-    assert "Trade Desk event history" in desk
+    assert "trade_desk_event_limit = 200" in desk
 
 
 def test_projected_event_query_bounds_rows_width_and_preserves_large_request(tmp_path):
