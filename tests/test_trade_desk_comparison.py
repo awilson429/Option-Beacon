@@ -244,6 +244,18 @@ def test_mirror_today_and_previous_filter_by_entry_session():
     assert previous["mirror"]["opened"] == 1 and previous["mirror"]["pnl"] == -12
 
 
+def test_mirror_session_membership_uses_exact_authoritative_id_not_row_timestamp():
+    events = [event("exact", "TRADE_ENTERED", 0, "SPY")]
+    model = trade_comparison_model(
+        events, [], [], [], session_date=NOW.astimezone().date(),
+        mirror_rows=[mirror_row("exact", at=NOW + timedelta(days=1)), mirror_row("unrelated")],
+        mirror_runtime=mirror_runtime(),
+    )
+    assert model["mirror"]["evaluated"] == 1
+    assert model["mirror"]["opened"] == 1
+    assert model["rows"][0]["mirror_disposition"] == "OPENED"
+
+
 def test_pre_experiment_session_is_not_interpreted_as_zero_performance():
     prior = NOW - timedelta(days=1)
     events = [{**event("prior", "TRADE_ENTERED", 0, "QQQ"), "event_timestamp": prior}]

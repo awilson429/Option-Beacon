@@ -219,6 +219,24 @@ class PaperExecutionRepository:
                 continue
         return positions
 
+    def positions_for_trade_ids(self, trade_ids):
+        """Load projected serialized positions for an exact PAPER trade set."""
+        identities = sorted({str(value) for value in trade_ids if value})
+        if not identities:
+            return []
+        placeholders = ",".join("?" for _ in identities)
+        with self.repository.connection() as connection:
+            rows = self.repository._fetchall(connection, f"""SELECT metadata_json
+                FROM paper_execution_positions WHERE trade_id IN ({placeholders})
+                ORDER BY opened_at,trade_id""", tuple(identities))
+        positions = []
+        for row in rows:
+            try:
+                positions.append(_deserialize(json.loads(row["metadata_json"])["position"]))
+            except Exception:
+                continue
+        return positions
+
     def load_operational(self, now=None):
         """Load open plus current-Eastern-session positions for worker risk state."""
         checked = now or datetime.now(timezone.utc)

@@ -3915,6 +3915,7 @@ def render_outcome_trade_journal(
     worker_config_state = None
     mirror_rows = []
     mirror_runtime = None
+    mirror_repository = None
 
     database_url = dashboard_database_url()
     if database_url:
@@ -3936,7 +3937,6 @@ def render_outcome_trade_journal(
                 mirror_repository = MirrorExecutionRepository(
                     trade_repository, initialize=False
                 )
-                mirror_rows = mirror_repository.rows()
                 mirror_runtime = mirror_repository.runtime_state()
             except Exception:
                 mirror_rows, mirror_runtime = [], None
@@ -4081,6 +4081,10 @@ def render_outcome_trade_journal(
             if event.get("opportunity_id") or event.get("trade_id")
         }
         session_captures = paper_repository.records_for_source_signal_ids(session_source_ids)
+        session_trade_ids = {
+            str(capture.trade_id) for capture in session_captures if capture.trade_id
+        }
+        session_positions = paper_repository.positions_for_trade_ids(session_trade_ids)
         session_journal = paper_repository.analytics_decisions(
             session_source_ids, limit=max(1, len(session_source_ids) * 4)
         )
@@ -4091,6 +4095,15 @@ def render_outcome_trade_journal(
             for row in [*paper_journal, *session_journal]
         }
         paper_journal = list(journal_by_id.values())
+        positions_by_trade = {
+            str(position.trade_id): position
+            for position in [*option_positions, *session_positions]
+        }
+        option_positions = list(positions_by_trade.values())
+        if mirror_repository is not None:
+            mirror_rows = mirror_repository.analytics_rows(
+                session_source_ids, limit=max(1, len(session_source_ids))
+            )
     comparison = trade_comparison_model(
         authoritative_events, paper_journal, paper_captures, option_positions,
         session_date=session_date, mirror_rows=mirror_rows,
