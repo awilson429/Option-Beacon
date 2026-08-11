@@ -31,10 +31,17 @@ def trade_comparison_model(
     mirror_rows=None, mirror_runtime=None,
 ):
     """Join a session by exact authoritative IDs; never fuzzy symbol/time matching."""
+    session_entry_ids = {
+        str(event.get("opportunity_id") or event.get("trade_id"))
+        for event in authoritative_events
+        if event.get("event_type") == "TRADE_ENTERED"
+        and event.get("event_timestamp")
+        and _aware(event["event_timestamp"]).astimezone(EASTERN).date() == session_date
+        and (event.get("opportunity_id") or event.get("trade_id"))
+    }
     events = [
         event for event in authoritative_events
-        if event.get("event_timestamp")
-        and _aware(event["event_timestamp"]).astimezone(EASTERN).date() == session_date
+        if str(event.get("opportunity_id") or event.get("trade_id")) in session_entry_ids
     ]
     entries = {}
     closes = {}
@@ -153,8 +160,7 @@ def trade_comparison_model(
         str(row.get("opportunity_id")): row
         for row in (mirror_rows or [])
         if row.get("opportunity_id")
-        and row.get("entry_event_at")
-        and _aware(row["entry_event_at"]).astimezone(EASTERN).date() == session_date
+        and str(row.get("opportunity_id")) in entries
     }
     mirror_available = bool(session_mirror) or bool(
         mirror_runtime and mirror_start and session_date >= mirror_start

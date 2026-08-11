@@ -49,6 +49,25 @@ def test_closed_trade_is_persisted_once(tmp_path):
     assert row == {"realized_pnl_dollars": 50.0, "exit_reason": "PROFIT_TARGET"}
 
 
+def test_session_position_lookup_keeps_closed_trade_by_exact_capture_id(tmp_path):
+    from dataclasses import replace
+    repository = PaperExecutionRepository(TradeRepository(tmp_path / "state.db", database_url=""))
+    trade = repository.append_once(captured())
+    position = position_from_trade(trade, execution_time=NOW, fill_price=1, quantity=1)
+    closed_later = replace(
+        position, status="CLOSED", exit_time=NOW.replace(day=4), exit_mid=1.5,
+        exit_return_percent=50, exit_reason="PROFIT_TARGET",
+    )
+    repository.save([closed_later])
+
+    assert repository.positions_for_trade_ids(["unrelated"]) == []
+    restored = repository.positions_for_trade_ids([trade.trade_id])
+    assert len(restored) == 1
+    assert restored[0].trade_id == trade.trade_id
+    assert restored[0].status == "CLOSED"
+    assert restored[0].exit_time.date() == closed_later.exit_time.date()
+
+
 def test_execution_disabled_by_default_and_unsupported_modes_rejected():
     assert not ExecutionConfig.from_environment({}).trading_enabled
     assert ExecutionConfig.from_environment({"OPTIONBEACON_EXECUTION_MODE": "AUTO"}).mode == "AUTO"

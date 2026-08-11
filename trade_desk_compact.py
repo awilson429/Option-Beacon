@@ -146,7 +146,7 @@ def risk_status_model(paper_summary, config, *, paper_available):
 def kpi_row_markup(model):
     def money(value, *, signed=False):
         if value is None:
-            return "â€”"
+            return "—"
         return f'${value:+,.2f}' if signed else f'${value:,.2f}'
 
     pnl = model["today_pnl"]
@@ -202,7 +202,7 @@ def performance_panel_markup(summary, paper_summary, *, paper_available):
             ("Unrealized P&L", f'${paper_summary["open_pnl"]:+,.2f}'),
             ("Win Rate", f'{paper_summary["win_rate"]:.1f}%'),
             ("Trades Closed", str(paper_summary["trades_closed_today"])),
-            ("Profit Factor", "âˆž" if math.isinf(factor) else f'{factor:.2f}'),
+            ("Profit Factor", "∞" if math.isinf(factor) else f'{factor:.2f}'),
         )
     else:
         score = summary or {}
@@ -383,9 +383,9 @@ def activity_panel_markup(rows, *, show_title=True):
     items = "".join(
         f'<div class="ob-activity-row"><span class="ob-activity-time">{escape(str(row["Time"]))}</span>'
         f'<span class="ob-activity-tag ob-activity-{escape(str(row["Event"]).lower().replace(" ", "-"))}">{escape(str(row["Event"]))}</span>'
-        f'<strong>{escape(str(row.get("Symbol") or "â€”"))}</strong>'
-        f'<span>{escape(str(row.get("Contract") or "â€”"))}</span>'
-        f'<span class="ob-activity-result">{escape(str(row.get("Price / Result") or "â€”"))}</span></div>'
+        f'<strong>{escape(str(row.get("Symbol") or "—"))}</strong>'
+        f'<span>{escape(str(row.get("Contract") or "—"))}</span>'
+        f'<span class="ob-activity-result">{escape(str(row.get("Price / Result") or "—"))}</span></div>'
         for row in rows
     )
     return panel_markup(title, items)
@@ -512,7 +512,7 @@ def _percent_or_dash(value, *, signed=False):
     try:
         value = float(value)
     except (TypeError, ValueError):
-        return "â€”"
+        return "—"
     return f'{value:+.2f}%' if signed else f'{value:.1f}%'
 
 
@@ -520,8 +520,8 @@ def _number_or_dash(value):
     try:
         value = float(value)
     except (TypeError, ValueError):
-        return "â€”"
-    return "âˆž" if math.isinf(value) else f'{value:.2f}'
+        return "—"
+    return "∞" if math.isinf(value) else f'{value:.2f}'
 
 
 def paper_active_row(position, now):

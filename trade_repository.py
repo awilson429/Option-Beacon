@@ -106,19 +106,26 @@ def authoritative_session_bounds(session_date, timezone_name="America/New_York")
 
 
 def authoritative_session_event_summaries(repository, session_date):
-    """Read a complete projected session after applying SQL time predicates."""
+    """Read lifecycle events for entries originating in one Eastern calendar day."""
     start_at, end_exclusive = authoritative_session_bounds(session_date)
     end_inclusive = end_exclusive - timedelta(microseconds=1)
-    event_types = ("TRADE_ENTERED", "TRADE_CLOSED")
     count = repository.count_trade_events(
-        event_types=event_types, start_at=start_at, end_at=end_inclusive
+        event_type="TRADE_ENTERED", start_at=start_at, end_at=end_inclusive
     )
     if not count:
         return []
-    return projected_trade_event_summaries(
-        repository, limit=count, event_types=event_types,
+    entries = projected_trade_event_summaries(
+        repository, limit=count, event_type="TRADE_ENTERED",
         start_at=start_at, end_at=end_inclusive,
     )
+    identities = {
+        str(event.get("opportunity_id") or event.get("trade_id"))
+        for event in entries
+        if event.get("opportunity_id") or event.get("trade_id")
+    }
+    lifecycle = repository.trade_event_summaries_for_opportunity_ids(identities)
+    lifecycle_ids = {str(event.get("id")) for event in lifecycle if event.get("id")}
+    return [*lifecycle, *(event for event in entries if str(event.get("id")) not in lifecycle_ids)]
 
 
 def authoritative_session_dates(repository, now):
@@ -998,6 +1005,23 @@ class TradeRepository:
         params.append(int(limit))
         with self.connection() as connection:
             return [self._decode_trade_event(row) for row in self._fetchall(connection, query, tuple(params))]
+
+    def trade_event_summaries_for_opportunity_ids(self, opportunity_ids) -> list[dict]:
+        """Return projected entry/close lifecycle rows for exact authoritative IDs."""
+        identities = sorted({str(value) for value in opportunity_ids if value})
+        if not identities:
+            return []
+        placeholders = ",".join("?" for _ in identities)
+        query = f"""SELECT id,trade_id,opportunity_id,symbol,direction,setup,event_type,
+            event_timestamp,underlying_price,entry_price,exit_price,current_return,
+            realized_return,exit_reason,rule_score,description
+            FROM authoritative_trade_events
+            WHERE (opportunity_id IN ({placeholders}) OR trade_id IN ({placeholders}))
+            AND event_type IN ('TRADE_ENTERED','TRADE_CLOSED')
+            ORDER BY event_timestamp DESC,id DESC"""
+        params = (*identities, *identities)
+        with self.connection() as connection:
+            return [self._decode_trade_event(row) for row in self._fetchall(connection, query, params)]
 
     def count_trade_events(self, *, event_type=None, event_types=None,
                            start_at=None, end_at=None) -> int:

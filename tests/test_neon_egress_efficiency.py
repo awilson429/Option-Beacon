@@ -82,6 +82,13 @@ def test_broad_analytics_decisions_are_projected_and_bounded(tmp_path):
     assert "SELECT *" not in source
 
 
+def test_trade_desk_session_positions_are_exact_id_projected(tmp_path):
+    source = inspect.getsource(PaperExecutionRepository.positions_for_trade_ids)
+    assert "trade_id IN" in source and "?" in source
+    assert "SELECT metadata_json" in source
+    assert "SELECT *" not in source
+
+
 def test_heavy_dashboards_are_query_on_demand_and_paginated():
     winner = open("winner_dna_dashboard.py", encoding="utf-8").read()
     selectivity = open("selectivity_dashboard.py", encoding="utf-8").read()
@@ -138,6 +145,9 @@ def test_trade_desk_and_intraday_default_reads_are_bounded_and_deferred():
     )
     assert "limit=10000" not in intraday_worker
     assert "active_signal_states()" in intraday_worker
+    render_source = inspect.getsource(__import__("app").render_outcome_trade_journal)
+    assert "mirror_repository.rows()" not in render_source
+    assert "mirror_repository.analytics_rows" in render_source
 
 
 def test_paper_worker_uses_server_filtered_operational_state():

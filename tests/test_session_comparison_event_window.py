@@ -153,6 +153,50 @@ def test_open_and_closed_authoritative_state_reconstruct_from_session_query(tmp_
     assert closed_model["authoritative"]["closed"] == 1
 
 
+def test_close_after_session_midnight_remains_with_originating_entry(tmp_path):
+    repository = TradeRepository(tmp_path / "state.db", database_url="")
+    entry_at = datetime(2026, 8, 10, 15, 55, tzinfo=ET)
+    close_at = datetime(2026, 8, 11, 9, 35, tzinfo=ET)
+    opportunity(repository, "overnight-close", entry_at)
+    record(repository, "overnight-close", "TRADE_ENTERED", entry_at,
+           underlying_price=600, entry_price=600)
+    record(repository, "overnight-close", "TRADE_CLOSED", close_at,
+           exit_price=603, realized_return=.5)
+    events = authoritative_session_event_summaries(repository, entry_at.date())
+    assert {row["event_type"] for row in events} == {"TRADE_ENTERED", "TRADE_CLOSED"}
+    assert trade_comparison_model(events, [], [], [], session_date=entry_at.date())["rows"][0]["status"] == "CLOSED"
+
+
+def test_today_is_stable_until_eastern_midnight_then_rolls_to_previous(tmp_path):
+    repository = TradeRepository(tmp_path / "state.db", database_url="")
+    opportunity(repository, "today", SESSION)
+    record(repository, "today", "TRADE_ENTERED", SESSION)
+    expected = {"today": SESSION.date(), "previous": None}
+    for clock in (
+        SESSION.replace(hour=15, minute=55), SESSION.replace(hour=16, minute=30),
+        SESSION.replace(hour=19, minute=30),
+        SESSION.replace(hour=23, minute=59, second=59),
+    ):
+        assert authoritative_session_dates(repository, clock) == expected
+        assert len(authoritative_session_event_summaries(repository, clock.date())) == 1
+    after_midnight = SESSION.replace(day=11, hour=0, minute=0)
+    assert authoritative_session_dates(repository, after_midnight) == {
+        "today": after_midnight.date(), "previous": SESSION.date(),
+    }
+    assert authoritative_session_event_summaries(repository, after_midnight.date()) == []
+
+
+def test_previous_session_skips_weekend_without_authoritative_entries(tmp_path):
+    repository = TradeRepository(tmp_path / "state.db", database_url="")
+    friday = datetime(2026, 8, 7, 15, 0, tzinfo=ET)
+    monday_evening = datetime(2026, 8, 10, 19, 30, tzinfo=ET)
+    opportunity(repository, "friday", friday)
+    record(repository, "friday", "TRADE_ENTERED", friday)
+    assert authoritative_session_dates(repository, monday_evening) == {
+        "today": monday_evening.date(), "previous": friday.date(),
+    }
+
+
 def test_eastern_calendar_bounds_are_utc_and_end_exclusive():
     start, end = authoritative_session_bounds(SESSION.date())
     assert start == datetime(2026, 8, 10, 4, 0, tzinfo=timezone.utc)
@@ -167,7 +211,21 @@ def test_session_sql_predicates_precede_limit_and_projection_stays_narrow():
     assert repository_source.index('query += " WHERE "') < repository_source.index("LIMIT ?")
     assert "SELECT *" not in repository_source
     assert "count_trade_events" in session_source
-    assert 'event_types = ("TRADE_ENTERED", "TRADE_CLOSED")' in session_source
+    assert 'event_type="TRADE_ENTERED"' in session_source
+    assert "trade_event_summaries_for_opportunity_ids" in session_source
     assert "start_at=start_at" in session_source and "end_at=end_inclusive" in session_source
     assert "limit=trade_desk_event_limit" in app_source
     assert "authoritative_session_event_summaries(trade_repository, session_date)" in app_source
+    assert "positions_for_trade_ids(session_trade_ids)" in app_source
+    assert "mirror_repository.analytics_rows" in app_source
+    assert "mirror_repository.rows()" not in app_source
+
+
+def test_session_reconciliation_is_independent_of_ui_history_market_and_worker_state():
+    app_source = inspect.getsource(__import__("app").render_outcome_trade_journal)
+    session_start = app_source.index("sessions = (")
+    comparison_end = app_source.index("comparison = trade_comparison_model", session_start)
+    session_path = app_source[session_start:comparison_end]
+    assert "trade_desk_event_limit" not in session_path
+    assert "market_open" not in session_path
+    assert "worker_config_state" not in session_path

@@ -363,9 +363,12 @@ def test_trade_desk_sources_contain_no_malformed_utf8_artifacts():
     source = (
         Path("app.py").read_text(encoding="utf-8")
         + Path("trade_desk_compact.py").read_text(encoding="utf-8")
+        + Path("trade_desk_comparison.py").read_text(encoding="utf-8")
     )
     assert "Ã¢â‚¬â€" not in source
     assert "Ã‚" not in source
+    assert "â€”" not in source
+    assert "âˆž" not in source
     assert "Â" not in source
 
 
