@@ -145,7 +145,7 @@ def test_primary_navigation_has_no_external_page_switching():
 def test_app_routes_only_the_selected_workspace_and_keeps_navigation_above_it():
     source = Path("app.py").read_text(encoding="utf-8")
     main_source = source.split("def main():", 1)[1]
-    navigation_index = main_source.index("active_page = render_card_navigation()")
+    navigation_index = main_source.index("active_page = render_production_navigation()")
     route_indexes = [
         main_source.index(f'active_page == "{workspace}"')
             for workspace in (

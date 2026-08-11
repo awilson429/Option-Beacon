@@ -212,8 +212,6 @@ from ui_navigation import (
     NO_ACTIONABLE_OPPORTUNITY_MESSAGE,
     RECORDED_CANDIDATES_LABEL,
     TRADE_DESK_SUBTITLE,
-    render_card_navigation,
-    set_active_workspace,
 )
 from ui_modern_style import (
     demo_scorecard_enabled,
@@ -228,6 +226,88 @@ SYMBOL_GROUPS = DEFAULT_SYMBOL_GROUPS
 MARKET_CONTEXT_TAPE_SYMBOLS = ["SPY", "QQQ", "IWM", "DIA", "XLK", "XLF"]
 LOGO_ASSET_PATH = Path("assets/option-beacon-header-logo.png")
 FALLBACK_LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-381bdd4d9924/OptionBeaconLLC%20Logo%20V2.png"
+
+# This is deliberately owned by the Streamlit entrypoint. Production reruns
+# app.py directly, so top-level navigation cannot be reconstructed by a cached
+# legacy presentation module.
+PRODUCTION_NAVIGATION = (
+    "Trade Desk",
+    "SPY / QQQ",
+    "Opportunities",
+    "Paper Trading",
+    "Strategy Lab",
+    "Advanced",
+)
+
+PRODUCTION_NAVIGATION_CSS = """
+<style>
+div[class*="st-key-ob_nav_"] button {
+    align-items:center; background:var(--ob-bg-control);
+    border:1px solid var(--ob-border-default); border-radius:.55rem;
+    box-sizing:border-box; color:var(--ob-text-primary) !important;
+    display:flex; height:2.75rem; justify-content:center;
+    min-height:2.75rem; padding:.4rem .42rem; width:100%;
+}
+div[class*="st-key-ob_nav_"] button p {
+    color:var(--ob-text-primary) !important; font-size:.8rem;
+    font-weight:650; line-height:1; margin:0; white-space:nowrap;
+}
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-ob_nav_"]) {
+    align-items:stretch; flex-wrap:nowrap; gap:.5rem; margin:.4rem 0 .7rem;
+    max-width:100%; overflow:hidden;
+}
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-ob_nav_"])
+    > div[data-testid="stColumn"] { min-width:0; }
+@media (max-width:760px) {
+    div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-ob_nav_"]) {
+        flex-wrap:wrap; overflow:visible;
+    }
+    div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-ob_nav_"])
+        > div[data-testid="stColumn"] { flex:1 1 9rem; width:auto !important; }
+}
+</style>
+"""
+
+
+def _production_navigation_key(workspace):
+    return "ob_nav_" + workspace.lower().replace(" ", "_")
+
+
+def set_active_workspace(workspace, session_state):
+    if workspace in PRODUCTION_NAVIGATION:
+        session_state["active_workspace"] = workspace
+
+
+def render_production_navigation(st_module=None):
+    """Render the exact top-level navigation consumed by production app.py."""
+    if st_module is None:
+        st_module = st
+    active_page = st_module.session_state.get("active_workspace")
+    if active_page not in PRODUCTION_NAVIGATION:
+        active_page = PRODUCTION_NAVIGATION[0]
+        st_module.session_state["active_workspace"] = active_page
+    active_key = _production_navigation_key(active_page)
+    active_css = f"""<style>
+div.st-key-{active_key} button {{
+    background:var(--ob-active-bg); border:1px solid var(--ob-active-border);
+    box-shadow:inset 0 -2px 0 var(--ob-accent-gold-muted) !important;
+}}
+div.st-key-{active_key} button p {{
+    color:var(--ob-accent-gold) !important; font-weight:650;
+}}
+</style>"""
+    st_module.markdown(PRODUCTION_NAVIGATION_CSS + active_css, unsafe_allow_html=True)
+    columns = st_module.columns(len(PRODUCTION_NAVIGATION))
+    for column, workspace in zip(columns, PRODUCTION_NAVIGATION):
+        column.button(
+            workspace,
+            key=_production_navigation_key(workspace),
+            on_click=set_active_workspace,
+            args=(workspace, st_module.session_state),
+            width="stretch",
+        )
+    selected = st_module.session_state.get("active_workspace")
+    return selected if selected in PRODUCTION_NAVIGATION else PRODUCTION_NAVIGATION[0]
 
 
 @st.cache_data(show_spinner=False)
@@ -5107,7 +5187,7 @@ def main():
         cached_open_trade_quote,
     )
 
-    active_page = render_card_navigation()
+    active_page = render_production_navigation()
 
     if active_page == "SPY / QQQ":
         render_intraday_page(trade_state.get("repository"))

@@ -113,5 +113,5 @@ def test_footer_appears_through_shared_app_layout():
 
     assert source.count("render_build_footer()") == 1
     assert source.index("render_build_footer()") > source.index(
-        "active_page = render_card_navigation()"
+        "active_page = render_production_navigation()"
     )
