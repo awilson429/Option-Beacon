@@ -122,7 +122,7 @@ def test_featured_css_has_no_ellipsis_or_clipped_core_values():
 def test_default_trade_desk_delegates_to_approved_journal_renderer():
     source = Path("app.py").read_text(encoding="utf-8")
     start = source.index('elif active_page == "Trade Desk":')
-    end = source.index('elif active_page == "History":')
+    end = source.index('elif active_page == "Strategy Lab":')
     body = source[start:end]
 
     assert "render_outcome_trade_journal(" in body

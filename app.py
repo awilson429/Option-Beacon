@@ -4029,13 +4029,6 @@ def render_outcome_trade_journal(
         }, sort_keys=True))
     summary = journal_summary_metrics(records) if records else None
     trade_desk_event_limit = 200
-    with st.expander("Advanced activity history", expanded=False):
-        if st.checkbox("Load extended Trade Desk event history", value=False,
-                       key="trade_desk_load_extended_events"):
-            trade_desk_event_limit = st.selectbox(
-                "Trade Desk event history", (500, 1000, 5000), index=0,
-                key="trade_desk_event_history_limit",
-            )
     activity_authoritative_events = (
         projected_trade_event_summaries(
             trade_repository, limit=trade_desk_event_limit
@@ -4514,9 +4507,16 @@ def render_paper_trading_page():
                 index=4,
                 key="broad_filter_effectiveness_window",
             )
-            effectiveness = broad_filter_effectiveness(
-                authoritative_events, raw_journal, captures, mirror_rows, mirror_marks,
-                mirror_runtime, window=analytics_window, now=now,
+            run_effectiveness = st.button(
+                "Run BROAD Filter Effectiveness",
+                key="run_broad_filter_effectiveness",
+            )
+            effectiveness = (
+                broad_filter_effectiveness(
+                    authoritative_events, raw_journal, captures, mirror_rows, mirror_marks,
+                    mirror_runtime, window=analytics_window, now=now,
+                )
+                if run_effectiveness else {"groups": [], "comparison": [], "insights": {}}
             )
             st.caption(
                 "Read-only exact-ID attribution · Option P&L uses persisted MIRROR fills · "
@@ -4589,8 +4589,10 @@ def render_paper_trading_page():
                             "Delta": trade["delta"] if trade["delta"] is not None else "NOT PERSISTED",
                             "Open Interest": trade["open_interest"], "Volume": trade["volume"],
                         } for trade in group["trades"]]), use_container_width=True, hide_index=True)
-            else:
+            elif run_effectiveness:
                 st.caption("No persisted MIRROR experiment trades exist in this window.")
+            else:
+                st.caption("Query-on-demand: run the analysis to load persisted research rows.")
 
     funnel = paper_execution_funnel(
         authoritative_events, raw_journal, captures, now
@@ -4807,19 +4809,13 @@ def render_authoritative_entry_funnel(repository):
 def render_developer_tools(trade_state=None):
     """Render read-only internal diagnostics without exposing provider secrets."""
     render_section_header(
-        "Developer Tools",
+        "Diagnostics",
         "Internal provider and Option Engine diagnostics",
     )
     st.info(
-        "Developer Tools runs diagnostics only. It does not place trades or "
+        "Diagnostics are read-only. They do not place trades or "
         "modify production trade history."
     )
-    render_selectivity_analysis(
-        st,
-        (trade_state or {}).get("repository"),
-    )
-    render_winner_dna(st, (trade_state or {}).get("repository"))
-    render_option_translation_autopsy(st, (trade_state or {}).get("repository"))
     render_authoritative_entry_funnel((trade_state or {}).get("repository"))
 
     st.markdown("### System Status")
@@ -4974,6 +4970,128 @@ def render_developer_tools(trade_state=None):
         )
 
 
+def _experiment_status_row(repository, query):
+    if repository is None:
+        return {}
+    try:
+        with repository.connection() as connection:
+            return repository._fetchone(connection, query) or {}
+    except Exception:
+        return {}
+
+
+def render_experiment_status(repository):
+    """Render lightweight persisted experiment aggregates without provider calls."""
+    st.markdown("### Experiment Status")
+    st.warning("COLLECTING FORWARD DATA — DO NOT TUNE")
+    authoritative = _experiment_status_row(repository, """SELECT
+        COUNT(*) AS resolved,
+        SUM(CASE WHEN realized_return>0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN realized_return<0 THEN 1 ELSE 0 END) AS losses
+        FROM authoritative_trade_events WHERE event_type='TRADE_CLOSED'""")
+    control = _experiment_status_row(repository, """SELECT
+        COUNT(*) AS completed,
+        SUM(CASE WHEN realized_pnl>0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN realized_pnl<0 THEN 1 ELSE 0 END) AS losses,
+        COALESCE(SUM(realized_pnl),0) AS net_pnl
+        FROM mirror_execution_trades WHERE status='CLOSED'""")
+    v2 = _experiment_status_row(repository, """SELECT
+        COUNT(*) AS evaluated,
+        SUM(CASE WHEN decision='ACCEPTED' THEN 1 ELSE 0 END) AS accepted,
+        SUM(CASE WHEN decision!='ACCEPTED' THEN 1 ELSE 0 END) AS rejected,
+        SUM(CASE WHEN status='CLOSED' THEN 1 ELSE 0 END) AS completed,
+        SUM(CASE WHEN status='CLOSED' AND realized_pnl>0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN status='CLOSED' AND realized_pnl<0 THEN 1 ELSE 0 END) AS losses,
+        COALESCE(SUM(CASE WHEN status='CLOSED' THEN realized_pnl ELSE 0 END),0) AS net_pnl
+        FROM mirror_v2_shadow_trades""")
+    broad = _experiment_status_row(repository, """SELECT
+        COUNT(*) AS positions,
+        SUM(CASE WHEN status='CLOSED' THEN 1 ELSE 0 END) AS completed,
+        COALESCE(SUM(realized_pnl_dollars),0) AS net_pnl
+        FROM paper_execution_trades""")
+    v2_rejected_winners = _experiment_status_row(repository, """SELECT
+        COUNT(*) AS count FROM mirror_v2_shadow_comparisons
+        WHERE authoritative_outcome='WIN' AND v2_decision!='ACCEPTED'""")
+    auth_total = int(authoritative.get("resolved") or 0)
+    cards = (
+        ("AUTHORITATIVE", authoritative, auth_total),
+        ("MIRROR CONTROL", control, int(control.get("completed") or 0)),
+        ("MIRROR V2", v2, int(v2.get("evaluated") or 0)),
+        ("BROAD", broad, int(broad.get("positions") or 0)),
+    )
+    columns = st.columns(4)
+    for column, (label, values, total) in zip(columns, cards):
+        wins, losses = int(values.get("wins") or 0), int(values.get("losses") or 0)
+        column.metric(label, total)
+        column.caption(
+            f'Completed {int(values.get("completed") or values.get("resolved") or 0)} · '
+            f'W/L {wins}/{losses} · Net ${float(values.get("net_pnl") or 0):+,.2f}'
+        )
+    if v2:
+        evaluated = int(v2.get("evaluated") or 0)
+        accepted = int(v2.get("accepted") or 0)
+        st.caption(
+            f'MIRROR V2 accepted {accepted} · rejected {int(v2.get("rejected") or 0)} · '
+            f'participation {(accepted / evaluated * 100) if evaluated else 0:.1f}% · '
+            f'authoritative winners rejected {int(v2_rejected_winners.get("count") or 0)}'
+        )
+
+
+def render_strategy_lab(trade_state=None, latest_results=None):
+    """Consolidated research navigation; analytics remain modular and deferred."""
+    render_section_header("Strategy Lab", "Forward experiments and read-only attribution research")
+    repository = (trade_state or {}).get("repository")
+    render_experiment_status(repository)
+    st.markdown("### Research Analyses")
+    render_winner_dna(st, repository)
+    render_option_translation_autopsy(st, repository)
+    render_selectivity_analysis(st, repository)
+    st.markdown("### BROAD Filter Effectiveness")
+    st.caption("Available from Paper Trading → Compare and remains query-on-demand.")
+    st.button(
+        "Open BROAD Filter Effectiveness",
+        key="strategy_lab_open_broad_effectiveness",
+        on_click=set_active_workspace,
+        args=("Paper Trading", st.session_state),
+    )
+    st.markdown("### After Hours Research")
+    st.caption("Earnings and headline briefing; the duplicated setup watchlist remains under Opportunities.")
+    if st.button("Load After Hours Briefing", key="strategy_lab_after_hours"):
+        render_after_hours(latest_results or {})
+
+
+def render_advanced(trade_state, latest_results, snapshot_time, symbol_groups,
+                    high_score_history):
+    """Low-frequency history and diagnostics with true deferred execution."""
+    render_section_header("Advanced", "History, diagnostics, reliability, and legacy inspection")
+    repository = (trade_state or {}).get("repository")
+    history_tab, events_tab, diagnostics_tab = st.tabs(
+        ["Trade History / Legacy", "Event History", "Diagnostics"]
+    )
+    with history_tab:
+        st.caption("Historical outcomes and legacy PAPER provenance remain read-only; no records are deleted.")
+        if st.button("Load Trade History", key="advanced_load_trade_history"):
+            render_coach_timeline()
+            st.divider()
+            render_recent_high_scores(high_score_history)
+            st.divider()
+            render_signal_outcomes()
+            st.divider()
+            render_trade_journal()
+    with events_tab:
+        event_limit = st.selectbox(
+            "Event history limit", (200, 500, 1000, 5000), index=0,
+            key="advanced_event_history_limit",
+        )
+        if st.button("Load Event History", key="advanced_load_event_history"):
+            rows = projected_trade_event_summaries(repository, limit=event_limit) if repository else []
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    with diagnostics_tab:
+        if st.button("Load Scanner Health", key="advanced_load_scanner_health"):
+            render_scanner_health(latest_results, snapshot_time, symbol_groups)
+        render_developer_tools(trade_state)
+
+
 def main():
     configure_page()
     render_header()
@@ -4993,9 +5111,6 @@ def main():
 
     if active_page == "SPY / QQQ":
         render_intraday_page(trade_state.get("repository"))
-
-    elif active_page == "After Hours":
-        render_after_hours(latest_results)
 
     elif active_page == "Opportunities":
         render_top_opportunities(
@@ -5026,20 +5141,14 @@ def main():
             trade_state,
         )
 
-    elif active_page == "History":
-        render_coach_timeline()
-        st.divider()
-        render_recent_high_scores(high_score_history)
-        st.divider()
-        render_signal_outcomes()
-        st.divider()
-        render_trade_journal()
+    elif active_page == "Strategy Lab":
+        render_strategy_lab(trade_state, latest_results)
 
-    elif active_page == "Tools":
-        render_scanner_health(latest_results, snapshot_time, symbol_groups)
-
-    elif active_page == "Developer Tools":
-        render_developer_tools(trade_state)
+    elif active_page == "Advanced":
+        render_advanced(
+            trade_state, latest_results, snapshot_time, symbol_groups,
+            high_score_history,
+        )
 
     st.markdown(
         '<div class="ob-disclaimer">Decision-support dashboard only. Not financial advice.</div>',

@@ -138,7 +138,7 @@ def test_dashboard_is_on_demand_read_only_and_has_no_provider_or_execution_calls
     for source in (dashboard, analytics):
         for forbidden in ("option_quote", "chain_provider", "run_mirror_execution", "record_disposition", "update_mark"):
             assert forbidden not in source
-    assert "render_option_translation_autopsy" in inspect.getsource(app.render_developer_tools)
+    assert "render_option_translation_autopsy" in inspect.getsource(app.render_strategy_lab)
     marks_source = inspect.getsource(MirrorExecutionRepository.analytics_marks)
     assert "SELECT *" not in marks_source
     assert marks_source.index("WHERE mirror_trade_id IN") < marks_source.index("LIMIT ?")

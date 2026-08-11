@@ -21,7 +21,7 @@ def render_selectivity_analysis(st, repository):
         "Selectivity history limit", (100, 500, 1000, 5000), index=1,
         key="selectivity_history_limit",
     )
-    if not st.checkbox("Load Selectivity analytics", value=False, key="load_selectivity_analytics"):
+    if not st.button("Load Selectivity analytics", key="load_selectivity_analytics"):
         st.caption("Query-on-demand: no historical intelligence rows are loaded while this analysis is idle.")
         return None
     report = analyze_selectivity(

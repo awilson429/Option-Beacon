@@ -140,8 +140,9 @@ def test_trade_desk_and_intraday_default_reads_are_bounded_and_deferred():
     app_source = open("app.py", encoding="utf-8").read()
     intraday_worker = open("optionbeacon/worker/intraday.py", encoding="utf-8").read()
     assert "list_opportunities(limit=5000)" not in app_source
-    assert app_source.index("Load extended Trade Desk event history") < app_source.index(
-        '"Trade Desk event history", (500, 1000, 5000)'
+    assert "Load extended Trade Desk event history" not in app_source
+    assert app_source.index("Load Event History") < app_source.index(
+        "projected_trade_event_summaries(repository, limit=event_limit)"
     )
     assert "limit=10000" not in intraday_worker
     assert "active_signal_states()" in intraday_worker

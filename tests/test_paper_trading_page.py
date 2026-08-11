@@ -32,8 +32,8 @@ def position():
 
 def test_paper_trading_follows_intraday_destination_and_navigation_is_responsive():
     assert CARD_NAVIGATION == (
-        "Trade Desk", "SPY / QQQ", "Opportunities", "Paper Trading", "After Hours",
-        "History", "Tools", "Developer Tools",
+        "Trade Desk", "SPY / QQQ", "Opportunities", "Paper Trading", "Strategy Lab",
+        "Advanced",
     )
     compact = CARD_NAVIGATION_CSS.replace(" ", "").replace("\n", "").lower()
     assert "flex-wrap:nowrap" in compact and "overflow:hidden" in compact

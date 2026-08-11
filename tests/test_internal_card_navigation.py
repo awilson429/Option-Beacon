@@ -58,24 +58,24 @@ def test_each_card_updates_active_workspace_and_navigation_remains_visible():
 
 
 def test_selected_workspace_is_highlighted():
-    fake = FakeStreamlit(session_state={"active_workspace": "History"})
+    fake = FakeStreamlit(session_state={"active_workspace": "Advanced"})
 
     render_card_navigation(st_module=fake)
 
     css = "\n".join(fake.markdown_calls)
-    assert "div.st-key-ob_nav_history button" in css
-    assert "div.st-key-ob_nav_history button p" in css
+    assert "div.st-key-ob_nav_advanced button" in css
+    assert "div.st-key-ob_nav_advanced button p" in css
     assert "border: 1px solid var(--ob-active-border)" in css
     assert "color: var(--ob-accent-gold) !important" in css
 
 
-def test_desktop_navigation_is_one_row_of_eight_columns_in_order():
+def test_desktop_navigation_is_one_row_of_six_columns_in_order():
     fake = FakeStreamlit()
 
     render_card_navigation(st_module=fake)
 
-    assert DESKTOP_NAVIGATION_COLUMNS == 8
-    assert fake.column_counts == [8]
+    assert DESKTOP_NAVIGATION_COLUMNS == 6
+    assert fake.column_counts == [6]
     assert tuple(fake.rendered) == CARD_NAVIGATION
 
 
@@ -121,11 +121,11 @@ def test_hover_focus_and_active_states_preserve_border_and_dimensions():
 
 
 def test_invalid_workspace_does_not_replace_selection():
-    state = {"active_workspace": "Tools"}
+    state = {"active_workspace": "Advanced"}
 
     set_active_workspace("Unknown", state)
 
-    assert state["active_workspace"] == "Tools"
+    assert state["active_workspace"] == "Advanced"
 
 
 def test_primary_navigation_has_no_external_page_switching():
@@ -153,14 +153,12 @@ def test_app_routes_only_the_selected_workspace_and_keeps_navigation_above_it():
                 "SPY / QQQ",
                 "Opportunities",
             "Paper Trading",
-            "After Hours",
-            "History",
-            "Tools",
-            "Developer Tools",
+            "Strategy Lab",
+            "Advanced",
         )
     ]
 
     assert navigation_index < min(route_indexes)
     assert main_source.count("\n    if active_page ==") == 1
-    assert main_source.count("\n    elif active_page ==") == 7
+    assert main_source.count("\n    elif active_page ==") == 5
     assert main_source.count("scan_symbols()") == 1

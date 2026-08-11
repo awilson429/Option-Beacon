@@ -23,10 +23,8 @@ def test_default_navigation_remains_trade_desk_with_paper_workspace():
         "SPY / QQQ",
         "Opportunities",
         "Paper Trading",
-        "After Hours",
-        "History",
-        "Tools",
-        "Developer Tools",
+        "Strategy Lab",
+        "Advanced",
     )
 
 

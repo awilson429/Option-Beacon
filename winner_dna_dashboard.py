@@ -19,7 +19,7 @@ def render_winner_dna(st, repository):
             "Winner DNA history limit", (100, 500, 1000, 5000), index=1,
             key="winner_dna_history_limit",
         )
-        if not st.checkbox("Load Winner DNA analytics", value=False, key="load_winner_dna"):
+        if not st.button("Load Winner DNA analytics", key="load_winner_dna"):
             st.caption("Analytics are query-on-demand to avoid transferring historical rows on unrelated reruns.")
             return None
         snapshots = repository.list_intelligence_snapshots(limit=history_limit)
