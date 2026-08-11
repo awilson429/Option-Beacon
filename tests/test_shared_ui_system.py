@@ -42,7 +42,7 @@ def test_design_tokens_cover_shared_visual_language():
 
 def test_default_app_preserves_approved_legacy_card_shell():
     source = Path("app.py").read_text(encoding="utf-8")
-    assert "active_page = render_card_navigation()" in source
+    assert "active_page = render_production_navigation()" in source
     assert "active_page = render_sidebar_navigation(" not in source
     assert "render_header()" in source
     assert "max-width:1024px" in SHARED_UI_CSS

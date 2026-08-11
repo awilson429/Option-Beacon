@@ -137,7 +137,7 @@ def test_app_uses_internal_card_navigation_without_page_fallback():
     source = Path("app.py").read_text(encoding="utf-8")
     navigation_source = Path("ui_navigation.py").read_text(encoding="utf-8")
 
-    assert "active_page = render_card_navigation()" in source
+    assert "active_page = render_production_navigation()" in source
     assert "st.tabs(MAIN_NAVIGATION)" not in source
     assert "st.page_link" not in navigation_source
     assert "st.switch_page" not in navigation_source
