@@ -91,6 +91,7 @@ from paper_execution import paper_account_summary
 from paper_execution_repository import PaperExecutionRepository
 from winner_dna_dashboard import render_winner_dna
 from option_translation_autopsy_dashboard import render_option_translation_autopsy
+from production_forensic_dashboard import render_production_forensic_audit
 from broad_filter_effectiveness import broad_filter_effectiveness
 from mirror_execution import MirrorExecutionRepository, mirror_summary
 from mirror_v2_shadow import MirrorV2Repository, mirror_v2_summary
@@ -4897,6 +4898,7 @@ def render_developer_tools(trade_state=None):
         "modify production trade history."
     )
     render_authoritative_entry_funnel((trade_state or {}).get("repository"))
+    render_production_forensic_audit(st)
 
     st.markdown("### System Status")
     status_rows = system_status()

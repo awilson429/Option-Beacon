@@ -6,6 +6,7 @@ and never substitutes zero for unavailable telemetry.
 
 from __future__ import annotations
 
+import json
 import math
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -133,6 +134,12 @@ def _broad_map(paper_trades, paper_journal):
               if row.get("trade_id") and row.get("source_signal_id")}
     result = {}
     for row in sorted(paper_journal, key=lambda item: _dt(item.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc)):
+        metadata = row.get("metadata_json")
+        if not isinstance(metadata, dict):
+            try: metadata = json.loads(metadata or "{}")
+            except (TypeError, ValueError): metadata = {}
+        if str(metadata.get("simulation_profile") or "").upper() != "BROAD":
+            continue
         identity = str(row.get("source_signal_id") or source.get(str(row.get("trade_id"))) or "")
         if identity and identity not in result and row.get("accepted") is not None:
             result[identity] = {"accepted": bool(row.get("accepted")), "reason": row.get("reason_code") or "UNKNOWN"}

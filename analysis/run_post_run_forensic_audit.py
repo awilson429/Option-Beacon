@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from psycopg2 import connect
 from psycopg2.extras import RealDictCursor
 
-from analysis.run_mirror_pnl_attribution import database_url
+from dashboard_storage_config import dashboard_database_url
 from post_run_forensic_audit import EASTERN, build_forensic_report
 
 
@@ -91,7 +91,7 @@ def main():
     args = parser.parse_args()
     if args.end < args.start:
         parser.error("--end must be on or after --start")
-    values = read_sessions(database_url(), start_date=args.start, end_date=args.end,
+    values = read_sessions(dashboard_database_url(), start_date=args.start, end_date=args.end,
                            trade_limit=args.trade_limit, mark_limit=args.mark_limit)
     report = build_forensic_report(*values[:6])
     report["source_status"] = values[6]

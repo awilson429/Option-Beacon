@@ -1,5 +1,32 @@
 # OptionBeacon Post-Run Forensic Audit
 
+## Deployed production execution
+
+The Advanced → Diagnostics page now contains a collapsed `POST-RUN FORENSIC
+AUDIT` section. Page load performs no forensic history reads. Selecting `Run
+production forensic audit` resolves the database through the same
+`dashboard_database_url(st)` adapter used by the deployed Streamlit app:
+
+1. `DATABASE_URL` environment variable;
+2. Streamlit `secrets["DATABASE_URL"]` fallback;
+3. `authoritative_trade_state(database_url=...)` → `repository_for_runtime()` →
+   `TradeRepository` for the live application repository.
+
+The audit uses the resolved URL directly in a database-enforced read-only
+PostgreSQL transaction. It deliberately does not instantiate a repository,
+because normal repository construction owns schema initialization.
+
+Before loading audit data, the panel displays a non-reversible logical-target
+fingerprint, table compatibility, and a live reconciliation snapshot. It stops
+without performance findings when the fingerprint disagrees, MIRROR ledgers are
+missing, or no complete authoritative/outcome/MIRROR/telemetry session exists.
+
+The local Codex workspace remains connected to a different database target. Its
+safe fingerprint is `8d3007a54ab4f1bc`; authoritative/intelligence/PAPER tables
+are present, but MIRROR and intraday tables are absent. The new safety gate
+correctly returns `MIRROR_LEDGER_MISMATCH`. The deployed panel must be used to
+obtain the actual live-production fingerprint and report.
+
 ## Production result (2026-08-13)
 
 The read-only production query was run for the explicit inclusive Eastern-date

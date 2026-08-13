@@ -40,7 +40,7 @@ def fixture(count=12):
         paper.append({"trade_id": paper_id, "source_signal_id": identity})
         journal.append({"trade_id": paper_id, "accepted": index % 2 == 0,
                         "reason_code": "ACCEPTED" if index % 2 == 0 else "SCORE_TOO_LOW",
-                        "created_at": entered.isoformat()})
+                        "created_at": entered.isoformat(), "metadata_json": '{"simulation_profile":"BROAD"}'})
     return snapshots, outcomes, mirrors, marks, paper, journal
 
 
