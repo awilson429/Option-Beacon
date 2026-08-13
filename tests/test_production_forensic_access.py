@@ -53,20 +53,66 @@ def test_explicit_click_uses_dashboard_resolver_and_safe_fingerprint():
 
 
 class FakeConnection:
-    def __init__(self): self.session = None; self.rolled_back = self.closed = False
-    def set_session(self, **kwargs): self.session = kwargs
+    def __init__(self): self.autocommit = None; self.rolled_back = self.closed = False; self.statements = []
+    def cursor(self): return FakeCursor(self)
     def rollback(self): self.rolled_back = True
     def close(self): self.closed = True
+
+
+class FakeCursor:
+    def __init__(self, connection): self.connection = connection
+    def __enter__(self): return self
+    def __exit__(self, *_args): return False
+    def execute(self, statement):
+        normalized = " ".join(statement.upper().split())
+        self.connection.statements.append(normalized)
+        if normalized.startswith(("INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP")):
+            raise RuntimeError("cannot execute in a read-only transaction")
+    def fetchone(self): return {"value": 1}
 
 
 def test_database_enforced_read_only_transaction():
     connection = FakeConnection()
     def connector(*args, **kwargs):
-        assert kwargs["options"] == "-c default_transaction_read_only=on"
+        assert "options" not in kwargs
         return connection
-    with read_only_connection("postgresql://redacted", connector): pass
-    assert connection.session == {"readonly": True, "autocommit": False}
+    with read_only_connection("postgresql://host-pooler.example/db", connector) as opened:
+        with opened.cursor() as cursor:
+            cursor.execute("SELECT 1")
+    assert connection.autocommit is False
+    assert connection.statements[:3] == ["BEGIN", "SET TRANSACTION READ ONLY", "SELECT 1"]
     assert connection.rolled_back and connection.closed
+
+
+def test_database_enforced_read_only_rejects_dml_and_ddl():
+    for statement in ("INSERT INTO x VALUES (1)", "UPDATE x SET y=1", "DELETE FROM x",
+                      "CREATE TABLE x(y int)", "ALTER TABLE x ADD y int", "DROP TABLE x"):
+        connection = FakeConnection()
+        try:
+            with read_only_connection("postgresql://host-pooler.example/db", lambda *a, **k: connection) as opened:
+                with opened.cursor() as cursor: cursor.execute(statement)
+        except RuntimeError as error:
+            assert "read-only transaction" in str(error)
+        else:
+            raise AssertionError(f"write unexpectedly succeeded: {statement}")
+        assert connection.rolled_back and connection.closed
+
+
+def test_read_only_initialization_failure_is_sanitized(caplog):
+    class FailingCursor(FakeCursor):
+        def execute(self, statement):
+            if statement == "SET TRANSACTION READ ONLY":
+                raise RuntimeError("password=secret host=private.pooler.neon.tech")
+            super().execute(statement)
+    connection = FakeConnection()
+    connection.cursor = lambda: FailingCursor(connection)
+    try:
+        with read_only_connection("postgresql://user:secret@private.pooler.neon.tech/db", lambda *a, **k: connection): pass
+    except access.ReadOnlyTransactionError as error:
+        assert str(error) == "Could not establish a read-only database transaction."
+    logs = caplog.text
+    assert "failure_stage" in logs and "read_only_transaction" in logs
+    assert "secret" not in logs and "private.pooler.neon.tech" not in logs
 
 
 def test_reconciliation_mismatch_and_missing_mirror_tables_stop_before_reader(monkeypatch):
@@ -110,3 +156,12 @@ def test_same_database_resolution_no_provider_writes_or_trade_desk_limit_depende
         assert forbidden not in access_source.lower()
     assert "trade desk" not in access_source.lower() and "history_limit" not in access_source.lower()
     assert "information_schema.columns" in access_source and "limit" not in inspect.getsource(access.reconciliation_snapshot).lower()
+    assert "default_transaction_read_only" not in access_source
+    assert 'cursor.execute("SET TRANSACTION READ ONLY")' in access_source
+
+
+def test_normal_repository_connection_semantics_are_unchanged():
+    from trade_repository import TradeRepository
+    source = inspect.getsource(TradeRepository.connection)
+    assert "default_transaction_read_only" not in source
+    assert "SET TRANSACTION READ ONLY" not in source
