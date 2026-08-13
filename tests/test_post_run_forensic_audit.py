@@ -90,7 +90,8 @@ def test_incomplete_telemetry_is_explicit_and_counterfactuals_use_ordered_open_m
 
 def test_production_reader_is_read_only_projected_bounded_and_not_trade_desk_controlled():
     source = inspect.getsource(read_sessions).lower()
-    assert "default_transaction_read_only=on" in source and "set_session(readonly=true" in source
+    assert "default_transaction_read_only" not in source
+    assert 'cursor.execute("set transaction read only")' in source
     assert "select *" not in source and " limit %s" in source
     assert "start_date" in source and "end_date" in source
     assert "history" not in source and "dropdown" not in source

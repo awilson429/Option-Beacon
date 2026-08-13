@@ -18,6 +18,19 @@ from post_run_forensic_audit import build_forensic_report
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+class ReadOnlyTransactionError(RuntimeError):
+    """Sanitized failure to establish the forensic read-only transaction."""
+
+
+def sanitize_database_error(error):
+    text = str(error or "").lower()
+    if "read only" in text or "read-only" in text:
+        return "read-only transaction unavailable"
+    if "timeout" in text:
+        return "database connection timed out"
+    return "database operation unavailable"
 REQUIRED_TABLE_COLUMNS = {
     "authoritative_trade_events": {"opportunity_id", "event_type", "event_timestamp"},
     "opportunities": {"id", "signal_timestamp"},
@@ -47,13 +60,26 @@ def database_fingerprint(database_url):
 def read_only_connection(database_url, connector=connect):
     if not database_url:
         raise RuntimeError("Production DATABASE_URL is not configured")
-    connection = connector(database_url, cursor_factory=RealDictCursor, sslmode="require",
-                           options="-c default_transaction_read_only=on")
+    connection = connector(database_url, cursor_factory=RealDictCursor, sslmode="require")
     try:
-        connection.set_session(readonly=True, autocommit=False)
+        connection.autocommit = False
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("BEGIN")
+                cursor.execute("SET TRANSACTION READ ONLY")
+        except Exception as error:
+            connection.rollback()
+            LOGGER.error(json.dumps({
+                "event": "post_run_forensic_audit_failed",
+                "failure_stage": "read_only_transaction",
+                "exception_class": type(error).__name__,
+                "message": sanitize_database_error(error),
+                "database_fingerprint": database_fingerprint(database_url),
+            }, sort_keys=True))
+            raise ReadOnlyTransactionError("Could not establish a read-only database transaction.") from None
         yield connection
-        connection.rollback()
     finally:
+        connection.rollback()
         connection.close()
 
 
@@ -181,8 +207,10 @@ def run_production_audit(database_url, *, dashboard_fingerprint=None, connector=
         result["duration_ms"] = duration
         return result
     except Exception as error:
-        LOGGER.exception(json.dumps({"event": "post_run_forensic_audit_failed", "database_fingerprint": fingerprint,
-                                     "error_type": type(error).__name__, "duration_ms": round((time.perf_counter() - started) * 1000)}))
+        LOGGER.error(json.dumps({"event": "post_run_forensic_audit_failed", "database_fingerprint": fingerprint,
+                                 "failure_stage": "read_only_transaction" if isinstance(error, ReadOnlyTransactionError) else "audit_query",
+                                 "exception_class": type(error).__name__, "message": sanitize_database_error(error),
+                                 "duration_ms": round((time.perf_counter() - started) * 1000)}, sort_keys=True))
         raise
 
 

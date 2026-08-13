@@ -30,11 +30,12 @@ def read_sessions(url, *, start_date, end_date, trade_limit=10000, mark_limit=25
         raise RuntimeError("DATABASE_URL is not configured")
     start, end = session_bounds(start_date, end_date)
     start_value, end_value = start.isoformat(), end.isoformat()
-    connection = connect(url, cursor_factory=RealDictCursor, sslmode="require",
-                         options="-c default_transaction_read_only=on")
+    connection = connect(url, cursor_factory=RealDictCursor, sslmode="require")
     try:
-        connection.set_session(readonly=True, autocommit=False)
+        connection.autocommit = False
         with connection.cursor() as cursor:
+            cursor.execute("BEGIN")
+            cursor.execute("SET TRANSACTION READ ONLY")
             cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name=ANY(%s)", (list(TABLES),))
             available = {row["table_name"] for row in cursor.fetchall()}
             missing = sorted(set(TABLES) - available)
@@ -63,9 +64,9 @@ def read_sessions(url, *, start_date, end_date, trade_limit=10000, mark_limit=25
             paper = _fetch(cursor, available, "paper_execution_trades", "SELECT trade_id,source_signal_id,opportunity_id,status,total_debit,realized_pnl_dollars,realized_return_pct,opened_at,closed_at FROM paper_execution_trades WHERE source_signal_id=ANY(%s) ORDER BY opened_at,trade_id LIMIT %s", (ids, trade_limit)) if ids else []
             trade_ids = [row["trade_id"] for row in paper if row.get("trade_id")]
             journal = _fetch(cursor, available, "paper_execution_journal", "SELECT trade_id,accepted,reason_code,created_at,metadata_json FROM paper_execution_journal WHERE trade_id=ANY(%s) ORDER BY created_at,trade_id LIMIT %s", (trade_ids, trade_limit)) if trade_ids else []
-            connection.rollback()
             return snapshots, outcomes, mirrors, marks, paper, journal, {"missing_tables": missing, "query": "READ_ONLY_EXPLICIT_ET_SESSIONS", "start_utc": start, "end_utc_exclusive": end}
     finally:
+        connection.rollback()
         connection.close()
 
 

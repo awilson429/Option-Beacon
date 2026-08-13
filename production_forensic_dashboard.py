@@ -20,8 +20,12 @@ def render_production_forensic_audit(st, *, database_resolver=dashboard_database
         if not url:
             st.error("Production database configuration is unavailable.")
             return None
-        with st.spinner("Running read-only production forensic audit..."):
-            result = audit_runner(url, dashboard_fingerprint=database_fingerprint(url))
+        try:
+            with st.spinner("Running read-only production forensic audit..."):
+                result = audit_runner(url, dashboard_fingerprint=database_fingerprint(url))
+        except Exception:
+            st.error("Production forensic audit could not establish or complete its read-only database operation. Check sanitized server logs.")
+            return None
         identity = result["database"]
         st.caption(f'{identity["engine"]} · schema {identity["schema"]} · fingerprint {identity["fingerprint"]} · {identity["durability"]}')
         st.dataframe(pd.DataFrame([{"Table": table, **status} for table, status in identity["table_presence"].items()]),
