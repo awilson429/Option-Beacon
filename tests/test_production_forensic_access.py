@@ -10,12 +10,14 @@ from analysis.production_forensic_access import (
     run_production_audit,
 )
 from production_forensic_dashboard import render_production_forensic_audit
+from production_forensic_dashboard import forensic_export_filename, forensic_export_json
 
 
 class FakeStreamlit:
     def __init__(self, clicked=False):
         self.clicked = clicked
         self.calls = []
+        self.session_state = {}
     def expander(self, *args, **kwargs): self.calls.append(("expander", args)); return nullcontext()
     def warning(self, value): self.calls.append(("warning", value))
     def caption(self, value): self.calls.append(("caption", value))
@@ -25,7 +27,7 @@ class FakeStreamlit:
     def dataframe(self, *args, **kwargs): self.calls.append(("dataframe", None))
     def markdown(self, value): self.calls.append(("markdown", value))
     def json(self, value): self.calls.append(("json", value))
-    def download_button(self, *args, **kwargs): self.calls.append(("download", None))
+    def download_button(self, *args, **kwargs): self.calls.append(("download", args, kwargs))
 
 
 def test_developer_tools_page_load_is_query_on_demand():
@@ -50,6 +52,73 @@ def test_explicit_click_uses_dashboard_resolver_and_safe_fingerprint():
     assert calls[0][0] == url
     rendered = json.dumps(st.calls)
     assert "private" not in rendered and "secret" not in rendered and "production.example" not in rendered
+
+
+def test_complete_export_preserves_nested_source_and_per_trade_records_without_secrets():
+    result = {"status": "COMPLETED", "database": {"fingerprint": "abc", "DATABASE_URL": "postgresql://secret"},
+              "reconciliation": {"mirror_total": 1}, "sessions": {"analyzable": ["2026-08-13"]},
+              "pairing": {"mirror_matches": 1},
+              "report": {"translation_matrix": [{"outcome": "AUTH WIN / MIRROR LOSS", "n": 1}],
+                         "auth_win_mirror_loss": {"rows": [{"opportunity_id": "auth-1", "mirror_trade_id": "mirror-1",
+                             "marks": [{"mark_id": "mark-1", "return_pct": 20}], "mfe": 20, "mae": -5, "giveback": 30}]},
+                         "counterfactual_exits": {"results": [{"variant": "TP20"}]},
+                         "biggest_observed_leak": {"failure_mode": "GIVEBACK"}},
+              "source_records": {"authoritative_outcomes": [{"outcome": {"opportunity_id": "auth-1"}}],
+                  "paper_trades": [{"trade_id": "paper-1", "source_signal_id": "auth-1"}],
+                  "broad_journal": [{"trade_id": "paper-1", "accepted": 0}],
+                  "mirror_trades": [{"mirror_trade_id": "mirror-1", "opportunity_id": "auth-1"}],
+                  "mirror_marks": [{"mark_id": "mark-1", "mirror_trade_id": "mirror-1"}],
+                  "access_token": "hidden"}}
+    exported = json.loads(forensic_export_json(result))
+    assert exported["report"] == result["report"]
+    assert exported["source_records"]["mirror_marks"] == result["source_records"]["mirror_marks"]
+    assert exported["source_records"]["paper_trades"][0]["source_signal_id"] == "auth-1"
+    encoded = json.dumps(exported)
+    assert "postgresql://secret" not in encoded and "hidden" not in encoded
+    assert forensic_export_filename(datetime(2026, 8, 13, 16, tzinfo=timezone.utc)) == "optionbeacon_forensic_audit_2026-08-13.json"
+
+
+def test_cached_completed_export_does_not_rerun_audit_or_write_database():
+    st, runner_calls = FakeStreamlit(clicked=True), []
+    result = {"status": "COMPLETED", "reason": None,
+              "database": {"engine": "postgresql", "schema": "public", "fingerprint": "abc", "durability": "DURABLE", "table_presence": {}},
+              "reconciliation": {}, "sessions": {}, "pairing": {}, "report": {}, "source_records": {}}
+    runner = lambda *_args, **_kwargs: runner_calls.append("audit") or result
+    render_production_forensic_audit(st, database_resolver=lambda _: "postgresql://redacted", audit_runner=runner)
+    st.clicked = False
+    render_production_forensic_audit(st, database_resolver=lambda _: (_ for _ in ()).throw(AssertionError("resolved again")), audit_runner=runner)
+    assert runner_calls == ["audit"]
+    downloads = [call for call in st.calls if call[0] == "download"]
+    assert len(downloads) == 2
+    assert downloads[-1][1][0] == "Download Full Forensic Report"
+    assert json.loads(downloads[-1][1][1]) == result
+    export_source = inspect.getsource(forensic_export_json)
+    assert all(token not in export_source.lower() for token in ("insert ", "update ", "delete ", "create ", "execute("))
+
+
+def test_completed_audit_retains_every_in_memory_source_collection(monkeypatch):
+    presence = {table: {"status": "PRESENT", "missing_columns": []} for table in access.REQUIRED_TABLE_COLUMNS}
+    sessions = {"discovered": ["2026-08-13"], "analyzable": ["2026-08-13"], "excluded": [],
+                "first": "2026-08-13", "last": "2026-08-13"}
+    values = ([{"snapshot": {"opportunity_id": "auth-1"}}],
+              [{"outcome": {"opportunity_id": "auth-1"}}],
+              [{"mirror_trade_id": "mirror-1", "opportunity_id": "auth-1"}],
+              [{"mark_id": "mark-1", "mirror_trade_id": "mirror-1"}],
+              [{"trade_id": "paper-1", "source_signal_id": "auth-1"}],
+              [{"trade_id": "paper-1", "accepted": 1}], {"query": "READ_ONLY"})
+    monkeypatch.setattr(access, "table_presence", lambda *_args: presence)
+    monkeypatch.setattr(access, "reconciliation_snapshot", lambda *_args: {"mirror_total": 1})
+    monkeypatch.setattr(access, "discover_sessions", lambda *_args: sessions)
+    monkeypatch.setattr(access, "build_forensic_report", lambda *_args: {
+        "translation_matrix": [{"n": 1}], "analysis_window": {"authoritative_opportunities": 1},
+        "data_integrity": {"orphaned_records": {"mirror_without_authoritative": []}}})
+    result = run_production_audit("postgresql://x@y/db", reader=lambda *_a, **_k: values)
+    assert result["status"] == "COMPLETED"
+    assert result["source_records"] == {
+        "authoritative_snapshots": values[0], "authoritative_outcomes": values[1],
+        "mirror_trades": values[2], "mirror_marks": values[3],
+        "paper_trades": values[4], "broad_journal": values[5],
+    }
 
 
 class FakeConnection:
