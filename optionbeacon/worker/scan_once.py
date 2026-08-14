@@ -47,6 +47,7 @@ from mirror_v2_shadow import (
     mirror_v2_experiment_start,
     run_mirror_v2_shadow,
 )
+from filtered_execution import FilteredExecutionRepository, filtered_enabled, run_filtered_execution
 from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable
 from trade_state_service import (
     list_trade_outcomes,
@@ -235,6 +236,8 @@ def run_scan_once(
             mirror_is_enabled = mirror_enabled()
             mirror_v2_repository = MirrorV2Repository(repository)
             mirror_v2_is_enabled = mirror_v2_enabled()
+            filtered_repository = FilteredExecutionRepository(repository)
+            filtered_is_enabled = filtered_enabled()
             mirror_v2_start_date = mirror_v2_experiment_start()
             if mirror_v2_is_enabled and mirror_v2_start_date is None:
                 prior_v2_state = mirror_v2_repository.runtime_state()
@@ -508,6 +511,11 @@ def run_scan_once(
                 chain_provider=shared_chain_provider, control_repository=mirror_repository,
                 experiment_start_date=mirror_v2_start_date,
                 entry_events=shared_entry_events, exit_events=shared_exit_events,
+            )
+            run_filtered_execution(
+                repository, filtered_repository, paper_repository, mirror_repository,
+                shared_entry_events, enabled=filtered_is_enabled,
+                scanner_id=scanner_id, now=clock(),
             )
         if scan_phase_error is not None:
             completed = clock()

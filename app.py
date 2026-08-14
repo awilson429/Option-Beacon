@@ -94,6 +94,8 @@ from option_translation_autopsy_dashboard import render_option_translation_autop
 from production_forensic_dashboard import render_production_forensic_audit
 from broad_filter_effectiveness import broad_filter_effectiveness
 from mirror_execution import MirrorExecutionRepository, mirror_summary
+from filtered_execution import FilteredExecutionRepository, filtered_summary
+from filtered_execution_analytics import filtered_comparison
 from mirror_v2_shadow import MirrorV2Repository, mirror_v2_summary
 from trade_repository import (
     TradeRepository,
@@ -4434,7 +4436,7 @@ def render_paper_trading_page():
     config = local_config
     positions, raw_journal, captures, authoritative_events = [], [], [], []
     worker_health, worker_config_state = None, None
-    mirror_rows, mirror_marks, mirror_runtime = [], [], None
+    mirror_rows, mirror_marks, mirror_runtime, filtered_rows = [], [], None, []
     mirror_v2_rows, mirror_v2_comparisons = [], []
     database_url = dashboard_database_url()
     if database_url:
@@ -4456,6 +4458,10 @@ def render_paper_trading_page():
                 mirror_runtime = mirror_repository.runtime_state()
             except Exception:
                 mirror_rows, mirror_marks, mirror_runtime = [], [], None
+            try:
+                filtered_rows = FilteredExecutionRepository(trade_repository, initialize=False).rows(limit=5000)
+            except Exception:
+                filtered_rows = []
             try:
                 mirror_v2_repository = MirrorV2Repository(trade_repository, initialize=False)
                 mirror_v2_rows = mirror_v2_repository.rows()
@@ -4494,8 +4500,8 @@ def render_paper_trading_page():
         unsafe_allow_html=True,
     )
 
-    broad_tab, mirror_tab, v2_tab, compare_tab = st.tabs(
-        ["BROAD", "MIRROR CONTROL", "MIRROR V2 SHADOW", "COMPARE"]
+    broad_tab, mirror_tab, filtered_tab, v2_tab, compare_tab = st.tabs(
+        ["BROAD", "MIRROR CONTROL", "FILTERED", "MIRROR V2 SHADOW", "COMPARE"]
     )
     with broad_tab:
         st.caption("Existing risk-filtered PAPER portfolio. Its policy and ledger are unchanged.")
@@ -4565,6 +4571,15 @@ def render_paper_trading_page():
             st.dataframe(pd.DataFrame(mirror_v2_comparisons), use_container_width=True, hide_index=True)
         else:
             st.caption("No forward MIRROR V2 decisions have been recorded.")
+    with filtered_tab:
+        metrics = filtered_summary(filtered_rows)
+        analytics = filtered_comparison(filtered_rows, mirror_rows)
+        st.caption("FILTERED · BROAD-eligible + spread ≤20% · shared MIRROR quotes · PAPER only")
+        st.dataframe(pd.DataFrame([metrics]), use_container_width=True, hide_index=True)
+        with st.expander("FILTERED experiment attribution", expanded=False):
+            st.dataframe(pd.DataFrame([analytics["spread_gate"]]), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(analytics["signal_age"]), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(analytics["loss_caps"]), use_container_width=True, hide_index=True)
     with compare_tab:
         comparison = portfolio_comparison(
             authoritative_events, raw_journal, captures, positions, mirror_rows
