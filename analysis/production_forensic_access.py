@@ -199,7 +199,13 @@ def run_production_audit(database_url, *, dashboard_fingerprint=None, connector=
             report = build_forensic_report(*values[:6])
             report["source_status"] = values[6]
             result = {"status": "COMPLETED", "reason": None, "database": _database_identity(fingerprint, presence),
-                      "reconciliation": reconciliation, "sessions": sessions, "pairing": pairing_summary(report, values[4], values[5]), "report": report}
+                      "reconciliation": reconciliation, "sessions": sessions,
+                      "pairing": pairing_summary(report, values[4], values[5]), "report": report,
+                      "source_records": {
+                          "authoritative_snapshots": values[0], "authoritative_outcomes": values[1],
+                          "mirror_trades": values[2], "mirror_marks": values[3],
+                          "paper_trades": values[4], "broad_journal": values[5],
+                      }}
         duration = round((time.perf_counter() - started) * 1000)
         LOGGER.info(json.dumps({"event": "post_run_forensic_audit_completed", "database_fingerprint": fingerprint,
             "sessions_analyzed": len(sessions["analyzable"]), "authoritative_n": (result.get("pairing") or {}).get("authoritative_opportunities", 0),
