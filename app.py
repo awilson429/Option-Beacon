@@ -96,6 +96,7 @@ from broad_filter_effectiveness import broad_filter_effectiveness
 from mirror_execution import MirrorExecutionRepository, mirror_summary
 from filtered_execution import FilteredExecutionRepository, filtered_summary
 from filtered_execution_analytics import filtered_comparison
+from experiment_scorecard_dashboard import render_experiment_scorecard
 from mirror_v2_shadow import MirrorV2Repository, mirror_v2_summary
 from trade_repository import (
     TradeRepository,
@@ -4435,6 +4436,7 @@ def render_paper_trading_page():
     local_config = ExecutionConfig()
     config = local_config
     positions, raw_journal, captures, authoritative_events = [], [], [], []
+    trade_repository = None
     worker_health, worker_config_state = None, None
     mirror_rows, mirror_marks, mirror_runtime, filtered_rows = [], [], None, []
     mirror_v2_rows, mirror_v2_comparisons = [], []
@@ -4478,6 +4480,7 @@ def render_paper_trading_page():
         st.warning("Authoritative PAPER storage is not configured for this dashboard.")
 
     status = execution_status_model(positions, raw_journal, worker_health)
+    render_experiment_scorecard(st, trade_repository)
     st.markdown(
         f'<div class="ob-paper-status ob-paper-status-{status["treatment"]}">'
         f'<span>MODE: {escape(status["mode"])}</span>'
