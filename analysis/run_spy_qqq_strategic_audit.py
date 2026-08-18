@@ -28,7 +28,7 @@ PROJECTIONS = {
 }
 
 
-def read_snapshot(url, *, row_limit=20000):
+def read_snapshot(url, *, row_limit=20000, start_utc=None, end_utc=None):
     with read_only_connection(url) as connection, connection.cursor() as cursor:
         cursor.execute("SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public'")
         columns = {}
@@ -41,7 +41,14 @@ def read_snapshot(url, *, row_limit=20000):
                 raw[name], status[name] = [], "ABSENT OR INCOMPATIBLE"
                 continue
             order = next((column for column in ("event_timestamp", "entry_event_at", "authoritative_event_at", "detected_at", "opened_at", "captured_at", "evaluated_at", "observed_at", "created_at") if column in selected), selected[0])
-            cursor.execute(f"SELECT {','.join(selected)} FROM {table} ORDER BY {order} LIMIT %s", (int(row_limit),))
+            temporal = order in {"event_timestamp", "entry_event_at", "authoritative_event_at", "detected_at", "opened_at",
+                                 "captured_at", "evaluated_at", "observed_at", "created_at", "updated_at"}
+            where, params = "", []
+            if temporal and start_utc is not None and end_utc is not None:
+                where = f" WHERE {order}::timestamptz >= %s AND {order}::timestamptz < %s"
+                params.extend((start_utc, end_utc))
+            params.append(int(row_limit))
+            cursor.execute(f"SELECT {','.join(selected)} FROM {table}{where} ORDER BY {order} LIMIT %s", tuple(params))
             raw[name], status[name] = [dict(row) for row in cursor.fetchall()], "PRESENT"
     return normalize(raw, status, database_fingerprint(url))
 
