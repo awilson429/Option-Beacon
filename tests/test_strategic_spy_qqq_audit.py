@@ -1,4 +1,9 @@
-from strategic_spy_qqq_audit import build_strategic_audit, excursions, performance
+from decimal import Decimal
+
+import pytest
+
+import strategic_spy_qqq_audit as strategic
+from strategic_spy_qqq_audit import build_strategic_audit, execution, excursions, performance
 
 
 def trade(identity, symbol, pnl, *, day="2026-08-17", spread=4, mfe=12, mae=-3):
@@ -43,6 +48,58 @@ def test_profitable_trade_with_missing_mfe_is_unavailable_not_type_error():
     result = excursions([row])
     assert result["coverage"] == 0
     assert result["winner_giveback_over_25pct_of_mfe"] == 0
+
+
+def test_unopened_row_reproduces_and_fixes_missing_quote_sum_type_error():
+    row = trade("rejected", "SPY", None)
+    row.update(opened_at=None, closed_at=None, entry_fill=None, return_pct=None, spread_percent=None)
+
+    with pytest.raises(TypeError, match="NoneType"):
+        sum(item.get("opened_at") and strategic.number(item.get("entry_fill")) is None for item in [row])
+
+    result = execution([row])
+    assert result["missing_quotes"] == 0
+    assert result["spread_coverage"] == 0
+    assert result["average_spread_percent"] is None
+
+
+def test_nullable_and_mixed_production_telemetry_remains_unavailable_not_zero():
+    profitable = trade("decimal", "SPY", Decimal("12.50"), mfe=None, mae=Decimal("-2.5"))
+    profitable.update(return_pct="6.25", spread="unused", spread_percent=Decimal("0.5"))
+    losing = trade("losing", "SPY", "-4.5", mfe="8.0", mae=None)
+    partial = trade("partial", "SPY", None, mfe=None, mae=None, spread=None)
+    partial.update(closed_at=None, return_pct=None, entry_fill=None)
+
+    report = build_strategic_audit({
+        "lanes": {"SPY": [profitable, losing, partial], "QQQ": [], "BROAD": [], "MIRROR": [], "FILTERED": []},
+        "AUTHORITATIVE": [], "OPPORTUNITY_CONTEXT": [], "CONTEXT_SHADOW": [], "POSITION_CONTEXT": [],
+        "DAILY_SCORECARD_ANALYTICS": [], "underlying_records": {},
+    })
+
+    assert report["performance"]["SPY"]["closed_trades"] == 2
+    assert report["performance"]["SPY"]["total_pnl"] == 8.0
+    assert report["mfe_mae_exit"]["SPY"]["coverage"] == 1
+    assert report["mfe_mae_exit"]["SPY"]["average_mae"] == -2.5
+    assert report["performance"]["QQQ"]["total_pnl"] is None
+    assert report["performance"]["BROAD"]["total_pnl"] is None
+    assert report["performance"]["MIRROR"]["total_pnl"] is None
+    assert report["performance"]["FILTERED"]["total_pnl"] is None
+
+
+def test_analytics_errors_carry_sanitized_substage_type_and_lane(monkeypatch):
+    def broken_execution(_rows):
+        raise TypeError("raw production value must not reach logs")
+
+    monkeypatch.setattr(strategic, "execution", broken_execution)
+    with pytest.raises(TypeError) as caught:
+        build_strategic_audit(snapshot())
+
+    diagnostics = caught.value.analytics_diagnostics
+    assert diagnostics["analytics_substage"] == "EXECUTION"
+    assert diagnostics["analytics_function"] == "broken_execution"
+    assert diagnostics["scope"] == "BROAD"
+    assert diagnostics["field_types"]["opened_at"] == ["str"]
+    assert "raw production value" not in str(diagnostics)
 
 
 def test_insufficient_sample_is_not_promoted_or_hindsight_filtered():

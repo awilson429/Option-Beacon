@@ -1,11 +1,13 @@
 import inspect
 import json
+import logging
 from decimal import Decimal
 from contextlib import nullcontext
 from datetime import datetime, timezone
 from uuid import UUID
 
 import app
+import pytest
 import analysis.production_strategic_audit as access
 from analysis.production_strategic_audit import (StrategicAuditFailure, _et_day,
     production_reconciliation, run_production_strategic_audit)
@@ -172,3 +174,32 @@ def test_completed_report_serializes_postgres_scalar_types():
     decoded=json.loads(encoded)
     assert decoded["report"]["pnl"]=="12.34"
     assert decoded["report"]["trade_id"]=="12345678-1234-5678-1234-567812345678"
+
+
+def test_production_log_includes_sanitized_analytics_context(monkeypatch, caplog):
+    data = reconciliation()
+    monkeypatch.setattr(access, "production_reconciliation", lambda *_a, **_k: data)
+
+    def fail_with_context(_snapshot):
+        error = TypeError("sensitive raw value")
+        error.analytics_diagnostics = {
+            "analytics_substage": "EXECUTION", "analytics_function": "execution",
+            "metric": "execution and missing quote metrics", "fields": ["opened_at", "entry_fill"],
+            "field_types": {"opened_at": ["NoneType"], "entry_fill": ["NoneType"]},
+            "scope": "FILTERED", "record_count": 1,
+        }
+        raise error
+
+    monkeypatch.setattr(access, "build_strategic_audit", fail_with_context)
+    with caplog.at_level(logging.ERROR), pytest.raises(StrategicAuditFailure):
+        run_production_strategic_audit(
+            "postgresql://user:password@host/database",
+            reader=lambda *_a, **_k: snapshot(),
+        )
+
+    logged = caplog.text
+    assert '"analytics_substage": "EXECUTION"' in logged
+    assert '"scope": "FILTERED"' in logged
+    assert '"database_fingerprint":' in logged and '"duration_ms":' in logged
+    assert "sensitive raw value" not in logged
+    assert "password" not in logged and "postgresql://" not in logged
