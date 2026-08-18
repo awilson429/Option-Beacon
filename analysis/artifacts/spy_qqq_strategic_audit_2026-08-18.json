@@ -1,0 +1,2194 @@
+{
+  "audit_metadata": {
+    "database_fingerprint": "8d3007a54ab4f1bc",
+    "generated_at": "2026-08-18T17:47:46.472075+00:00",
+    "table_status": {
+      "opportunities": "PRESENT",
+      "authoritative": "PRESENT",
+      "snapshots": "PRESENT",
+      "outcomes": "PRESENT",
+      "mirror": "ABSENT OR INCOMPATIBLE",
+      "filtered": "ABSENT OR INCOMPATIBLE",
+      "intraday_signals": "ABSENT OR INCOMPATIBLE",
+      "intraday": "ABSENT OR INCOMPATIBLE",
+      "context": "PRESENT",
+      "context_shadow": "PRESENT",
+      "position_context": "PRESENT",
+      "broad_trades": "PRESENT",
+      "broad_journal": "PRESENT"
+    },
+    "source_of_truth": "PERSISTED RECORDS ONLY",
+    "read_only": true,
+    "provider_calls": 0,
+    "database_writes": 0,
+    "previous_audit_cutoff": "2026-08-14T04:00:00+00:00",
+    "audit_date_range": {
+      "first": "2026-07-30T14:00:00+00:00",
+      "latest": "2026-07-30T16:10:00+00:00"
+    }
+  },
+  "inventory": {
+    "BROAD": {
+      "first_timestamp": null,
+      "latest_timestamp": null,
+      "sessions": 0,
+      "records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "new_records_since_previous_audit": 0
+    },
+    "MIRROR": {
+      "first_timestamp": null,
+      "latest_timestamp": null,
+      "sessions": 0,
+      "records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "new_records_since_previous_audit": 0
+    },
+    "FILTERED": {
+      "first_timestamp": null,
+      "latest_timestamp": null,
+      "sessions": 0,
+      "records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "new_records_since_previous_audit": 0
+    },
+    "SPY": {
+      "first_timestamp": null,
+      "latest_timestamp": null,
+      "sessions": 0,
+      "records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "new_records_since_previous_audit": 0
+    },
+    "QQQ": {
+      "first_timestamp": null,
+      "latest_timestamp": null,
+      "sessions": 0,
+      "records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "new_records_since_previous_audit": 0
+    },
+    "SPY_QQQ": {
+      "first_timestamp": null,
+      "latest_timestamp": null,
+      "sessions": 0,
+      "records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "new_records_since_previous_audit": 0
+    },
+    "AUTHORITATIVE": {
+      "first_timestamp": "2026-07-30T14:00:00+00:00",
+      "latest_timestamp": "2026-07-30T16:10:00+00:00",
+      "sessions": 1,
+      "records": 92,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "new_records_since_previous_audit": 0
+    },
+    "OPPORTUNITY_CONTEXT": {
+      "first_timestamp": null,
+      "latest_timestamp": null,
+      "sessions": 0,
+      "records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "new_records_since_previous_audit": 0
+    },
+    "CONTEXT_SHADOW": {
+      "first_timestamp": null,
+      "latest_timestamp": null,
+      "sessions": 0,
+      "records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "new_records_since_previous_audit": 0
+    },
+    "POSITION_CONTEXT": {
+      "first_timestamp": null,
+      "latest_timestamp": null,
+      "sessions": 0,
+      "records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "new_records_since_previous_audit": 0
+    },
+    "DAILY_SCORECARD_ANALYTICS": {
+      "first_timestamp": null,
+      "latest_timestamp": null,
+      "sessions": 0,
+      "records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "new_records_since_previous_audit": 0
+    }
+  },
+  "data_quality": {
+    "BROAD": {
+      "grade": "INSUFFICIENT",
+      "duplicate_identities": 0,
+      "missing_entries": 0,
+      "missing_exits_or_stale_open": 0,
+      "closed_with_missing_outcome": 0,
+      "missing_spread": 0,
+      "missing_signal_age": 0
+    },
+    "MIRROR": {
+      "grade": "INSUFFICIENT",
+      "duplicate_identities": 0,
+      "missing_entries": 0,
+      "missing_exits_or_stale_open": 0,
+      "closed_with_missing_outcome": 0,
+      "missing_spread": 0,
+      "missing_signal_age": 0
+    },
+    "FILTERED": {
+      "grade": "INSUFFICIENT",
+      "duplicate_identities": 0,
+      "missing_entries": 0,
+      "missing_exits_or_stale_open": 0,
+      "closed_with_missing_outcome": 0,
+      "missing_spread": 0,
+      "missing_signal_age": 0
+    },
+    "SPY": {
+      "grade": "INSUFFICIENT",
+      "duplicate_identities": 0,
+      "missing_entries": 0,
+      "missing_exits_or_stale_open": 0,
+      "closed_with_missing_outcome": 0,
+      "missing_spread": 0,
+      "missing_signal_age": 0
+    },
+    "QQQ": {
+      "grade": "INSUFFICIENT",
+      "duplicate_identities": 0,
+      "missing_entries": 0,
+      "missing_exits_or_stale_open": 0,
+      "closed_with_missing_outcome": 0,
+      "missing_spread": 0,
+      "missing_signal_age": 0
+    },
+    "SPY_QQQ": {
+      "grade": "INSUFFICIENT",
+      "duplicate_identities": 0,
+      "missing_entries": 0,
+      "missing_exits_or_stale_open": 0,
+      "closed_with_missing_outcome": 0,
+      "missing_spread": 0,
+      "missing_signal_age": 0
+    },
+    "AUTHORITATIVE": {
+      "grade": "INSUFFICIENT",
+      "duplicate_identities": 0,
+      "missing_entries": 0,
+      "missing_exits_or_stale_open": 0,
+      "closed_with_missing_outcome": 0,
+      "missing_spread": 0,
+      "missing_signal_age": 0,
+      "opportunities": 92,
+      "outcome_labels": 1,
+      "authoritative_trade_events": 0,
+      "missing_outcomes": 91,
+      "outcome_coverage_percent": 1.0869565217391304
+    },
+    "OPPORTUNITY_CONTEXT": {
+      "grade": "INSUFFICIENT",
+      "duplicate_identities": 0,
+      "missing_entries": 0,
+      "missing_exits_or_stale_open": 0,
+      "closed_with_missing_outcome": 0,
+      "missing_spread": 0,
+      "missing_signal_age": 0
+    },
+    "CONTEXT_SHADOW": {
+      "grade": "INSUFFICIENT",
+      "duplicate_identities": 0,
+      "missing_entries": 0,
+      "missing_exits_or_stale_open": 0,
+      "closed_with_missing_outcome": 0,
+      "missing_spread": 0,
+      "missing_signal_age": 0
+    },
+    "POSITION_CONTEXT": {
+      "grade": "INSUFFICIENT",
+      "duplicate_identities": 0,
+      "missing_entries": 0,
+      "missing_exits_or_stale_open": 0,
+      "closed_with_missing_outcome": 0,
+      "missing_spread": 0,
+      "missing_signal_age": 0
+    },
+    "DAILY_SCORECARD_ANALYTICS": {
+      "grade": "INSUFFICIENT",
+      "duplicate_identities": 0,
+      "missing_entries": 0,
+      "missing_exits_or_stale_open": 0,
+      "closed_with_missing_outcome": 0,
+      "missing_spread": 0,
+      "missing_signal_age": 0
+    }
+  },
+  "performance": {
+    "BROAD": {
+      "total_records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "total_pnl": null,
+      "average_pnl": null,
+      "median_pnl": null,
+      "average_return": null,
+      "median_return": null,
+      "expectancy_per_trade": null,
+      "average_winner": null,
+      "average_loser": null,
+      "payoff_ratio": null,
+      "profit_factor": null,
+      "profit_factor_note": null,
+      "max_observed_winner": null,
+      "max_observed_loser": null,
+      "profitable_session_percentage": null,
+      "losing_session_percentage": null,
+      "average_daily_pnl": null,
+      "median_daily_pnl": null,
+      "daily_pnl_standard_deviation": null,
+      "best_day": null,
+      "worst_day": null,
+      "longest_winning_day_streak": 0,
+      "longest_losing_day_streak": 0,
+      "maximum_consecutive_losses": 0,
+      "worst_5_trade_sequence": null,
+      "worst_10_trade_sequence": null,
+      "cumulative_debit": null,
+      "pnl_per_dollar_deployed": null,
+      "maximum_realized_drawdown": 0.0,
+      "maximum_percentage_drawdown": 0.0,
+      "longest_recovery_period_trades": 0,
+      "peak_index": 0,
+      "trough_index": 0,
+      "daily": [],
+      "rolling": {
+        "5": [],
+        "10": [],
+        "20": []
+      }
+    },
+    "MIRROR": {
+      "total_records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "total_pnl": null,
+      "average_pnl": null,
+      "median_pnl": null,
+      "average_return": null,
+      "median_return": null,
+      "expectancy_per_trade": null,
+      "average_winner": null,
+      "average_loser": null,
+      "payoff_ratio": null,
+      "profit_factor": null,
+      "profit_factor_note": null,
+      "max_observed_winner": null,
+      "max_observed_loser": null,
+      "profitable_session_percentage": null,
+      "losing_session_percentage": null,
+      "average_daily_pnl": null,
+      "median_daily_pnl": null,
+      "daily_pnl_standard_deviation": null,
+      "best_day": null,
+      "worst_day": null,
+      "longest_winning_day_streak": 0,
+      "longest_losing_day_streak": 0,
+      "maximum_consecutive_losses": 0,
+      "worst_5_trade_sequence": null,
+      "worst_10_trade_sequence": null,
+      "cumulative_debit": null,
+      "pnl_per_dollar_deployed": null,
+      "maximum_realized_drawdown": 0.0,
+      "maximum_percentage_drawdown": 0.0,
+      "longest_recovery_period_trades": 0,
+      "peak_index": 0,
+      "trough_index": 0,
+      "daily": [],
+      "rolling": {
+        "5": [],
+        "10": [],
+        "20": []
+      }
+    },
+    "FILTERED": {
+      "total_records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "total_pnl": null,
+      "average_pnl": null,
+      "median_pnl": null,
+      "average_return": null,
+      "median_return": null,
+      "expectancy_per_trade": null,
+      "average_winner": null,
+      "average_loser": null,
+      "payoff_ratio": null,
+      "profit_factor": null,
+      "profit_factor_note": null,
+      "max_observed_winner": null,
+      "max_observed_loser": null,
+      "profitable_session_percentage": null,
+      "losing_session_percentage": null,
+      "average_daily_pnl": null,
+      "median_daily_pnl": null,
+      "daily_pnl_standard_deviation": null,
+      "best_day": null,
+      "worst_day": null,
+      "longest_winning_day_streak": 0,
+      "longest_losing_day_streak": 0,
+      "maximum_consecutive_losses": 0,
+      "worst_5_trade_sequence": null,
+      "worst_10_trade_sequence": null,
+      "cumulative_debit": null,
+      "pnl_per_dollar_deployed": null,
+      "maximum_realized_drawdown": 0.0,
+      "maximum_percentage_drawdown": 0.0,
+      "longest_recovery_period_trades": 0,
+      "peak_index": 0,
+      "trough_index": 0,
+      "daily": [],
+      "rolling": {
+        "5": [],
+        "10": [],
+        "20": []
+      }
+    },
+    "SPY": {
+      "total_records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "total_pnl": null,
+      "average_pnl": null,
+      "median_pnl": null,
+      "average_return": null,
+      "median_return": null,
+      "expectancy_per_trade": null,
+      "average_winner": null,
+      "average_loser": null,
+      "payoff_ratio": null,
+      "profit_factor": null,
+      "profit_factor_note": null,
+      "max_observed_winner": null,
+      "max_observed_loser": null,
+      "profitable_session_percentage": null,
+      "losing_session_percentage": null,
+      "average_daily_pnl": null,
+      "median_daily_pnl": null,
+      "daily_pnl_standard_deviation": null,
+      "best_day": null,
+      "worst_day": null,
+      "longest_winning_day_streak": 0,
+      "longest_losing_day_streak": 0,
+      "maximum_consecutive_losses": 0,
+      "worst_5_trade_sequence": null,
+      "worst_10_trade_sequence": null,
+      "cumulative_debit": null,
+      "pnl_per_dollar_deployed": null,
+      "maximum_realized_drawdown": 0.0,
+      "maximum_percentage_drawdown": 0.0,
+      "longest_recovery_period_trades": 0,
+      "peak_index": 0,
+      "trough_index": 0,
+      "daily": [],
+      "rolling": {
+        "5": [],
+        "10": [],
+        "20": []
+      }
+    },
+    "QQQ": {
+      "total_records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "total_pnl": null,
+      "average_pnl": null,
+      "median_pnl": null,
+      "average_return": null,
+      "median_return": null,
+      "expectancy_per_trade": null,
+      "average_winner": null,
+      "average_loser": null,
+      "payoff_ratio": null,
+      "profit_factor": null,
+      "profit_factor_note": null,
+      "max_observed_winner": null,
+      "max_observed_loser": null,
+      "profitable_session_percentage": null,
+      "losing_session_percentage": null,
+      "average_daily_pnl": null,
+      "median_daily_pnl": null,
+      "daily_pnl_standard_deviation": null,
+      "best_day": null,
+      "worst_day": null,
+      "longest_winning_day_streak": 0,
+      "longest_losing_day_streak": 0,
+      "maximum_consecutive_losses": 0,
+      "worst_5_trade_sequence": null,
+      "worst_10_trade_sequence": null,
+      "cumulative_debit": null,
+      "pnl_per_dollar_deployed": null,
+      "maximum_realized_drawdown": 0.0,
+      "maximum_percentage_drawdown": 0.0,
+      "longest_recovery_period_trades": 0,
+      "peak_index": 0,
+      "trough_index": 0,
+      "daily": [],
+      "rolling": {
+        "5": [],
+        "10": [],
+        "20": []
+      }
+    },
+    "SPY_QQQ": {
+      "total_records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "total_pnl": null,
+      "average_pnl": null,
+      "median_pnl": null,
+      "average_return": null,
+      "median_return": null,
+      "expectancy_per_trade": null,
+      "average_winner": null,
+      "average_loser": null,
+      "payoff_ratio": null,
+      "profit_factor": null,
+      "profit_factor_note": null,
+      "max_observed_winner": null,
+      "max_observed_loser": null,
+      "profitable_session_percentage": null,
+      "losing_session_percentage": null,
+      "average_daily_pnl": null,
+      "median_daily_pnl": null,
+      "daily_pnl_standard_deviation": null,
+      "best_day": null,
+      "worst_day": null,
+      "longest_winning_day_streak": 0,
+      "longest_losing_day_streak": 0,
+      "maximum_consecutive_losses": 0,
+      "worst_5_trade_sequence": null,
+      "worst_10_trade_sequence": null,
+      "cumulative_debit": null,
+      "pnl_per_dollar_deployed": null,
+      "maximum_realized_drawdown": 0.0,
+      "maximum_percentage_drawdown": 0.0,
+      "longest_recovery_period_trades": 0,
+      "peak_index": 0,
+      "trough_index": 0,
+      "daily": [],
+      "rolling": {
+        "5": [],
+        "10": [],
+        "20": []
+      }
+    }
+  },
+  "consistency_and_risk": {
+    "BROAD": {
+      "total_records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "total_pnl": null,
+      "average_pnl": null,
+      "median_pnl": null,
+      "average_return": null,
+      "median_return": null,
+      "expectancy_per_trade": null,
+      "average_winner": null,
+      "average_loser": null,
+      "payoff_ratio": null,
+      "profit_factor": null,
+      "profit_factor_note": null,
+      "max_observed_winner": null,
+      "max_observed_loser": null,
+      "profitable_session_percentage": null,
+      "losing_session_percentage": null,
+      "average_daily_pnl": null,
+      "median_daily_pnl": null,
+      "daily_pnl_standard_deviation": null,
+      "best_day": null,
+      "worst_day": null,
+      "longest_winning_day_streak": 0,
+      "longest_losing_day_streak": 0,
+      "maximum_consecutive_losses": 0,
+      "worst_5_trade_sequence": null,
+      "worst_10_trade_sequence": null,
+      "cumulative_debit": null,
+      "pnl_per_dollar_deployed": null,
+      "maximum_realized_drawdown": 0.0,
+      "maximum_percentage_drawdown": 0.0,
+      "longest_recovery_period_trades": 0,
+      "peak_index": 0,
+      "trough_index": 0,
+      "daily": [],
+      "rolling": {
+        "5": [],
+        "10": [],
+        "20": []
+      }
+    },
+    "MIRROR": {
+      "total_records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "total_pnl": null,
+      "average_pnl": null,
+      "median_pnl": null,
+      "average_return": null,
+      "median_return": null,
+      "expectancy_per_trade": null,
+      "average_winner": null,
+      "average_loser": null,
+      "payoff_ratio": null,
+      "profit_factor": null,
+      "profit_factor_note": null,
+      "max_observed_winner": null,
+      "max_observed_loser": null,
+      "profitable_session_percentage": null,
+      "losing_session_percentage": null,
+      "average_daily_pnl": null,
+      "median_daily_pnl": null,
+      "daily_pnl_standard_deviation": null,
+      "best_day": null,
+      "worst_day": null,
+      "longest_winning_day_streak": 0,
+      "longest_losing_day_streak": 0,
+      "maximum_consecutive_losses": 0,
+      "worst_5_trade_sequence": null,
+      "worst_10_trade_sequence": null,
+      "cumulative_debit": null,
+      "pnl_per_dollar_deployed": null,
+      "maximum_realized_drawdown": 0.0,
+      "maximum_percentage_drawdown": 0.0,
+      "longest_recovery_period_trades": 0,
+      "peak_index": 0,
+      "trough_index": 0,
+      "daily": [],
+      "rolling": {
+        "5": [],
+        "10": [],
+        "20": []
+      }
+    },
+    "FILTERED": {
+      "total_records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "total_pnl": null,
+      "average_pnl": null,
+      "median_pnl": null,
+      "average_return": null,
+      "median_return": null,
+      "expectancy_per_trade": null,
+      "average_winner": null,
+      "average_loser": null,
+      "payoff_ratio": null,
+      "profit_factor": null,
+      "profit_factor_note": null,
+      "max_observed_winner": null,
+      "max_observed_loser": null,
+      "profitable_session_percentage": null,
+      "losing_session_percentage": null,
+      "average_daily_pnl": null,
+      "median_daily_pnl": null,
+      "daily_pnl_standard_deviation": null,
+      "best_day": null,
+      "worst_day": null,
+      "longest_winning_day_streak": 0,
+      "longest_losing_day_streak": 0,
+      "maximum_consecutive_losses": 0,
+      "worst_5_trade_sequence": null,
+      "worst_10_trade_sequence": null,
+      "cumulative_debit": null,
+      "pnl_per_dollar_deployed": null,
+      "maximum_realized_drawdown": 0.0,
+      "maximum_percentage_drawdown": 0.0,
+      "longest_recovery_period_trades": 0,
+      "peak_index": 0,
+      "trough_index": 0,
+      "daily": [],
+      "rolling": {
+        "5": [],
+        "10": [],
+        "20": []
+      }
+    },
+    "SPY": {
+      "total_records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "total_pnl": null,
+      "average_pnl": null,
+      "median_pnl": null,
+      "average_return": null,
+      "median_return": null,
+      "expectancy_per_trade": null,
+      "average_winner": null,
+      "average_loser": null,
+      "payoff_ratio": null,
+      "profit_factor": null,
+      "profit_factor_note": null,
+      "max_observed_winner": null,
+      "max_observed_loser": null,
+      "profitable_session_percentage": null,
+      "losing_session_percentage": null,
+      "average_daily_pnl": null,
+      "median_daily_pnl": null,
+      "daily_pnl_standard_deviation": null,
+      "best_day": null,
+      "worst_day": null,
+      "longest_winning_day_streak": 0,
+      "longest_losing_day_streak": 0,
+      "maximum_consecutive_losses": 0,
+      "worst_5_trade_sequence": null,
+      "worst_10_trade_sequence": null,
+      "cumulative_debit": null,
+      "pnl_per_dollar_deployed": null,
+      "maximum_realized_drawdown": 0.0,
+      "maximum_percentage_drawdown": 0.0,
+      "longest_recovery_period_trades": 0,
+      "peak_index": 0,
+      "trough_index": 0,
+      "daily": [],
+      "rolling": {
+        "5": [],
+        "10": [],
+        "20": []
+      }
+    },
+    "QQQ": {
+      "total_records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "total_pnl": null,
+      "average_pnl": null,
+      "median_pnl": null,
+      "average_return": null,
+      "median_return": null,
+      "expectancy_per_trade": null,
+      "average_winner": null,
+      "average_loser": null,
+      "payoff_ratio": null,
+      "profit_factor": null,
+      "profit_factor_note": null,
+      "max_observed_winner": null,
+      "max_observed_loser": null,
+      "profitable_session_percentage": null,
+      "losing_session_percentage": null,
+      "average_daily_pnl": null,
+      "median_daily_pnl": null,
+      "daily_pnl_standard_deviation": null,
+      "best_day": null,
+      "worst_day": null,
+      "longest_winning_day_streak": 0,
+      "longest_losing_day_streak": 0,
+      "maximum_consecutive_losses": 0,
+      "worst_5_trade_sequence": null,
+      "worst_10_trade_sequence": null,
+      "cumulative_debit": null,
+      "pnl_per_dollar_deployed": null,
+      "maximum_realized_drawdown": 0.0,
+      "maximum_percentage_drawdown": 0.0,
+      "longest_recovery_period_trades": 0,
+      "peak_index": 0,
+      "trough_index": 0,
+      "daily": [],
+      "rolling": {
+        "5": [],
+        "10": [],
+        "20": []
+      }
+    },
+    "SPY_QQQ": {
+      "total_records": 0,
+      "opened_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "win_rate": null,
+      "total_pnl": null,
+      "average_pnl": null,
+      "median_pnl": null,
+      "average_return": null,
+      "median_return": null,
+      "expectancy_per_trade": null,
+      "average_winner": null,
+      "average_loser": null,
+      "payoff_ratio": null,
+      "profit_factor": null,
+      "profit_factor_note": null,
+      "max_observed_winner": null,
+      "max_observed_loser": null,
+      "profitable_session_percentage": null,
+      "losing_session_percentage": null,
+      "average_daily_pnl": null,
+      "median_daily_pnl": null,
+      "daily_pnl_standard_deviation": null,
+      "best_day": null,
+      "worst_day": null,
+      "longest_winning_day_streak": 0,
+      "longest_losing_day_streak": 0,
+      "maximum_consecutive_losses": 0,
+      "worst_5_trade_sequence": null,
+      "worst_10_trade_sequence": null,
+      "cumulative_debit": null,
+      "pnl_per_dollar_deployed": null,
+      "maximum_realized_drawdown": 0.0,
+      "maximum_percentage_drawdown": 0.0,
+      "longest_recovery_period_trades": 0,
+      "peak_index": 0,
+      "trough_index": 0,
+      "daily": [],
+      "rolling": {
+        "5": [],
+        "10": [],
+        "20": []
+      }
+    }
+  },
+  "execution": {
+    "BROAD": {
+      "spread_coverage": 0,
+      "average_spread_percent": null,
+      "median_spread_percent": null,
+      "p90_spread_percent": null,
+      "signal_age_coverage": 0,
+      "average_signal_age_seconds": null,
+      "median_signal_age_seconds": null,
+      "missing_quotes": 0,
+      "dte": [],
+      "option_volume": {
+        "coverage": 0,
+        "average": null,
+        "median": null
+      },
+      "open_interest": {
+        "coverage": 0,
+        "average": null,
+        "median": null
+      },
+      "quote_age": "NOT PERSISTED",
+      "execution_latency": "AVAILABLE ONLY WHERE SIGNAL AND OPEN TIMESTAMPS EXIST",
+      "fill_assumption": []
+    },
+    "MIRROR": {
+      "spread_coverage": 0,
+      "average_spread_percent": null,
+      "median_spread_percent": null,
+      "p90_spread_percent": null,
+      "signal_age_coverage": 0,
+      "average_signal_age_seconds": null,
+      "median_signal_age_seconds": null,
+      "missing_quotes": 0,
+      "dte": [],
+      "option_volume": {
+        "coverage": 0,
+        "average": null,
+        "median": null
+      },
+      "open_interest": {
+        "coverage": 0,
+        "average": null,
+        "median": null
+      },
+      "quote_age": "NOT PERSISTED",
+      "execution_latency": "AVAILABLE ONLY WHERE SIGNAL AND OPEN TIMESTAMPS EXIST",
+      "fill_assumption": []
+    },
+    "FILTERED": {
+      "spread_coverage": 0,
+      "average_spread_percent": null,
+      "median_spread_percent": null,
+      "p90_spread_percent": null,
+      "signal_age_coverage": 0,
+      "average_signal_age_seconds": null,
+      "median_signal_age_seconds": null,
+      "missing_quotes": 0,
+      "dte": [],
+      "option_volume": {
+        "coverage": 0,
+        "average": null,
+        "median": null
+      },
+      "open_interest": {
+        "coverage": 0,
+        "average": null,
+        "median": null
+      },
+      "quote_age": "NOT PERSISTED",
+      "execution_latency": "AVAILABLE ONLY WHERE SIGNAL AND OPEN TIMESTAMPS EXIST",
+      "fill_assumption": []
+    },
+    "SPY": {
+      "spread_coverage": 0,
+      "average_spread_percent": null,
+      "median_spread_percent": null,
+      "p90_spread_percent": null,
+      "signal_age_coverage": 0,
+      "average_signal_age_seconds": null,
+      "median_signal_age_seconds": null,
+      "missing_quotes": 0,
+      "dte": [],
+      "option_volume": {
+        "coverage": 0,
+        "average": null,
+        "median": null
+      },
+      "open_interest": {
+        "coverage": 0,
+        "average": null,
+        "median": null
+      },
+      "quote_age": "NOT PERSISTED",
+      "execution_latency": "AVAILABLE ONLY WHERE SIGNAL AND OPEN TIMESTAMPS EXIST",
+      "fill_assumption": []
+    },
+    "QQQ": {
+      "spread_coverage": 0,
+      "average_spread_percent": null,
+      "median_spread_percent": null,
+      "p90_spread_percent": null,
+      "signal_age_coverage": 0,
+      "average_signal_age_seconds": null,
+      "median_signal_age_seconds": null,
+      "missing_quotes": 0,
+      "dte": [],
+      "option_volume": {
+        "coverage": 0,
+        "average": null,
+        "median": null
+      },
+      "open_interest": {
+        "coverage": 0,
+        "average": null,
+        "median": null
+      },
+      "quote_age": "NOT PERSISTED",
+      "execution_latency": "AVAILABLE ONLY WHERE SIGNAL AND OPEN TIMESTAMPS EXIST",
+      "fill_assumption": []
+    },
+    "SPY_QQQ": {
+      "spread_coverage": 0,
+      "average_spread_percent": null,
+      "median_spread_percent": null,
+      "p90_spread_percent": null,
+      "signal_age_coverage": 0,
+      "average_signal_age_seconds": null,
+      "median_signal_age_seconds": null,
+      "missing_quotes": 0,
+      "dte": [],
+      "option_volume": {
+        "coverage": 0,
+        "average": null,
+        "median": null
+      },
+      "open_interest": {
+        "coverage": 0,
+        "average": null,
+        "median": null
+      },
+      "quote_age": "NOT PERSISTED",
+      "execution_latency": "AVAILABLE ONLY WHERE SIGNAL AND OPEN TIMESTAMPS EXIST",
+      "fill_assumption": []
+    }
+  },
+  "mfe_mae_exit": {
+    "BROAD": {
+      "coverage": 0,
+      "average_mfe": null,
+      "median_mfe": null,
+      "average_mae": null,
+      "median_mae": null,
+      "average_mfe_captured_percent": null,
+      "profitable_before_loss": {
+        "5": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "10": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "15": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "20": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "30": {
+          "n": 0,
+          "loser_percent": null
+        }
+      },
+      "winner_giveback_over_25pct_of_mfe": 0,
+      "winner_giveback_over_50pct_of_mfe": 0
+    },
+    "MIRROR": {
+      "coverage": 0,
+      "average_mfe": null,
+      "median_mfe": null,
+      "average_mae": null,
+      "median_mae": null,
+      "average_mfe_captured_percent": null,
+      "profitable_before_loss": {
+        "5": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "10": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "15": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "20": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "30": {
+          "n": 0,
+          "loser_percent": null
+        }
+      },
+      "winner_giveback_over_25pct_of_mfe": 0,
+      "winner_giveback_over_50pct_of_mfe": 0
+    },
+    "FILTERED": {
+      "coverage": 0,
+      "average_mfe": null,
+      "median_mfe": null,
+      "average_mae": null,
+      "median_mae": null,
+      "average_mfe_captured_percent": null,
+      "profitable_before_loss": {
+        "5": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "10": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "15": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "20": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "30": {
+          "n": 0,
+          "loser_percent": null
+        }
+      },
+      "winner_giveback_over_25pct_of_mfe": 0,
+      "winner_giveback_over_50pct_of_mfe": 0
+    },
+    "SPY": {
+      "coverage": 0,
+      "average_mfe": null,
+      "median_mfe": null,
+      "average_mae": null,
+      "median_mae": null,
+      "average_mfe_captured_percent": null,
+      "profitable_before_loss": {
+        "5": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "10": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "15": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "20": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "30": {
+          "n": 0,
+          "loser_percent": null
+        }
+      },
+      "winner_giveback_over_25pct_of_mfe": 0,
+      "winner_giveback_over_50pct_of_mfe": 0
+    },
+    "QQQ": {
+      "coverage": 0,
+      "average_mfe": null,
+      "median_mfe": null,
+      "average_mae": null,
+      "median_mae": null,
+      "average_mfe_captured_percent": null,
+      "profitable_before_loss": {
+        "5": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "10": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "15": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "20": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "30": {
+          "n": 0,
+          "loser_percent": null
+        }
+      },
+      "winner_giveback_over_25pct_of_mfe": 0,
+      "winner_giveback_over_50pct_of_mfe": 0
+    },
+    "SPY_QQQ": {
+      "coverage": 0,
+      "average_mfe": null,
+      "median_mfe": null,
+      "average_mae": null,
+      "median_mae": null,
+      "average_mfe_captured_percent": null,
+      "profitable_before_loss": {
+        "5": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "10": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "15": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "20": {
+          "n": 0,
+          "loser_percent": null
+        },
+        "30": {
+          "n": 0,
+          "loser_percent": null
+        }
+      },
+      "winner_giveback_over_25pct_of_mfe": 0,
+      "winner_giveback_over_50pct_of_mfe": 0
+    }
+  },
+  "breakdowns": {
+    "BROAD": {
+      "direction": [],
+      "time_of_day": [],
+      "setup": [],
+      "regime": [],
+      "signal_age": []
+    },
+    "MIRROR": {
+      "direction": [],
+      "time_of_day": [],
+      "setup": [],
+      "regime": [],
+      "signal_age": []
+    },
+    "FILTERED": {
+      "direction": [],
+      "time_of_day": [],
+      "setup": [],
+      "regime": [],
+      "signal_age": []
+    },
+    "SPY": {
+      "direction": [],
+      "time_of_day": [],
+      "setup": [],
+      "regime": [],
+      "signal_age": []
+    },
+    "QQQ": {
+      "direction": [],
+      "time_of_day": [],
+      "setup": [],
+      "regime": [],
+      "signal_age": []
+    },
+    "SPY_QQQ": {
+      "direction": [],
+      "time_of_day": [],
+      "setup": [],
+      "regime": [],
+      "signal_age": []
+    }
+  },
+  "underlying_vs_option_translation": {
+    "SPY_QQQ": {},
+    "note": "Classes are reported only when persisted underlying outcome evidence exists."
+  },
+  "signal_frequency_and_sample_efficiency": {
+    "BROAD": {
+      "sessions": 0,
+      "signals_per_session": null,
+      "trades_per_session": null,
+      "no_trade_sessions": "UNAVAILABLE WITHOUT COMPLETE SESSION CALENDAR",
+      "estimated_sessions_for_samples": {
+        "50": null,
+        "100": null,
+        "250": null,
+        "500": null
+      }
+    },
+    "MIRROR": {
+      "sessions": 0,
+      "signals_per_session": null,
+      "trades_per_session": null,
+      "no_trade_sessions": "UNAVAILABLE WITHOUT COMPLETE SESSION CALENDAR",
+      "estimated_sessions_for_samples": {
+        "50": null,
+        "100": null,
+        "250": null,
+        "500": null
+      }
+    },
+    "FILTERED": {
+      "sessions": 0,
+      "signals_per_session": null,
+      "trades_per_session": null,
+      "no_trade_sessions": "UNAVAILABLE WITHOUT COMPLETE SESSION CALENDAR",
+      "estimated_sessions_for_samples": {
+        "50": null,
+        "100": null,
+        "250": null,
+        "500": null
+      }
+    },
+    "SPY": {
+      "sessions": 0,
+      "signals_per_session": null,
+      "trades_per_session": null,
+      "no_trade_sessions": "UNAVAILABLE WITHOUT COMPLETE SESSION CALENDAR",
+      "estimated_sessions_for_samples": {
+        "50": null,
+        "100": null,
+        "250": null,
+        "500": null
+      }
+    },
+    "QQQ": {
+      "sessions": 0,
+      "signals_per_session": null,
+      "trades_per_session": null,
+      "no_trade_sessions": "UNAVAILABLE WITHOUT COMPLETE SESSION CALENDAR",
+      "estimated_sessions_for_samples": {
+        "50": null,
+        "100": null,
+        "250": null,
+        "500": null
+      }
+    },
+    "SPY_QQQ": {
+      "sessions": 0,
+      "signals_per_session": null,
+      "trades_per_session": null,
+      "no_trade_sessions": "UNAVAILABLE WITHOUT COMPLETE SESSION CALENDAR",
+      "estimated_sessions_for_samples": {
+        "50": null,
+        "100": null,
+        "250": null,
+        "500": null
+      }
+    }
+  },
+  "complexity": {
+    "BROAD": {
+      "symbols_observed": 0,
+      "company_specific_risk": true,
+      "sector_dependencies": true
+    },
+    "SPY_QQQ": {
+      "symbols_observed": 2,
+      "company_specific_risk": false,
+      "sector_dependencies": false
+    },
+    "note": "Static architectural traits plus observed symbol count; provider-request totals are not persisted."
+  },
+  "context_coverage": {
+    "opportunity_contexts": 0,
+    "context_shadow_decisions": 0,
+    "position_context_marks": 0
+  },
+  "shadow_exit_experiments": [],
+  "strategic_scorecard": [
+    {
+      "system": "BROAD",
+      "current_expectancy": "INSUFFICIENT DATA",
+      "consistency": "INSUFFICIENT DATA",
+      "drawdown": "INSUFFICIENT DATA",
+      "execution_quality": "INSUFFICIENT DATA",
+      "liquidity": "INSUFFICIENT DATA",
+      "signal_frequency": "INSUFFICIENT DATA",
+      "sample_efficiency": "INSUFFICIENT DATA",
+      "underlying_directional_accuracy": "INSUFFICIENT DATA",
+      "option_translation_efficiency": "INSUFFICIENT DATA",
+      "exit_efficiency": "INSUFFICIENT DATA",
+      "operational_complexity": "INSUFFICIENT DATA",
+      "data_completeness": "INSUFFICIENT DATA"
+    },
+    {
+      "system": "SPY",
+      "current_expectancy": "INSUFFICIENT DATA",
+      "consistency": "INSUFFICIENT DATA",
+      "drawdown": "INSUFFICIENT DATA",
+      "execution_quality": "INSUFFICIENT DATA",
+      "liquidity": "INSUFFICIENT DATA",
+      "signal_frequency": "INSUFFICIENT DATA",
+      "sample_efficiency": "INSUFFICIENT DATA",
+      "underlying_directional_accuracy": "INSUFFICIENT DATA",
+      "option_translation_efficiency": "INSUFFICIENT DATA",
+      "exit_efficiency": "INSUFFICIENT DATA",
+      "operational_complexity": "INSUFFICIENT DATA",
+      "data_completeness": "INSUFFICIENT DATA"
+    },
+    {
+      "system": "QQQ",
+      "current_expectancy": "INSUFFICIENT DATA",
+      "consistency": "INSUFFICIENT DATA",
+      "drawdown": "INSUFFICIENT DATA",
+      "execution_quality": "INSUFFICIENT DATA",
+      "liquidity": "INSUFFICIENT DATA",
+      "signal_frequency": "INSUFFICIENT DATA",
+      "sample_efficiency": "INSUFFICIENT DATA",
+      "underlying_directional_accuracy": "INSUFFICIENT DATA",
+      "option_translation_efficiency": "INSUFFICIENT DATA",
+      "exit_efficiency": "INSUFFICIENT DATA",
+      "operational_complexity": "INSUFFICIENT DATA",
+      "data_completeness": "INSUFFICIENT DATA"
+    },
+    {
+      "system": "SPY_QQQ",
+      "current_expectancy": "INSUFFICIENT DATA",
+      "consistency": "INSUFFICIENT DATA",
+      "drawdown": "INSUFFICIENT DATA",
+      "execution_quality": "INSUFFICIENT DATA",
+      "liquidity": "INSUFFICIENT DATA",
+      "signal_frequency": "INSUFFICIENT DATA",
+      "sample_efficiency": "INSUFFICIENT DATA",
+      "underlying_directional_accuracy": "INSUFFICIENT DATA",
+      "option_translation_efficiency": "INSUFFICIENT DATA",
+      "exit_efficiency": "INSUFFICIENT DATA",
+      "operational_complexity": "INSUFFICIENT DATA",
+      "data_completeness": "INSUFFICIENT DATA"
+    }
+  ],
+  "verdict": {
+    "positive_expectancy_evidence": {
+      "BROAD": false,
+      "SPY": false,
+      "QQQ": false,
+      "SPY_QQQ": false
+    },
+    "biggest_observed_leak": "INSUFFICIENT DATA",
+    "architecture_recommendation": "NOT ENOUGH EVIDENCE",
+    "forced_choice_today": "HYBRID DATA COLLECTION; evidence is not mature enough to retire either architecture"
+  },
+  "next_experiment": {
+    "name": "SPY/QQQ-only forward experiment",
+    "hypothesis": "Actual dedicated SPY/QQQ trades produce more consistent net expectancy than BROAD.",
+    "predeclared_rule": "Run the existing SPY/QQQ lane unchanged and compare every closed trade with unchanged BROAD; no hindsight exclusions.",
+    "baseline": "BROAD",
+    "experimental_lane": "existing SPY/QQQ intraday strategy",
+    "minimum_sample": "50 closed SPY/QQQ trades and 20 sessions",
+    "success_metric": "positive expectancy, profit factor >1, and >=50% profitable sessions, all forward-only",
+    "failure_criterion": "non-positive expectancy or profit factor <=1 after the minimum sample"
+  },
+  "limitations": [
+    "Complete exchange session calendar is not persisted in these ledgers.",
+    "Underlying directional outcome classes are unavailable unless persisted by the dedicated strategy.",
+    "Historical option Greeks, quote age, and execution latency components are not reconstructed."
+  ],
+  "underlying_records": {
+    "opportunities": [
+      {
+        "id": "bdecd00bf6b83e258a90f70b236075e2e8adaa3953698794ef9037b99eaa83a0",
+        "symbol": "SPY",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:33:32.345900+00:00"
+      },
+      {
+        "id": "8795f095ec629aeff9a11e254ea2bf3fe0c03fc01db01531e5ded4b651f78fc8",
+        "symbol": "QQQ",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:33:36.206151+00:00"
+      },
+      {
+        "id": "81574402a605845fc7f95e45e7b3128aef8bdf3a7dc2f68136daf86edde9466a",
+        "symbol": "IWM",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:33:40.086383+00:00"
+      },
+      {
+        "id": "59d824d4d9a224c85a85fb2421433fa30e2622979ea533d83762bb30dea43b7f",
+        "symbol": "DIA",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:33:44.071469+00:00"
+      },
+      {
+        "id": "38250d51d8c476e439e767f6e7e21a9e81db0bdd76d69b189699ddfe7a1d6ed0",
+        "symbol": "XLK",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:33:47.842035+00:00"
+      },
+      {
+        "id": "83e6be924c75e04a2a4c21d397bdb080089661d45dccd0597c8b257ed3774018",
+        "symbol": "XLY",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:33:51.576164+00:00"
+      },
+      {
+        "id": "f04722e0180ba433f6d8748fad1c219ab13a395d43b60ba27e5c9f0f2565a7ae",
+        "symbol": "XLF",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:33:55.259698+00:00"
+      },
+      {
+        "id": "bec81b6d5f350d4ba0277998d19b1ae8a400b95ffb98339b770a5c0374b42f05",
+        "symbol": "XLV",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:33:58.812875+00:00"
+      },
+      {
+        "id": "0aa404b0fbf32952a9c40de88e405f9c4888bbb3a674574e8fe85975f1fc4347",
+        "symbol": "XLI",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:02.541699+00:00"
+      },
+      {
+        "id": "94766f66e51d8752ad89697a6528977303e06d7c63d9846c5a6203c8c9d657a7",
+        "symbol": "XLE",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:06.260061+00:00"
+      },
+      {
+        "id": "a9377cd00d17c590b705d2901591d3a317659e8701cda5f73c346989803cbc0f",
+        "symbol": "XLP",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:09.885999+00:00"
+      },
+      {
+        "id": "09473509a834da13ddb928bffa11fac68d110b79fc42360b5aa610b2bafb8bde",
+        "symbol": "XLU",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:13.684992+00:00"
+      },
+      {
+        "id": "f04c5078248140bf4614bc8d402af578ac1f87623f6dc631ac7178e80db686a5",
+        "symbol": "XLC",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:17.674797+00:00"
+      },
+      {
+        "id": "34445a6edf5383c873d3c28e7d0c52d8d62eed650dd35099c29e4aa66e291ee0",
+        "symbol": "XLRE",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:21.419250+00:00"
+      },
+      {
+        "id": "0a169f2c95785fc4bdd8a5beb2b0f69c0199642d8c910f5b7354a0a38b6f49b0",
+        "symbol": "XLB",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:25.222572+00:00"
+      },
+      {
+        "id": "80d2e7c196d8cf1b86fa5062cd626c187036495dbfd8b8856ee20c5f3f90ec75",
+        "symbol": "AMAT",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:29.101178+00:00"
+      },
+      {
+        "id": "878d56daeab1baca45fc2f2b945a0e6431be338756584b04f1a13ba25dcc726b",
+        "symbol": "INTC",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:32.968831+00:00"
+      },
+      {
+        "id": "14b02004a49ef1fe2e1b8c3c5b758b2600e93c780132a36592d034f56c451e2a",
+        "symbol": "AMD",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:36.658054+00:00"
+      },
+      {
+        "id": "b5348d63f6624185d8a86607af4c7ebe92fd39fd28a8044109bad136d592f605",
+        "symbol": "SMCI",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:40.496251+00:00"
+      },
+      {
+        "id": "913a55afa8e55454bfa51ca150c1507bbeabc45b935766b50018eb3ec84de1ab",
+        "symbol": "TQQQ",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:44.357315+00:00"
+      },
+      {
+        "id": "c092352c5b071671eaa8daf8fd055dcdc446165795af36fbb2c2196510d1d2ab",
+        "symbol": "SQQQ",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:48.019037+00:00"
+      },
+      {
+        "id": "246d37de483daed1327dca0a1d521e0440ce632363a8feffa47c8d15d3c89796",
+        "symbol": "DOCU",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:51.662083+00:00"
+      },
+      {
+        "id": "632d1244a310b707095c72f48e4a8f973509dd7cdaadc465953fc732ebfc9bae",
+        "symbol": "ASML",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:55.426991+00:00"
+      },
+      {
+        "id": "ad44601d15c9f8083f887141883aa9efd82e717badb0a0fcedf582315a2733f6",
+        "symbol": "ADBE",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:34:59.063520+00:00"
+      },
+      {
+        "id": "8d68c04212791fd13969c691e74efc687ef9fc42b96140388eb24be8e7e584f9",
+        "symbol": "DUOL",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:30:00+00:00",
+        "created_at": "2026-07-30T15:35:02.915911+00:00"
+      },
+      {
+        "id": "5ac42f7c590b2f6395bd5089702d26410b074ccb1c8167f38e6ebc4bfce5f6be",
+        "symbol": "CRM",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:06.923694+00:00"
+      },
+      {
+        "id": "389f32cf334c115a9ed6d7323f7a1965db579d4b946e74319bc2965df8e10cec",
+        "symbol": "BKNG",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:10.876872+00:00"
+      },
+      {
+        "id": "e130aac9968c96ab1a2c7362b8f6a807d542db99deb92633d08fbc9f19bac113",
+        "symbol": "AMZN",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:15.060625+00:00"
+      },
+      {
+        "id": "2570db02f9ee0925931ea8526a45437a323cad66c21b85560751f9405f8b5ff4",
+        "symbol": "DKNG",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:18.888842+00:00"
+      },
+      {
+        "id": "37011fde3139da733ba9db8e7dde24562911b7c9679f1fa44f03d1800c825187",
+        "symbol": "ARM",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:22.662076+00:00"
+      },
+      {
+        "id": "53133e1dba9a179dc842baf2713e5ae6955ab36ed63d70f645247261a1d2fa08",
+        "symbol": "TTD",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:26.556358+00:00"
+      },
+      {
+        "id": "704328b08613517b9607333d310c9f8f885827e103d7c6d09a5e98fc8ac19ec2",
+        "symbol": "SOFI",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:30.481963+00:00"
+      },
+      {
+        "id": "9fa2525c8e2eeaabd95cc6953041a498552c93cdb24ddf529bc3042f1db56b20",
+        "symbol": "FCX",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:34.412923+00:00"
+      },
+      {
+        "id": "b27ae243d8ccea3bc89eb0d188ea92e7ebd87790cc6ba1aa98019fde5b60f2a7",
+        "symbol": "F",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:38.309694+00:00"
+      },
+      {
+        "id": "c6e310ec8fc4e707f859e1617b475701ed5add403bfcbe090f477d8d199bc6e4",
+        "symbol": "DIS",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:42.329523+00:00"
+      },
+      {
+        "id": "199ef9de07e91e96f637b04a8a5f8de9e348729294edc485d4af3bbb6430622b",
+        "symbol": "HOOD",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:46.013589+00:00"
+      },
+      {
+        "id": "06e70a882bba3203a26a49ba7b8ea21cfdbec01b57b0a1b4c99724e7431f3d71",
+        "symbol": "SNOW",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:49.808823+00:00"
+      },
+      {
+        "id": "c3c15a4949222496e197d7b21bb806c6884878ff1798c9285d2bf1722316e72a",
+        "symbol": "AVGO",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:53.793634+00:00"
+      },
+      {
+        "id": "08a54e6e3a909460c93b85915208accddda67d4192d5e9a78026acf035a7f43a",
+        "symbol": "UBER",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:35:57.681590+00:00"
+      },
+      {
+        "id": "4de9e170b4a6bf3b9c31b0767516d4a0c015901c916239f08370a0545bd71343",
+        "symbol": "VXX",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:01.902753+00:00"
+      },
+      {
+        "id": "686912c6c693c749b965624d5e74e72e560c0dc6fa796261dbe48f269d4ef31b",
+        "symbol": "VIXY",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:05.792497+00:00"
+      },
+      {
+        "id": "20b51aea1c6408a8df069e196f6e63bd65d56e0cdd9d9e85f76d24158a4d9f3e",
+        "symbol": "T",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:09.482757+00:00"
+      },
+      {
+        "id": "065f8e13a02028ddbb981a9eb29c1ab70212bc2b8c53eae2d7fc87b9b03a11e3",
+        "symbol": "CAT",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:13.438235+00:00"
+      },
+      {
+        "id": "e5544cff4966ef97857ffd1eabe7008496d90489a88b24d6570a3442418ee307",
+        "symbol": "ABBV",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:17.262192+00:00"
+      },
+      {
+        "id": "137b13e066433c00de361d8f1b7eca7ac29937f4b20524f11bbcbd47eb0d6ec2",
+        "symbol": "ETSY",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:21.043095+00:00"
+      },
+      {
+        "id": "61985017fb3c4f2a63bcef4294305f9549a182e91901021f8a154394c6f47176",
+        "symbol": "C",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:24.896824+00:00"
+      },
+      {
+        "id": "afddfb1aa741c9f534616541269831285c0ce4441a0701124772441a106c1942",
+        "symbol": "WMT",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:28.840190+00:00"
+      },
+      {
+        "id": "326301a79b5965d94803b0cfcb6efe2acaa31bac755f750a70d3556e4e4576b9",
+        "symbol": "ARKG",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:32.641251+00:00"
+      },
+      {
+        "id": "4fe111e389d8ad52ec2853eabef1067985038a7cc04311abec574955654d93a2",
+        "symbol": "GS",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:36.576055+00:00"
+      },
+      {
+        "id": "eefeb0dd61b2d755614394e1134770f93c332358def8b696b2fa8fcf9bcee80d",
+        "symbol": "SPXS",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:41.574651+00:00"
+      },
+      {
+        "id": "55bf7f5b8e2250210626f69b3963294780071f3cf8edde007bfeda10859471ac",
+        "symbol": "SPXL",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:45.497107+00:00"
+      },
+      {
+        "id": "b43b443146fba9b9ea7dd747fc68416e4c1aebf0fefb058be87d9f91df7db370",
+        "symbol": "IBM",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:49.396487+00:00"
+      },
+      {
+        "id": "624f4b393f465966a6ae8545fd53423cdd51ac3e91e127d8d3e013dd10a2bf51",
+        "symbol": "TSLA",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:53.292948+00:00"
+      },
+      {
+        "id": "aa753c7b5cb22b59a5e74901e119b3068ca16c58258bdd7c9b07d662e4184fb3",
+        "symbol": "WYNN",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T15:35:00+00:00",
+        "created_at": "2026-07-30T15:36:57.074521+00:00"
+      },
+      {
+        "id": "423aa2265bfa622213d522661600e786efaddbb64f129b98482ff7c726f57426",
+        "symbol": "SPY",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:10:30.094452+00:00"
+      },
+      {
+        "id": "6d2067d849cae7c136cd529a9d64a5b9f6da2b01908e082f17669277f145b6f7",
+        "symbol": "QQQ",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:10:34.339117+00:00"
+      },
+      {
+        "id": "de4adfa80d11860109b6b7e686c9db0481bcc5d7cd1ad894869e8b29c005efcd",
+        "symbol": "IWM",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:10:38.100757+00:00"
+      },
+      {
+        "id": "d0277dc0a91e22c4b1616613f6e39d8861fcacd4a0da1d0fa7845e9eff53d7f6",
+        "symbol": "DIA",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:10:41.782814+00:00"
+      },
+      {
+        "id": "44b6953c7db1035954e8487e4cfb3aa660ec490834d9b0f99e941383e4f1647b",
+        "symbol": "XLK",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:10:47.019917+00:00"
+      },
+      {
+        "id": "e86e059eac54cd1cd487c21012f7086c9bef5160b33407aa3a494a2589bf367a",
+        "symbol": "XLY",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:10:50.945473+00:00"
+      },
+      {
+        "id": "8bb809e362b129ccc5bd3337dfd0a23d8a0f9087e499719b49fb04a93155357e",
+        "symbol": "XLF",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:10:57.912163+00:00"
+      },
+      {
+        "id": "6ba67cd7ff94c69606f15608caf3efe5ad9857331f7e9131b25109d379c7450e",
+        "symbol": "XLV",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:01.751433+00:00"
+      },
+      {
+        "id": "055d2d527024093cd537765292e3629049d29752cddda0746b9f2c38a8588321",
+        "symbol": "XLI",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:05.246279+00:00"
+      },
+      {
+        "id": "5ff56c1cff2109e16e5e8ebc52306e758365054a53b50608f495884782de1abe",
+        "symbol": "XLE",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:08.931388+00:00"
+      },
+      {
+        "id": "f6cac6858392278a330c9a4109b632f91d08ef88c1194ce9a5c1c69cec3105d3",
+        "symbol": "XLP",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:12.725488+00:00"
+      },
+      {
+        "id": "7922aa2b4da9e42bbe325eae6dab8f799762632214e3bd85585fdb1c22c5b691",
+        "symbol": "XLU",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:16.619234+00:00"
+      },
+      {
+        "id": "f3a97ddf1a0bbdff4c9bd2934fc399e1a2b063d843553987cb451d2a18445bb9",
+        "symbol": "XLC",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:20.268602+00:00"
+      },
+      {
+        "id": "59ea325c119cae00fdb66cf3b00508c770f7fdddf1d785ecb4b8a360b1fa5f54",
+        "symbol": "XLRE",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:24.100347+00:00"
+      },
+      {
+        "id": "cb28a313480b222d40be220b4a0d668e243475db7bcdbb2c806d24937037c9c3",
+        "symbol": "XLB",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:28.389160+00:00"
+      },
+      {
+        "id": "451e28ef07e4050ebce787289b60a400500a73aa5ad81edbb86b19bde7ee1e52",
+        "symbol": "AMAT",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:31.841589+00:00"
+      },
+      {
+        "id": "5b7ea5faf017f9c113116220429004689226d5b18463a4e64b2139bfcba3ce5c",
+        "symbol": "INTC",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:35.704820+00:00"
+      },
+      {
+        "id": "37d69943aa8262e14bf294e293b455bb58677022d1310c496c66e45622eaf451",
+        "symbol": "AMD",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:39.268919+00:00"
+      },
+      {
+        "id": "b003559851a4475ae88fd8b609d261a258fad3ab626a55562de519231afcab2f",
+        "symbol": "SMCI",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:42.870006+00:00"
+      },
+      {
+        "id": "d07e84a03bada78c49b0777e5e4120bc0fe993ab03d69afb7f3751a586a10e7f",
+        "symbol": "TQQQ",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:46.277592+00:00"
+      },
+      {
+        "id": "a41f73fb6f19d59c65be27f4e99d0777185323688d6465be4b338026ef1b97be",
+        "symbol": "SQQQ",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:49.646252+00:00"
+      },
+      {
+        "id": "994095fb765ddada5882fdfa9234f2a29e36f3317982c6e98c9a41c4d589030b",
+        "symbol": "DOCU",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:53.491564+00:00"
+      },
+      {
+        "id": "bf778c92e738b08b9c70f2a2ec46a264196d3bb74a72116e8da035eaf679855a",
+        "symbol": "ASML",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:11:56.917089+00:00"
+      },
+      {
+        "id": "bec11dbee2a8f609ced7cc6ff66c958bf440a532a8aad8f3c827fe8f3ca3639f",
+        "symbol": "ADBE",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:12:01.346690+00:00"
+      },
+      {
+        "id": "188a406d302f69741d58ff7dc1b26425955a21cdf8cbef7b27374b37e2478538",
+        "symbol": "DUOL",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:12:05.012314+00:00"
+      },
+      {
+        "id": "377d26249a8317157b98db0a5e35fe12bf197de55a7ff868764ba101c3acf544",
+        "symbol": "CRM",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:12:08.640983+00:00"
+      },
+      {
+        "id": "3392bf98b112ae21aa05a2cdd247c956942d0cb0c7eec53c4e95cb28af3f0651",
+        "symbol": "BKNG",
+        "direction": "Bearish",
+        "playbook": "Bearish breakdown",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:12:12.209196+00:00"
+      },
+      {
+        "id": "8bc8e56c98b500dbce0fd2d4532b64710198b76458d3cd8c110fb6a6b0e9e661",
+        "symbol": "AMZN",
+        "direction": "Bullish",
+        "playbook": "Bullish breakout",
+        "signal_timestamp": "2026-07-30T16:10:00+00:00",
+        "created_at": "2026-07-30T16:12:15.700049+00:00"
+      },
+      {
+        "id": "aa55b2f9ba5a4f57beaacfb5f8ee4011",
+        "symbol": "NVDA",
+        "direction": "Bullish",
+        "playbook": "Breakout",
+        "signal_timestamp": "2026-07-30T14:00:00+00:00",
+        "created_at": "2026-08-01T01:39:36.017359+00:00"
+      },
+      {
+        "id": "8fa634d0c35979a1f5042680b438a82d685fe1552e70294e64e7afb03f83902e",
+        "symbol": "NVDA",
+        "direction": "Bullish",
+        "playbook": "Breakout",
+        "signal_timestamp": "2026-07-30T14:00:00+00:00",
+        "created_at": "2026-08-01T01:39:40.429687+00:00"
+      },
+      {
+        "id": "08acc0bf0599482c96969a723350d440",
+        "symbol": "NVDA",
+        "direction": "Bullish",
+        "playbook": "Breakout",
+        "signal_timestamp": "2026-07-30T14:00:00+00:00",
+        "created_at": "2026-08-01T02:50:14.797739+00:00"
+      },
+      {
+        "id": "3e5f5c34c85e4c329acd007300b10db9",
+        "symbol": "NVDA",
+        "direction": "Bullish",
+        "playbook": "Breakout",
+        "signal_timestamp": "2026-07-30T14:00:00+00:00",
+        "created_at": "2026-08-03T13:16:54.030024+00:00"
+      },
+      {
+        "id": "1d566837ceae47a8a402f4213f0de874",
+        "symbol": "NVDA",
+        "direction": "Bullish",
+        "playbook": "Breakout",
+        "signal_timestamp": "2026-07-30T14:00:00+00:00",
+        "created_at": "2026-08-03T13:17:18.647786+00:00"
+      },
+      {
+        "id": "765f35d461fd4856ba2ff45cb36bccdf",
+        "symbol": "NVDA",
+        "direction": "Bullish",
+        "playbook": "Breakout",
+        "signal_timestamp": "2026-07-30T14:00:00+00:00",
+        "created_at": "2026-08-03T13:20:46.293771+00:00"
+      },
+      {
+        "id": "2b4314c6c19d469c871bd8fe90854aa9",
+        "symbol": "NVDA",
+        "direction": "Bullish",
+        "playbook": "Breakout",
+        "signal_timestamp": "2026-07-30T14:00:00+00:00",
+        "created_at": "2026-08-03T13:21:25.820932+00:00"
+      },
+      {
+        "id": "d9d133827abe4cb5864cce273b898337",
+        "symbol": "NVDA",
+        "direction": "Bullish",
+        "playbook": "Breakout",
+        "signal_timestamp": "2026-07-30T14:00:00+00:00",
+        "created_at": "2026-08-03T14:46:16.421707+00:00"
+      },
+      {
+        "id": "dd1e360b61fb4c0e8a4845869ce61d93",
+        "symbol": "NVDA",
+        "direction": "Bullish",
+        "playbook": "Breakout",
+        "signal_timestamp": "2026-07-30T14:00:00+00:00",
+        "created_at": "2026-08-03T14:46:54.138042+00:00"
+      },
+      {
+        "id": "3b0df3d94ad548c9820eb34a86450c82",
+        "symbol": "NVDA",
+        "direction": "Bullish",
+        "playbook": "Breakout",
+        "signal_timestamp": "2026-07-30T14:00:00+00:00",
+        "created_at": "2026-08-03T15:03:05.077892+00:00"
+      }
+    ],
+    "authoritative": [],
+    "intelligence_setup_snapshots": [
+      {
+        "opportunity_id": "aa55b2f9ba5a4f57beaacfb5f8ee4011",
+        "snapshot_json": "{\"data_quality\": {\"fallback_state\": null, \"freshness\": null, \"missing_feature_flags\": [\"atr\", \"breakout_distance\", \"candle_body_percent\", \"consolidation_duration\", \"distance_from_day_high\", \"distance_from_day_low\", \"distance_from_resistance\", \"distance_from_support\", \"distance_from_vwap\", \"ema20\", \"ema200\", \"ema21\", \"ema21_slope\", \"ema50\", \"ema9\", \"ema9_slope\", \"ema_alignment\", \"entry_zone\", \"gap_percent\", \"maximum_acceptable_entry\", \"momentum_acceleration\", \"momentum_direction\", \"opening_range_position\", \"range_expansion\", \"risk_reward\", \"trend_alignment\", \"volatility\", \"volume_ratio\", \"vwap\", \"vwap_relationship\"], \"partial_scan\": false, \"provider\": null, \"rate_limit_state\": null, \"scanner_version\": null}, \"direction\": \"Bullish\", \"eastern_trading_date\": \"2026-07-30\", \"entry_timestamp\": null, \"features\": {\"atr\": null, \"breakout_distance\": null, \"candle_body_percent\": null, \"confirmation_level\": 100, \"consolidation_duration\": null, \"distance_from_day_high\": null, \"distance_from_day_low\": null, \"distance_from_resistance\": null, \"distance_from_support\": null, \"distance_from_vwap\": null, \"ema20\": null, \"ema200\": null, \"ema21\": null, \"ema21_slope\": null, \"ema50\": null, \"ema9\": null, \"ema9_slope\": null, \"ema_alignment\": null, \"entry\": 100, \"entry_zone\": null, \"gap_percent\": null, \"maximum_acceptable_entry\": null, \"momentum_acceleration\": null, \"momentum_direction\": null, \"opening_range_position\": null, \"price\": 100, \"range_expansion\": null, \"relative_volume\": 1.8, \"risk_reward\": null, \"rsi\": 61, \"stop\": 99, \"target_1\": 102, \"target_2\": 104, \"trend_alignment\": null, \"volatility\": null, \"volume_ratio\": null, \"vwap\": null, \"vwap_relationship\": null}, \"generated_timestamp\": \"2026-07-30T14:00:00+00:00\", \"market_regime\": {\"confidence_band\": \"MEDIUM\", \"contributing_factors\": [\"SPY_QQQ_BULLISH_ALIGNMENT\"], \"data_quality_status\": \"COMPLETE\", \"regime\": \"BULLISH_TREND\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"opportunity_id\": \"aa55b2f9ba5a4f57beaacfb5f8ee4011\", \"scanner_id\": \"optionbeacon-scanner\", \"schema_version\": 1, \"scoring\": {\"bearish_score\": null, \"bullish_score\": null, \"confidence\": 90, \"eligibility_reason\": null, \"missing_requirements\": null, \"momentum_score\": null, \"price_action_score\": null, \"quality\": null, \"reasons\": null, \"signal\": null, \"status\": null, \"trend_score\": null, \"volatility_score\": null, \"volume_score\": null}, \"sector_context\": {\"alignment_status\": \"UNKNOWN\", \"reason_codes\": [\"SECTOR_MAPPING_UNAVAILABLE\"], \"relative_strength_score\": null, \"sector\": \"Technology\", \"sector_benchmark\": \"XLK\", \"sector_rank\": null, \"sector_trend\": \"UNKNOWN\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"session_segment\": \"MORNING\", \"setup_type\": \"Breakout\", \"symbol\": \"NVDA\", \"trade_plan_id\": null}",
+        "created_at": "2026-08-01T01:39:37.258381+00:00"
+      },
+      {
+        "opportunity_id": "8fa634d0c35979a1f5042680b438a82d685fe1552e70294e64e7afb03f83902e",
+        "snapshot_json": "{\"data_quality\": {\"fallback_state\": null, \"freshness\": null, \"missing_feature_flags\": [\"atr\", \"breakout_distance\", \"candle_body_percent\", \"consolidation_duration\", \"distance_from_day_high\", \"distance_from_day_low\", \"distance_from_resistance\", \"distance_from_support\", \"distance_from_vwap\", \"ema20\", \"ema200\", \"ema21\", \"ema21_slope\", \"ema50\", \"ema9\", \"ema9_slope\", \"ema_alignment\", \"entry_zone\", \"gap_percent\", \"maximum_acceptable_entry\", \"momentum_acceleration\", \"momentum_direction\", \"opening_range_position\", \"range_expansion\", \"risk_reward\", \"trend_alignment\", \"volatility\", \"volume_ratio\", \"vwap\", \"vwap_relationship\"], \"partial_scan\": false, \"provider\": null, \"rate_limit_state\": null, \"scanner_version\": \"test\"}, \"direction\": \"Bullish\", \"eastern_trading_date\": \"2026-07-30\", \"entry_timestamp\": null, \"features\": {\"atr\": null, \"breakout_distance\": null, \"candle_body_percent\": null, \"confirmation_level\": 100, \"consolidation_duration\": null, \"distance_from_day_high\": null, \"distance_from_day_low\": null, \"distance_from_resistance\": null, \"distance_from_support\": null, \"distance_from_vwap\": null, \"ema20\": null, \"ema200\": null, \"ema21\": null, \"ema21_slope\": null, \"ema50\": null, \"ema9\": null, \"ema9_slope\": null, \"ema_alignment\": null, \"entry\": 100, \"entry_zone\": null, \"gap_percent\": null, \"maximum_acceptable_entry\": null, \"momentum_acceleration\": null, \"momentum_direction\": null, \"opening_range_position\": null, \"price\": 100, \"range_expansion\": null, \"relative_volume\": 1.8, \"risk_reward\": null, \"rsi\": 61, \"stop\": 99, \"target_1\": 102, \"target_2\": 104, \"trend_alignment\": null, \"volatility\": null, \"volume_ratio\": null, \"vwap\": null, \"vwap_relationship\": null}, \"generated_timestamp\": \"2026-07-30T14:00:00+00:00\", \"market_regime\": {\"confidence_band\": \"MEDIUM\", \"contributing_factors\": [\"SPY_QQQ_BULLISH_ALIGNMENT\"], \"data_quality_status\": \"COMPLETE\", \"regime\": \"BULLISH_TREND\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"opportunity_id\": \"8fa634d0c35979a1f5042680b438a82d685fe1552e70294e64e7afb03f83902e\", \"scanner_id\": \"optionbeacon-scanner\", \"schema_version\": 1, \"scoring\": {\"bearish_score\": null, \"bullish_score\": null, \"confidence\": 90, \"eligibility_reason\": null, \"missing_requirements\": null, \"momentum_score\": null, \"price_action_score\": null, \"quality\": null, \"reasons\": null, \"signal\": null, \"status\": null, \"trend_score\": null, \"volatility_score\": null, \"volume_score\": null}, \"sector_context\": {\"alignment_status\": \"UNKNOWN\", \"reason_codes\": [\"SECTOR_MAPPING_UNAVAILABLE\"], \"relative_strength_score\": null, \"sector\": \"Technology\", \"sector_benchmark\": \"XLK\", \"sector_rank\": null, \"sector_trend\": \"UNKNOWN\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"session_segment\": \"MORNING\", \"setup_type\": \"Breakout\", \"symbol\": \"NVDA\", \"trade_plan_id\": null}",
+        "created_at": "2026-08-01T01:39:43.066742+00:00"
+      },
+      {
+        "opportunity_id": "08acc0bf0599482c96969a723350d440",
+        "snapshot_json": "{\"data_quality\": {\"fallback_state\": null, \"freshness\": null, \"missing_feature_flags\": [\"atr\", \"breakout_distance\", \"candle_body_percent\", \"consolidation_duration\", \"distance_from_day_high\", \"distance_from_day_low\", \"distance_from_resistance\", \"distance_from_support\", \"distance_from_vwap\", \"ema20\", \"ema200\", \"ema21\", \"ema21_slope\", \"ema50\", \"ema9\", \"ema9_slope\", \"ema_alignment\", \"entry_zone\", \"gap_percent\", \"maximum_acceptable_entry\", \"momentum_acceleration\", \"momentum_direction\", \"opening_range_position\", \"range_expansion\", \"risk_reward\", \"trend_alignment\", \"volatility\", \"volume_ratio\", \"vwap\", \"vwap_relationship\"], \"partial_scan\": false, \"provider\": null, \"rate_limit_state\": null, \"scanner_version\": null}, \"direction\": \"Bullish\", \"eastern_trading_date\": \"2026-07-30\", \"entry_timestamp\": null, \"features\": {\"atr\": null, \"breakout_distance\": null, \"candle_body_percent\": null, \"confirmation_level\": 100, \"consolidation_duration\": null, \"distance_from_day_high\": null, \"distance_from_day_low\": null, \"distance_from_resistance\": null, \"distance_from_support\": null, \"distance_from_vwap\": null, \"ema20\": null, \"ema200\": null, \"ema21\": null, \"ema21_slope\": null, \"ema50\": null, \"ema9\": null, \"ema9_slope\": null, \"ema_alignment\": null, \"entry\": 100, \"entry_zone\": null, \"gap_percent\": null, \"maximum_acceptable_entry\": null, \"momentum_acceleration\": null, \"momentum_direction\": null, \"opening_range_position\": null, \"price\": 100, \"range_expansion\": null, \"relative_volume\": 1.8, \"risk_reward\": null, \"rsi\": 61, \"stop\": 99, \"target_1\": 102, \"target_2\": 104, \"trend_alignment\": null, \"volatility\": null, \"volume_ratio\": null, \"vwap\": null, \"vwap_relationship\": null}, \"generated_timestamp\": \"2026-07-30T14:00:00+00:00\", \"market_regime\": {\"confidence_band\": \"MEDIUM\", \"contributing_factors\": [\"SPY_QQQ_BULLISH_ALIGNMENT\"], \"data_quality_status\": \"COMPLETE\", \"regime\": \"BULLISH_TREND\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"opportunity_id\": \"08acc0bf0599482c96969a723350d440\", \"scanner_id\": \"optionbeacon-scanner\", \"schema_version\": 1, \"scoring\": {\"bearish_score\": null, \"bullish_score\": null, \"confidence\": 90, \"eligibility_reason\": null, \"missing_requirements\": null, \"momentum_score\": null, \"price_action_score\": null, \"quality\": null, \"reasons\": null, \"signal\": null, \"status\": null, \"trend_score\": null, \"volatility_score\": null, \"volume_score\": null}, \"sector_context\": {\"alignment_status\": \"UNKNOWN\", \"reason_codes\": [\"SECTOR_MAPPING_UNAVAILABLE\"], \"relative_strength_score\": null, \"sector\": \"Technology\", \"sector_benchmark\": \"XLK\", \"sector_rank\": null, \"sector_trend\": \"UNKNOWN\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"session_segment\": \"MORNING\", \"setup_type\": \"Breakout\", \"symbol\": \"NVDA\", \"trade_plan_id\": null}",
+        "created_at": "2026-08-01T02:50:16.206253+00:00"
+      },
+      {
+        "opportunity_id": "3e5f5c34c85e4c329acd007300b10db9",
+        "snapshot_json": "{\"data_quality\": {\"fallback_state\": null, \"freshness\": null, \"missing_feature_flags\": [\"atr\", \"breakout_distance\", \"candle_body_percent\", \"consolidation_duration\", \"distance_from_day_high\", \"distance_from_day_low\", \"distance_from_resistance\", \"distance_from_support\", \"distance_from_vwap\", \"ema20\", \"ema200\", \"ema21\", \"ema21_slope\", \"ema50\", \"ema9\", \"ema9_slope\", \"ema_alignment\", \"entry_zone\", \"gap_percent\", \"maximum_acceptable_entry\", \"momentum_acceleration\", \"momentum_direction\", \"opening_range_position\", \"range_expansion\", \"risk_reward\", \"trend_alignment\", \"volatility\", \"volume_ratio\", \"vwap\", \"vwap_relationship\"], \"partial_scan\": false, \"provider\": null, \"rate_limit_state\": null, \"scanner_version\": null}, \"direction\": \"Bullish\", \"eastern_trading_date\": \"2026-07-30\", \"entry_timestamp\": null, \"features\": {\"atr\": null, \"breakout_distance\": null, \"candle_body_percent\": null, \"confirmation_level\": 100, \"consolidation_duration\": null, \"distance_from_day_high\": null, \"distance_from_day_low\": null, \"distance_from_resistance\": null, \"distance_from_support\": null, \"distance_from_vwap\": null, \"ema20\": null, \"ema200\": null, \"ema21\": null, \"ema21_slope\": null, \"ema50\": null, \"ema9\": null, \"ema9_slope\": null, \"ema_alignment\": null, \"entry\": 100, \"entry_zone\": null, \"gap_percent\": null, \"maximum_acceptable_entry\": null, \"momentum_acceleration\": null, \"momentum_direction\": null, \"opening_range_position\": null, \"price\": 100, \"range_expansion\": null, \"relative_volume\": 1.8, \"risk_reward\": null, \"rsi\": 61, \"stop\": 99, \"target_1\": 102, \"target_2\": 104, \"trend_alignment\": null, \"volatility\": null, \"volume_ratio\": null, \"vwap\": null, \"vwap_relationship\": null}, \"generated_timestamp\": \"2026-07-30T14:00:00+00:00\", \"market_regime\": {\"confidence_band\": \"MEDIUM\", \"contributing_factors\": [\"SPY_QQQ_BULLISH_ALIGNMENT\"], \"data_quality_status\": \"COMPLETE\", \"regime\": \"BULLISH_TREND\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"opportunity_id\": \"3e5f5c34c85e4c329acd007300b10db9\", \"scanner_id\": \"optionbeacon-scanner\", \"schema_version\": 1, \"scoring\": {\"bearish_score\": null, \"bullish_score\": null, \"confidence\": 90, \"eligibility_reason\": null, \"missing_requirements\": null, \"momentum_score\": null, \"price_action_score\": null, \"quality\": null, \"reasons\": null, \"signal\": null, \"status\": null, \"trend_score\": null, \"volatility_score\": null, \"volume_score\": null}, \"sector_context\": {\"alignment_status\": \"UNKNOWN\", \"reason_codes\": [\"SECTOR_MAPPING_UNAVAILABLE\"], \"relative_strength_score\": null, \"sector\": \"Technology\", \"sector_benchmark\": \"XLK\", \"sector_rank\": null, \"sector_trend\": \"UNKNOWN\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"session_segment\": \"MORNING\", \"setup_type\": \"Breakout\", \"symbol\": \"NVDA\", \"trade_plan_id\": null}",
+        "created_at": "2026-08-03T13:16:55.202339+00:00"
+      },
+      {
+        "opportunity_id": "1d566837ceae47a8a402f4213f0de874",
+        "snapshot_json": "{\"data_quality\": {\"fallback_state\": null, \"freshness\": null, \"missing_feature_flags\": [\"atr\", \"breakout_distance\", \"candle_body_percent\", \"consolidation_duration\", \"distance_from_day_high\", \"distance_from_day_low\", \"distance_from_resistance\", \"distance_from_support\", \"distance_from_vwap\", \"ema20\", \"ema200\", \"ema21\", \"ema21_slope\", \"ema50\", \"ema9\", \"ema9_slope\", \"ema_alignment\", \"entry_zone\", \"gap_percent\", \"maximum_acceptable_entry\", \"momentum_acceleration\", \"momentum_direction\", \"opening_range_position\", \"range_expansion\", \"risk_reward\", \"trend_alignment\", \"volatility\", \"volume_ratio\", \"vwap\", \"vwap_relationship\"], \"partial_scan\": false, \"provider\": null, \"rate_limit_state\": null, \"scanner_version\": null}, \"direction\": \"Bullish\", \"eastern_trading_date\": \"2026-07-30\", \"entry_timestamp\": null, \"features\": {\"atr\": null, \"breakout_distance\": null, \"candle_body_percent\": null, \"confirmation_level\": 100, \"consolidation_duration\": null, \"distance_from_day_high\": null, \"distance_from_day_low\": null, \"distance_from_resistance\": null, \"distance_from_support\": null, \"distance_from_vwap\": null, \"ema20\": null, \"ema200\": null, \"ema21\": null, \"ema21_slope\": null, \"ema50\": null, \"ema9\": null, \"ema9_slope\": null, \"ema_alignment\": null, \"entry\": 100, \"entry_zone\": null, \"gap_percent\": null, \"maximum_acceptable_entry\": null, \"momentum_acceleration\": null, \"momentum_direction\": null, \"opening_range_position\": null, \"price\": 100, \"range_expansion\": null, \"relative_volume\": 1.8, \"risk_reward\": null, \"rsi\": 61, \"stop\": 99, \"target_1\": 102, \"target_2\": 104, \"trend_alignment\": null, \"volatility\": null, \"volume_ratio\": null, \"vwap\": null, \"vwap_relationship\": null}, \"generated_timestamp\": \"2026-07-30T14:00:00+00:00\", \"market_regime\": {\"confidence_band\": \"MEDIUM\", \"contributing_factors\": [\"SPY_QQQ_BULLISH_ALIGNMENT\"], \"data_quality_status\": \"COMPLETE\", \"regime\": \"BULLISH_TREND\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"opportunity_id\": \"1d566837ceae47a8a402f4213f0de874\", \"scanner_id\": \"optionbeacon-scanner\", \"schema_version\": 1, \"scoring\": {\"bearish_score\": null, \"bullish_score\": null, \"confidence\": 90, \"eligibility_reason\": null, \"missing_requirements\": null, \"momentum_score\": null, \"price_action_score\": null, \"quality\": null, \"reasons\": null, \"signal\": null, \"status\": null, \"trend_score\": null, \"volatility_score\": null, \"volume_score\": null}, \"sector_context\": {\"alignment_status\": \"UNKNOWN\", \"reason_codes\": [\"SECTOR_MAPPING_UNAVAILABLE\"], \"relative_strength_score\": null, \"sector\": \"Technology\", \"sector_benchmark\": \"XLK\", \"sector_rank\": null, \"sector_trend\": \"UNKNOWN\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"session_segment\": \"MORNING\", \"setup_type\": \"Breakout\", \"symbol\": \"NVDA\", \"trade_plan_id\": null}",
+        "created_at": "2026-08-03T13:17:19.786222+00:00"
+      },
+      {
+        "opportunity_id": "765f35d461fd4856ba2ff45cb36bccdf",
+        "snapshot_json": "{\"data_quality\": {\"fallback_state\": null, \"freshness\": null, \"missing_feature_flags\": [\"atr\", \"breakout_distance\", \"candle_body_percent\", \"consolidation_duration\", \"distance_from_day_high\", \"distance_from_day_low\", \"distance_from_resistance\", \"distance_from_support\", \"distance_from_vwap\", \"ema20\", \"ema200\", \"ema21\", \"ema21_slope\", \"ema50\", \"ema9\", \"ema9_slope\", \"ema_alignment\", \"entry_zone\", \"gap_percent\", \"maximum_acceptable_entry\", \"momentum_acceleration\", \"momentum_direction\", \"opening_range_position\", \"range_expansion\", \"risk_reward\", \"trend_alignment\", \"volatility\", \"volume_ratio\", \"vwap\", \"vwap_relationship\"], \"partial_scan\": false, \"provider\": null, \"rate_limit_state\": null, \"scanner_version\": null}, \"direction\": \"Bullish\", \"eastern_trading_date\": \"2026-07-30\", \"entry_timestamp\": null, \"features\": {\"atr\": null, \"breakout_distance\": null, \"candle_body_percent\": null, \"confirmation_level\": 100, \"consolidation_duration\": null, \"distance_from_day_high\": null, \"distance_from_day_low\": null, \"distance_from_resistance\": null, \"distance_from_support\": null, \"distance_from_vwap\": null, \"ema20\": null, \"ema200\": null, \"ema21\": null, \"ema21_slope\": null, \"ema50\": null, \"ema9\": null, \"ema9_slope\": null, \"ema_alignment\": null, \"entry\": 100, \"entry_zone\": null, \"gap_percent\": null, \"maximum_acceptable_entry\": null, \"momentum_acceleration\": null, \"momentum_direction\": null, \"opening_range_position\": null, \"price\": 100, \"range_expansion\": null, \"relative_volume\": 1.8, \"risk_reward\": null, \"rsi\": 61, \"stop\": 99, \"target_1\": 102, \"target_2\": 104, \"trend_alignment\": null, \"volatility\": null, \"volume_ratio\": null, \"vwap\": null, \"vwap_relationship\": null}, \"generated_timestamp\": \"2026-07-30T14:00:00+00:00\", \"market_regime\": {\"confidence_band\": \"MEDIUM\", \"contributing_factors\": [\"SPY_QQQ_BULLISH_ALIGNMENT\"], \"data_quality_status\": \"COMPLETE\", \"regime\": \"BULLISH_TREND\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"opportunity_id\": \"765f35d461fd4856ba2ff45cb36bccdf\", \"scanner_id\": \"optionbeacon-scanner\", \"schema_version\": 1, \"scoring\": {\"bearish_score\": null, \"bullish_score\": null, \"confidence\": 90, \"eligibility_reason\": null, \"missing_requirements\": null, \"momentum_score\": null, \"price_action_score\": null, \"quality\": null, \"reasons\": null, \"signal\": null, \"status\": null, \"trend_score\": null, \"volatility_score\": null, \"volume_score\": null}, \"sector_context\": {\"alignment_status\": \"UNKNOWN\", \"reason_codes\": [\"SECTOR_MAPPING_UNAVAILABLE\"], \"relative_strength_score\": null, \"sector\": \"Technology\", \"sector_benchmark\": \"XLK\", \"sector_rank\": null, \"sector_trend\": \"UNKNOWN\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"session_segment\": \"MORNING\", \"setup_type\": \"Breakout\", \"symbol\": \"NVDA\", \"trade_plan_id\": null}",
+        "created_at": "2026-08-03T13:20:47.469927+00:00"
+      },
+      {
+        "opportunity_id": "2b4314c6c19d469c871bd8fe90854aa9",
+        "snapshot_json": "{\"data_quality\": {\"fallback_state\": null, \"freshness\": null, \"missing_feature_flags\": [\"atr\", \"breakout_distance\", \"candle_body_percent\", \"consolidation_duration\", \"distance_from_day_high\", \"distance_from_day_low\", \"distance_from_resistance\", \"distance_from_support\", \"distance_from_vwap\", \"ema20\", \"ema200\", \"ema21\", \"ema21_slope\", \"ema50\", \"ema9\", \"ema9_slope\", \"ema_alignment\", \"entry_zone\", \"gap_percent\", \"maximum_acceptable_entry\", \"momentum_acceleration\", \"momentum_direction\", \"opening_range_position\", \"range_expansion\", \"risk_reward\", \"trend_alignment\", \"volatility\", \"volume_ratio\", \"vwap\", \"vwap_relationship\"], \"partial_scan\": false, \"provider\": null, \"rate_limit_state\": null, \"scanner_version\": null}, \"direction\": \"Bullish\", \"eastern_trading_date\": \"2026-07-30\", \"entry_timestamp\": null, \"features\": {\"atr\": null, \"breakout_distance\": null, \"candle_body_percent\": null, \"confirmation_level\": 100, \"consolidation_duration\": null, \"distance_from_day_high\": null, \"distance_from_day_low\": null, \"distance_from_resistance\": null, \"distance_from_support\": null, \"distance_from_vwap\": null, \"ema20\": null, \"ema200\": null, \"ema21\": null, \"ema21_slope\": null, \"ema50\": null, \"ema9\": null, \"ema9_slope\": null, \"ema_alignment\": null, \"entry\": 100, \"entry_zone\": null, \"gap_percent\": null, \"maximum_acceptable_entry\": null, \"momentum_acceleration\": null, \"momentum_direction\": null, \"opening_range_position\": null, \"price\": 100, \"range_expansion\": null, \"relative_volume\": 1.8, \"risk_reward\": null, \"rsi\": 61, \"stop\": 99, \"target_1\": 102, \"target_2\": 104, \"trend_alignment\": null, \"volatility\": null, \"volume_ratio\": null, \"vwap\": null, \"vwap_relationship\": null}, \"generated_timestamp\": \"2026-07-30T14:00:00+00:00\", \"market_regime\": {\"confidence_band\": \"MEDIUM\", \"contributing_factors\": [\"SPY_QQQ_BULLISH_ALIGNMENT\"], \"data_quality_status\": \"COMPLETE\", \"regime\": \"BULLISH_TREND\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"opportunity_id\": \"2b4314c6c19d469c871bd8fe90854aa9\", \"scanner_id\": \"optionbeacon-scanner\", \"schema_version\": 1, \"scoring\": {\"bearish_score\": null, \"bullish_score\": null, \"confidence\": 90, \"eligibility_reason\": null, \"missing_requirements\": null, \"momentum_score\": null, \"price_action_score\": null, \"quality\": null, \"reasons\": null, \"signal\": null, \"status\": null, \"trend_score\": null, \"volatility_score\": null, \"volume_score\": null}, \"sector_context\": {\"alignment_status\": \"UNKNOWN\", \"reason_codes\": [\"SECTOR_MAPPING_UNAVAILABLE\"], \"relative_strength_score\": null, \"sector\": \"Technology\", \"sector_benchmark\": \"XLK\", \"sector_rank\": null, \"sector_trend\": \"UNKNOWN\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"session_segment\": \"MORNING\", \"setup_type\": \"Breakout\", \"symbol\": \"NVDA\", \"trade_plan_id\": null}",
+        "created_at": "2026-08-03T13:21:27.236886+00:00"
+      },
+      {
+        "opportunity_id": "d9d133827abe4cb5864cce273b898337",
+        "snapshot_json": "{\"data_quality\": {\"fallback_state\": null, \"freshness\": null, \"missing_feature_flags\": [\"atr\", \"breakout_distance\", \"candle_body_percent\", \"consolidation_duration\", \"distance_from_day_high\", \"distance_from_day_low\", \"distance_from_resistance\", \"distance_from_support\", \"distance_from_vwap\", \"ema20\", \"ema200\", \"ema21\", \"ema21_slope\", \"ema50\", \"ema9\", \"ema9_slope\", \"ema_alignment\", \"entry_zone\", \"gap_percent\", \"maximum_acceptable_entry\", \"momentum_acceleration\", \"momentum_direction\", \"opening_range_position\", \"range_expansion\", \"risk_reward\", \"trend_alignment\", \"volatility\", \"volume_ratio\", \"vwap\", \"vwap_relationship\"], \"partial_scan\": false, \"provider\": null, \"rate_limit_state\": null, \"scanner_version\": null}, \"direction\": \"Bullish\", \"eastern_trading_date\": \"2026-07-30\", \"entry_timestamp\": null, \"features\": {\"atr\": null, \"breakout_distance\": null, \"candle_body_percent\": null, \"confirmation_level\": 100, \"consolidation_duration\": null, \"distance_from_day_high\": null, \"distance_from_day_low\": null, \"distance_from_resistance\": null, \"distance_from_support\": null, \"distance_from_vwap\": null, \"ema20\": null, \"ema200\": null, \"ema21\": null, \"ema21_slope\": null, \"ema50\": null, \"ema9\": null, \"ema9_slope\": null, \"ema_alignment\": null, \"entry\": 100, \"entry_zone\": null, \"gap_percent\": null, \"maximum_acceptable_entry\": null, \"momentum_acceleration\": null, \"momentum_direction\": null, \"opening_range_position\": null, \"price\": 100, \"range_expansion\": null, \"relative_volume\": 1.8, \"risk_reward\": null, \"rsi\": 61, \"stop\": 99, \"target_1\": 102, \"target_2\": 104, \"trend_alignment\": null, \"volatility\": null, \"volume_ratio\": null, \"vwap\": null, \"vwap_relationship\": null}, \"generated_timestamp\": \"2026-07-30T14:00:00+00:00\", \"market_regime\": {\"confidence_band\": \"MEDIUM\", \"contributing_factors\": [\"SPY_QQQ_BULLISH_ALIGNMENT\"], \"data_quality_status\": \"COMPLETE\", \"regime\": \"BULLISH_TREND\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"opportunity_id\": \"d9d133827abe4cb5864cce273b898337\", \"scanner_id\": \"optionbeacon-scanner\", \"schema_version\": 1, \"scoring\": {\"bearish_score\": null, \"bullish_score\": null, \"confidence\": 90, \"eligibility_reason\": null, \"missing_requirements\": null, \"momentum_score\": null, \"price_action_score\": null, \"quality\": null, \"reasons\": null, \"signal\": null, \"status\": null, \"trend_score\": null, \"volatility_score\": null, \"volume_score\": null}, \"sector_context\": {\"alignment_status\": \"UNKNOWN\", \"reason_codes\": [\"SECTOR_MAPPING_UNAVAILABLE\"], \"relative_strength_score\": null, \"sector\": \"Technology\", \"sector_benchmark\": \"XLK\", \"sector_rank\": null, \"sector_trend\": \"UNKNOWN\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"session_segment\": \"MORNING\", \"setup_type\": \"Breakout\", \"symbol\": \"NVDA\", \"trade_plan_id\": null}",
+        "created_at": "2026-08-03T14:46:17.624477+00:00"
+      },
+      {
+        "opportunity_id": "dd1e360b61fb4c0e8a4845869ce61d93",
+        "snapshot_json": "{\"data_quality\": {\"fallback_state\": null, \"freshness\": null, \"missing_feature_flags\": [\"atr\", \"breakout_distance\", \"candle_body_percent\", \"consolidation_duration\", \"distance_from_day_high\", \"distance_from_day_low\", \"distance_from_resistance\", \"distance_from_support\", \"distance_from_vwap\", \"ema20\", \"ema200\", \"ema21\", \"ema21_slope\", \"ema50\", \"ema9\", \"ema9_slope\", \"ema_alignment\", \"entry_zone\", \"gap_percent\", \"maximum_acceptable_entry\", \"momentum_acceleration\", \"momentum_direction\", \"opening_range_position\", \"range_expansion\", \"risk_reward\", \"trend_alignment\", \"volatility\", \"volume_ratio\", \"vwap\", \"vwap_relationship\"], \"partial_scan\": false, \"provider\": null, \"rate_limit_state\": null, \"scanner_version\": null}, \"direction\": \"Bullish\", \"eastern_trading_date\": \"2026-07-30\", \"entry_timestamp\": null, \"features\": {\"atr\": null, \"breakout_distance\": null, \"candle_body_percent\": null, \"confirmation_level\": 100, \"consolidation_duration\": null, \"distance_from_day_high\": null, \"distance_from_day_low\": null, \"distance_from_resistance\": null, \"distance_from_support\": null, \"distance_from_vwap\": null, \"ema20\": null, \"ema200\": null, \"ema21\": null, \"ema21_slope\": null, \"ema50\": null, \"ema9\": null, \"ema9_slope\": null, \"ema_alignment\": null, \"entry\": 100, \"entry_zone\": null, \"gap_percent\": null, \"maximum_acceptable_entry\": null, \"momentum_acceleration\": null, \"momentum_direction\": null, \"opening_range_position\": null, \"price\": 100, \"range_expansion\": null, \"relative_volume\": 1.8, \"risk_reward\": null, \"rsi\": 61, \"stop\": 99, \"target_1\": 102, \"target_2\": 104, \"trend_alignment\": null, \"volatility\": null, \"volume_ratio\": null, \"vwap\": null, \"vwap_relationship\": null}, \"generated_timestamp\": \"2026-07-30T14:00:00+00:00\", \"market_regime\": {\"confidence_band\": \"MEDIUM\", \"contributing_factors\": [\"SPY_QQQ_BULLISH_ALIGNMENT\"], \"data_quality_status\": \"COMPLETE\", \"regime\": \"BULLISH_TREND\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"opportunity_id\": \"dd1e360b61fb4c0e8a4845869ce61d93\", \"scanner_id\": \"optionbeacon-scanner\", \"schema_version\": 1, \"scoring\": {\"bearish_score\": null, \"bullish_score\": null, \"confidence\": 90, \"eligibility_reason\": null, \"missing_requirements\": null, \"momentum_score\": null, \"price_action_score\": null, \"quality\": null, \"reasons\": null, \"signal\": null, \"status\": null, \"trend_score\": null, \"volatility_score\": null, \"volume_score\": null}, \"sector_context\": {\"alignment_status\": \"UNKNOWN\", \"reason_codes\": [\"SECTOR_MAPPING_UNAVAILABLE\"], \"relative_strength_score\": null, \"sector\": \"Technology\", \"sector_benchmark\": \"XLK\", \"sector_rank\": null, \"sector_trend\": \"UNKNOWN\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"session_segment\": \"MORNING\", \"setup_type\": \"Breakout\", \"symbol\": \"NVDA\", \"trade_plan_id\": null}",
+        "created_at": "2026-08-03T14:46:55.346837+00:00"
+      },
+      {
+        "opportunity_id": "3b0df3d94ad548c9820eb34a86450c82",
+        "snapshot_json": "{\"data_quality\": {\"fallback_state\": null, \"freshness\": null, \"missing_feature_flags\": [\"atr\", \"breakout_distance\", \"candle_body_percent\", \"consolidation_duration\", \"distance_from_day_high\", \"distance_from_day_low\", \"distance_from_resistance\", \"distance_from_support\", \"distance_from_vwap\", \"ema20\", \"ema200\", \"ema21\", \"ema21_slope\", \"ema50\", \"ema9\", \"ema9_slope\", \"ema_alignment\", \"entry_zone\", \"gap_percent\", \"maximum_acceptable_entry\", \"momentum_acceleration\", \"momentum_direction\", \"opening_range_position\", \"range_expansion\", \"risk_reward\", \"trend_alignment\", \"volatility\", \"volume_ratio\", \"vwap\", \"vwap_relationship\"], \"partial_scan\": false, \"provider\": null, \"rate_limit_state\": null, \"scanner_version\": null}, \"direction\": \"Bullish\", \"eastern_trading_date\": \"2026-07-30\", \"entry_timestamp\": null, \"features\": {\"atr\": null, \"breakout_distance\": null, \"candle_body_percent\": null, \"confirmation_level\": 100, \"consolidation_duration\": null, \"distance_from_day_high\": null, \"distance_from_day_low\": null, \"distance_from_resistance\": null, \"distance_from_support\": null, \"distance_from_vwap\": null, \"ema20\": null, \"ema200\": null, \"ema21\": null, \"ema21_slope\": null, \"ema50\": null, \"ema9\": null, \"ema9_slope\": null, \"ema_alignment\": null, \"entry\": 100, \"entry_zone\": null, \"gap_percent\": null, \"maximum_acceptable_entry\": null, \"momentum_acceleration\": null, \"momentum_direction\": null, \"opening_range_position\": null, \"price\": 100, \"range_expansion\": null, \"relative_volume\": 1.8, \"risk_reward\": null, \"rsi\": 61, \"stop\": 99, \"target_1\": 102, \"target_2\": 104, \"trend_alignment\": null, \"volatility\": null, \"volume_ratio\": null, \"vwap\": null, \"vwap_relationship\": null}, \"generated_timestamp\": \"2026-07-30T14:00:00+00:00\", \"market_regime\": {\"confidence_band\": \"MEDIUM\", \"contributing_factors\": [\"SPY_QQQ_BULLISH_ALIGNMENT\"], \"data_quality_status\": \"COMPLETE\", \"regime\": \"BULLISH_TREND\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"opportunity_id\": \"3b0df3d94ad548c9820eb34a86450c82\", \"scanner_id\": \"optionbeacon-scanner\", \"schema_version\": 1, \"scoring\": {\"bearish_score\": null, \"bullish_score\": null, \"confidence\": 90, \"eligibility_reason\": null, \"missing_requirements\": null, \"momentum_score\": null, \"price_action_score\": null, \"quality\": null, \"reasons\": null, \"signal\": null, \"status\": null, \"trend_score\": null, \"volatility_score\": null, \"volume_score\": null}, \"sector_context\": {\"alignment_status\": \"UNKNOWN\", \"reason_codes\": [\"SECTOR_MAPPING_UNAVAILABLE\"], \"relative_strength_score\": null, \"sector\": \"Technology\", \"sector_benchmark\": \"XLK\", \"sector_rank\": null, \"sector_trend\": \"UNKNOWN\", \"timestamp\": \"2026-07-30T14:00:00+00:00\"}, \"session_segment\": \"MORNING\", \"setup_type\": \"Breakout\", \"symbol\": \"NVDA\", \"trade_plan_id\": null}",
+        "created_at": "2026-08-03T15:03:06.231255+00:00"
+      }
+    ],
+    "intelligence_outcome_labels": [
+      {
+        "opportunity_id": "8fa634d0c35979a1f5042680b438a82d685fe1552e70294e64e7afb03f83902e",
+        "outcome_json": "{\"best_available_return\": 0.0, \"duration_minutes\": 0.0, \"end_of_day_exit\": false, \"entered\": true, \"entry_price\": 100.0, \"entry_quality\": \"ENTERED\", \"entry_timestamp\": \"2026-07-30T14:00:00+00:00\", \"exit_price\": null, \"exit_reason\": null, \"exit_timestamp\": null, \"failed_immediately\": null, \"favorable_before_failure\": null, \"invalidation_reached\": false, \"management_quality\": \"NOT_EVALUABLE\", \"maximum_adverse_excursion\": 0.0, \"maximum_favorable_excursion\": 0.0, \"maximum_hold_exit\": false, \"missing_fields\": [\"time_to_mfe_minutes\", \"time_to_mae_minutes\"], \"never_entered\": false, \"opportunity_id\": \"8fa634d0c35979a1f5042680b438a82d685fe1552e70294e64e7afb03f83902e\", \"realized_return\": null, \"result_class\": \"UNRESOLVED\", \"schema_version\": 1, \"setup_quality\": \"PENDING\", \"stop_reached\": false, \"target_1_reached\": false, \"target_2_reached\": false, \"time_to_mae_minutes\": null, \"time_to_mfe_minutes\": null, \"worst_available_return\": 0.0}",
+        "updated_at": "2026-08-01T02:50:21.408803+00:00"
+      }
+    ],
+    "mirror": [],
+    "filtered": [],
+    "intraday_signals": [],
+    "intraday_trades": [],
+    "broad_trades": [],
+    "broad_journal": [],
+    "opportunity_context": [],
+    "context_shadow": [],
+    "position_context_marks": []
+  }
+}
