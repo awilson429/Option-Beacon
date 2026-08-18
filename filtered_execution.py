@@ -106,6 +106,12 @@ class FilteredExecutionRepository:
                 signal_age_seconds,signal_age_bucket,eligible_60s,eligible_120s,eligible_180s,eligible_300s,opened_at,status,
                 created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(opportunity_id) DO NOTHING""", values).close()
+        try:
+            self.repository.enrich_opportunity_context(opportunity_id, {"lifecycle": {
+                "filtered_evaluated_at": utc_iso(now), "filtered_opened_at": (mirror or {}).get("opened_at") if eligible else None,
+                "authoritative_to_filtered_open_seconds": age if eligible else None, "signal_age_bucket": signal_age_bucket(age)}})
+        except Exception:
+            LOGGER.exception("Could not enrich shadow opportunity context %s", opportunity_id)
         return self.get(opportunity_id)
 
     def sync(self, filtered, mirror, marks, now):

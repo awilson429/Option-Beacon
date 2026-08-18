@@ -192,6 +192,15 @@ def run_paper_execution(
                 scanner_id=scanner_id, run_number=run_number, risk_state=risk_state,
                 execution_config=config,
             )
+            try:
+                context_repository = getattr(journal, "repository", None)
+                if context_repository is not None:
+                    context_repository.enrich_opportunity_context(
+                        result.get("_authoritative_entry_id"),
+                        {"lifecycle": {"broad_decided_at": checked_at.isoformat()}},
+                    )
+            except Exception:
+                LOGGER.exception("Could not enrich shadow opportunity context %s", result.get("_authoritative_entry_id"))
             decisions.append(decision)
             if not decision.eligible:
                 rejected += 1

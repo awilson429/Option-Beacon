@@ -539,6 +539,20 @@ class TradeRepository:
             )
             for operation, ddl in (
                 (
+                    "opportunity_context",
+                    f"""
+                    CREATE TABLE IF NOT EXISTS opportunity_context (
+                        opportunity_id {text_id},
+                        context_json TEXT NOT NULL,
+                        schema_version INTEGER NOT NULL,
+                        captured_at TEXT NOT NULL,
+                        eastern_session TEXT NOT NULL,
+                        experiment_scope TEXT NOT NULL,
+                        FOREIGN KEY(opportunity_id) REFERENCES opportunities(id)
+                    )
+                    """,
+                ),
+                (
                     "intelligence_setup_snapshots",
                     f"""
                     CREATE TABLE IF NOT EXISTS intelligence_setup_snapshots (
@@ -1520,6 +1534,72 @@ class TradeRepository:
                     (source_fingerprint, str(source_row)),
                 )
             )
+
+    def create_opportunity_context(self, opportunity_id, context, *, schema_version=1):
+        """Persist one immutable point-in-time context row per opportunity."""
+        existing = self.get_opportunity_context(opportunity_id)
+        if existing:
+            return existing
+        encoded = json.dumps(context, sort_keys=True, default=str)
+        with self.connection() as connection:
+            try:
+                self._execute(connection, """INSERT INTO opportunity_context
+                    (opportunity_id,context_json,schema_version,captured_at,eastern_session,experiment_scope)
+                    VALUES (?,?,?,?,?,?) ON CONFLICT(opportunity_id) DO NOTHING""", (
+                    opportunity_id, encoded, int(schema_version), context["captured_at"],
+                    context["eastern_session"], context["experiment_scope"],
+                )).close()
+            except Exception:
+                existing = self.get_opportunity_context(opportunity_id)
+                if not existing:
+                    raise
+        return self.get_opportunity_context(opportunity_id)
+
+    def get_opportunity_context(self, opportunity_id):
+        with self.connection() as connection:
+            row = self._fetchone(connection, """SELECT opportunity_id,context_json,schema_version,
+                captured_at,eastern_session,experiment_scope FROM opportunity_context
+                WHERE opportunity_id=?""", (opportunity_id,))
+        if not row:
+            return None
+        row["context"] = json.loads(row.pop("context_json"))
+        return row
+
+    def enrich_opportunity_context(self, opportunity_id, patch):
+        """Add known-at-stage measurements without replacing the decision snapshot."""
+        existing = self.get_opportunity_context(opportunity_id)
+        if not existing:
+            return None
+        context = existing["context"]
+        for group, values in patch.items():
+            if isinstance(values, dict):
+                context.setdefault(group, {}).update({key: value for key, value in values.items() if value is not None})
+        with self.connection() as connection:
+            self._execute(connection, "UPDATE opportunity_context SET context_json=? WHERE opportunity_id=?",
+                          (json.dumps(context, sort_keys=True, default=str), opportunity_id)).close()
+        return self.get_opportunity_context(opportunity_id)
+
+    def list_opportunity_contexts(self, *, start_session=None, end_session=None, limit=5000):
+        query = """SELECT opportunity_id,context_json,schema_version,captured_at,eastern_session,
+            experiment_scope FROM opportunity_context"""
+        clauses, params = [], []
+        if start_session:
+            clauses.append("eastern_session>=?"); params.append(str(start_session))
+        if end_session:
+            clauses.append("eastern_session<=?"); params.append(str(end_session))
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY eastern_session DESC,captured_at DESC LIMIT ?"
+        params.append(min(max(int(limit), 1), 10000))
+        with self.connection() as connection:
+            rows = self._fetchall(connection, query, tuple(params))
+        result = []
+        for row in rows:
+            context = json.loads(row.pop("context_json")); context.update({
+                "opportunity_id": row["opportunity_id"], "captured_at": row["captured_at"],
+                "eastern_session": row["eastern_session"], "experiment_scope": row["experiment_scope"]})
+            result.append(context)
+        return result
 
     def create_intelligence_snapshot(self, opportunity_id, snapshot, *, schema_version=1):
         """Insert an immutable decision-time snapshot, returning the original on repeats."""

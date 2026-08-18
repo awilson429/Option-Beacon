@@ -314,6 +314,36 @@ class MirrorExecutionRepository:
                 disposition_detail,current_mark,current_value,unrealized_pnl,last_quote_at,fill_model,
                 metadata_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", values).close()
         self.journal(opportunity_id, trade_id, "mirror_entry_opened" if fill else "mirror_entry_unexecutable", code, now, {"detail": detail})
+        try:
+            from opportunity_context import dte_bucket, spread_bucket, timestamp
+            underlying = _number(candidate.get("price"))
+            strike = _number(contract.get("strike"))
+            option_type = str(contract.get("option_type") or "").upper()
+            signed_moneyness = None
+            if underlying and strike is not None:
+                signed_moneyness = ((underlying - strike) if option_type.startswith("C") else (strike - underlying)) / underlying * 100
+            stored_context = self.repository.get_opportunity_context(opportunity_id)
+            first_seen = timestamp((((stored_context or {}).get("context") or {}).get("signal_maturity") or {}).get("first_seen_timestamp"))
+            context_now = _aware(now)
+            total_age = max(0, (context_now - first_seen).total_seconds()) if first_seen and context_now >= first_seen else None
+            authoritative_at = _aware(event["event_timestamp"])
+            self.repository.enrich_opportunity_context(opportunity_id, {
+                "lifecycle": {"mirror_contract_selected_at": utc_iso(now), "mirror_opened_at": utc_iso(now) if fill is not None else None,
+                    "authoritative_to_contract_seconds": max(0, (context_now-authoritative_at).total_seconds()),
+                    "authoritative_to_mirror_open_seconds": max(0, (context_now-authoritative_at).total_seconds()) if fill is not None else None,
+                    "total_candidate_to_execution_seconds": total_age if fill is not None else None},
+                "option_execution": {"contract": contract.get("option_symbol"), "option_type": contract.get("option_type"),
+                    "expiration": expiration, "dte": dte, "strike": contract.get("strike"), "bid": bid, "ask": ask,
+                    "midpoint": mid, "conservative_fill": fill, "spread_dollars": spread, "spread_percent": spread_pct,
+                    "volume": contract.get("volume"), "open_interest": contract.get("open_interest"), "delta": contract.get("delta"),
+                    "iv": contract.get("iv") or contract.get("implied_volatility"), "underlying_price": underlying,
+                    "atm_distance_dollars": abs(underlying-strike) if underlying is not None and strike is not None else None,
+                    "atm_distance_percent": abs(underlying-strike)/underlying*100 if underlying and strike is not None else None,
+                    "signed_moneyness_percent": signed_moneyness,
+                    "spread_bucket": spread_bucket(spread_pct), "dte_bucket": dte_bucket(dte)},
+            })
+        except Exception:
+            LOGGER.exception("Could not enrich shadow opportunity context %s", opportunity_id)
         return self.get(opportunity_id)
 
     def _snapshot(self, connection, row, quote, now, *, underlying_price=None,

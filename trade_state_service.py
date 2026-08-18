@@ -27,6 +27,7 @@ from intraday_session import (
     intraday_trade_exit_due,
 )
 from intelligence_capture import outcome_label, setup_feature_snapshot
+from opportunity_context import build_opportunity_context, signal_age_bucket, timestamp
 from live_trade_activity import persist_outcome_transition
 from trade_repository import (
     DEFAULT_REPOSITORY_FILE,
@@ -245,6 +246,7 @@ def process_scanner_result(
             )
             _persist_outcome_label(repository, record)
             if entered_now:
+                _persist_authoritative_context_timing(repository, record)
                 LOGGER.info(json.dumps({
                     "event": "authoritative_trade_entered",
                     "scanner_id": scanner_id, "run_number": run_number,
@@ -268,6 +270,7 @@ def process_scanner_result(
         _persist_intelligence_snapshot(
             repository, result, candidate, source_version=source_version
         )
+        _persist_opportunity_context(repository, result, candidate)
         _persist_outcome_label(repository, candidate)
         if outcome_records is not None:
             outcome_records.append(candidate)
@@ -284,6 +287,37 @@ def _persist_intelligence_snapshot(repository, result, record, *, source_version
         repository.create_intelligence_snapshot(record.trade_id, snapshot.to_dict(), schema_version=snapshot.schema_version)
     except Exception:
         LOGGER.exception("Could not persist intelligence snapshot %s", record.trade_id)
+
+
+def _persist_opportunity_context(repository, result, record):
+    """Failure-isolated shadow capture; it cannot affect authoritative behavior."""
+    try:
+        context = build_opportunity_context(dict(result or {}), record)
+        repository.create_opportunity_context(record.trade_id, context, schema_version=context["schema_version"])
+    except Exception:
+        LOGGER.exception("Could not persist opportunity context %s", record.trade_id)
+
+
+def _persist_authoritative_context_timing(repository, record):
+    try:
+        stored = repository.get_opportunity_context(record.trade_id)
+        if not stored:
+            return
+        context = stored["context"]
+        maturity = context.get("signal_maturity") or {}
+        lifecycle = context.get("lifecycle") or {}
+        entered = timestamp(record.entry_time)
+        first_seen = timestamp(maturity.get("first_seen_timestamp"))
+        setup = timestamp(lifecycle.get("setup_detected_at"))
+        first_age = max(0, (entered - first_seen).total_seconds()) if entered and first_seen and entered >= first_seen else None
+        setup_age = max(0, (entered - setup).total_seconds()) if entered and setup and entered >= setup else None
+        repository.enrich_opportunity_context(record.trade_id, {
+            "lifecycle": {"authoritative_entered_at": entered.isoformat(), "setup_to_authoritative_seconds": setup_age,
+                "signal_age_bucket": signal_age_bucket(setup_age if setup_age is not None else first_age)},
+            "signal_maturity": {"authoritative_timestamp": entered.isoformat(), "seconds_from_first_seen_to_authoritative": first_age},
+        })
+    except Exception:
+        LOGGER.exception("Could not enrich authoritative context timing %s", record.trade_id)
 
 
 def _persist_outcome_label(repository, record):
