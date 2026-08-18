@@ -10,10 +10,10 @@ from ui_navigation import (
 
 
 EXPECTED_PAGES = (
-    "Command Center",
-    "Performance",
-    "SPY / QQQ",
-    "Research / Developer Tools",
+    "Trade Desk",
+    "Positions",
+    "Journal",
+    "Developer Tools",
 )
 
 
@@ -74,29 +74,29 @@ def test_sidebar_renders_all_four_primary_items_in_order():
     )
 
     assert MAIN_NAVIGATION == EXPECTED_PAGES
-    assert selected == "Command Center"
+    assert selected == "Trade Desk"
     assert ("radio", EXPECTED_PAGES) in FakeSidebar.calls
 
 
 def test_default_and_existing_navigation_selection_are_preserved():
-    assert selected_navigation_page({}) == "Command Center"
-    assert selected_navigation_page({"page": "positions"}) == "Command Center"
-    assert selected_navigation_page({"page": ["journal"]}) == "Performance"
-    assert selected_navigation_page({"page": "developer-tools"}) == "Research / Developer Tools"
-    assert selected_navigation_page({"page": "unknown"}) == "Command Center"
+    assert selected_navigation_page({}) == "Trade Desk"
+    assert selected_navigation_page({"page": "positions"}) == "Positions"
+    assert selected_navigation_page({"page": ["journal"]}) == "Journal"
+    assert selected_navigation_page({"page": "developer-tools"}) == "Developer Tools"
+    assert selected_navigation_page({"page": "unknown"}) == "Trade Desk"
     assert (
         selected_navigation_page(
             {"page": "trade-desk"},
-            {"ob_primary_page": "Performance"},
+            {"ob_primary_page": "Journal"},
         )
-        == "Performance"
+        == "Journal"
     )
 
 
 def test_query_link_can_replace_prior_sidebar_selection():
     FakeStreamlit.session_state = {
-        "ob_primary_page": "Command Center",
-        "_ob_primary_query_slug": "command-center",
+        "ob_primary_page": "Trade Desk",
+        "_ob_primary_query_slug": "trade-desk",
     }
     FakeSidebar.calls = []
 
@@ -105,8 +105,8 @@ def test_query_link_can_replace_prior_sidebar_selection():
         st_module=FakeStreamlit,
     )
 
-    assert selected == "Performance"
-    assert FakeStreamlit.session_state["ob_primary_page"] == "Performance"
+    assert selected == "Journal"
+    assert FakeStreamlit.session_state["ob_primary_page"] == "Journal"
 
 
 def test_active_state_uses_native_checked_radio_treatment():

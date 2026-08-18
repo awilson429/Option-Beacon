@@ -17,12 +17,14 @@ def test_production_score_thresholds_remain_90():
 
 def test_default_navigation_remains_trade_desk_with_paper_workspace():
     state = {}
-    assert active_card_workspace(state) == "Command Center"
+    assert active_card_workspace(state) == "Trade Desk"
     assert CARD_NAVIGATION == (
-        "Command Center",
-        "Performance",
+        "Trade Desk",
         "SPY / QQQ",
-        "Research / Developer Tools",
+        "Opportunities",
+        "Paper Trading",
+        "Strategy Lab",
+        "Advanced",
     )
 
 
