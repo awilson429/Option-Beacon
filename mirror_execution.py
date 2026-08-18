@@ -314,6 +314,18 @@ class MirrorExecutionRepository:
                 disposition_detail,current_mark,current_value,unrealized_pnl,last_quote_at,fill_model,
                 metadata_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", values).close()
         self.journal(opportunity_id, trade_id, "mirror_entry_opened" if fill else "mirror_entry_unexecutable", code, now, {"detail": detail})
+        try:
+            from opportunity_context import dte_bucket, spread_bucket
+            self.repository.enrich_opportunity_context(opportunity_id, {
+                "lifecycle": {"mirror_contract_selected_at": utc_iso(now), "mirror_opened_at": utc_iso(now) if fill is not None else None},
+                "option_execution": {"contract": contract.get("option_symbol"), "option_type": contract.get("option_type"),
+                    "expiration": expiration, "dte": dte, "strike": contract.get("strike"), "bid": bid, "ask": ask,
+                    "midpoint": mid, "conservative_fill": fill, "spread_dollars": spread, "spread_percent": spread_pct,
+                    "volume": contract.get("volume"), "open_interest": contract.get("open_interest"), "delta": contract.get("delta"),
+                    "iv": contract.get("iv"), "spread_bucket": spread_bucket(spread_pct), "dte_bucket": dte_bucket(dte)},
+            })
+        except Exception:
+            LOGGER.exception("Could not enrich shadow opportunity context %s", opportunity_id)
         return self.get(opportunity_id)
 
     def _snapshot(self, connection, row, quote, now, *, underlying_price=None,
