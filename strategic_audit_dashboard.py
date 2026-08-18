@@ -6,7 +6,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from analysis.production_forensic_access import database_fingerprint
-from analysis.production_strategic_audit import run_production_strategic_audit
+from analysis.production_strategic_audit import StrategicAuditFailure, run_production_strategic_audit
 from dashboard_storage_config import dashboard_database_url
 from production_forensic_dashboard import _sanitize
 
@@ -40,6 +40,9 @@ def render_production_strategic_audit(st, *, database_resolver=dashboard_databas
                 with st.spinner("Running read-only production strategic audit..."):
                     result = audit_runner(url, dashboard_fingerprint=database_fingerprint(url))
                 st.session_state[RESULT_KEY] = result
+            except StrategicAuditFailure as error:
+                st.error(str(error))
+                return None
             except Exception:
                 st.error("Production strategic audit could not complete. Check sanitized server logs.")
                 return None

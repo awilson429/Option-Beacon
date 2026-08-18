@@ -166,8 +166,11 @@ def excursions(rows):
 
 
 def _giveback_count(rows, fraction):
-    return sum(number(row.get("pnl")) > 0 and number(row.get("mfe")) and
-               number(row.get("mfe")) - number(row.get("return_pct")) > number(row.get("mfe")) * fraction for row in rows)
+    return sum(bool(number(row.get("pnl")) is not None and number(row.get("pnl")) > 0 and
+               number(row.get("mfe")) is not None and number(row.get("mfe")) > 0 and
+               number(row.get("return_pct")) is not None and
+               number(row.get("mfe")) - number(row.get("return_pct")) > number(row.get("mfe")) * fraction)
+               for row in rows)
 
 
 def _distribution(rows, key):

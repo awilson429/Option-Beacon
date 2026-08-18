@@ -1,4 +1,4 @@
-from strategic_spy_qqq_audit import build_strategic_audit, performance
+from strategic_spy_qqq_audit import build_strategic_audit, excursions, performance
 
 
 def trade(identity, symbol, pnl, *, day="2026-08-17", spread=4, mfe=12, mae=-3):
@@ -35,6 +35,14 @@ def test_metrics_include_consistency_risk_execution_and_excursions():
     assert report["execution"]["SPY"]["p90_spread_percent"] == 4
     assert report["mfe_mae_exit"]["SPY"]["coverage"] == 6
     assert report["signal_frequency_and_sample_efficiency"]["SPY"]["estimated_sessions_for_samples"]["50"]
+
+
+def test_profitable_trade_with_missing_mfe_is_unavailable_not_type_error():
+    row = trade("missing-mfe", "SPY", 5)
+    row["mfe"] = None
+    result = excursions([row])
+    assert result["coverage"] == 0
+    assert result["winner_giveback_over_25pct_of_mfe"] == 0
 
 
 def test_insufficient_sample_is_not_promoted_or_hindsight_filtered():
