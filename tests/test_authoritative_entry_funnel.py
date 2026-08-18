@@ -3,6 +3,7 @@ import inspect
 from datetime import datetime, timedelta, timezone
 
 import app
+import pyarrow as pa
 
 from authoritative_entry_funnel import (
     AuthoritativeEntryFunnelRepository,
@@ -107,3 +108,23 @@ def test_developer_tools_is_read_only_for_funnel_state():
     assert "initialize=False" in source
     for forbidden in ("save_cycle", "initialize()", "_execute", "INSERT", "UPDATE", "DELETE"):
         assert forbidden not in source
+
+
+def test_threshold_display_frame_is_pyarrow_safe_without_mutating_config():
+    thresholds = {
+        "integer": 15,
+        "fraction": 0.5,
+        "enabled": True,
+        "session_end": "15:55",
+        "unavailable": None,
+    }
+    original = copy.deepcopy(thresholds)
+
+    frame = app.authoritative_thresholds_display_frame(thresholds)
+    table = pa.Table.from_pandas(frame)
+
+    assert thresholds == original
+    assert frame["Setting"].tolist() == list(thresholds)
+    assert frame["Configured Value"].tolist() == ["15", "0.5", "True", "15:55", "Unavailable"]
+    arrow_type = table.schema.field("Configured Value").type
+    assert pa.types.is_string(arrow_type) or pa.types.is_large_string(arrow_type)
