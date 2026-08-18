@@ -553,6 +553,29 @@ class TradeRepository:
                     """,
                 ),
                 (
+                    "context_shadow_decisions",
+                    f"""
+                    CREATE TABLE IF NOT EXISTS context_shadow_decisions (
+                        opportunity_id {text_id}, decision TEXT NOT NULL,
+                        decision_json TEXT NOT NULL, evaluated_at TEXT NOT NULL,
+                        experiment_scope TEXT NOT NULL,
+                        FOREIGN KEY(opportunity_id) REFERENCES opportunities(id)
+                    )
+                    """,
+                ),
+                (
+                    "position_context_marks",
+                    f"""
+                    CREATE TABLE IF NOT EXISTS position_context_marks (
+                        mark_id {text_id}, trade_id TEXT NOT NULL, opportunity_id TEXT NOT NULL,
+                        lane TEXT NOT NULL, observed_at TEXT NOT NULL, setup_health TEXT NOT NULL,
+                        mark_json TEXT NOT NULL,
+                        UNIQUE(lane,trade_id,observed_at),
+                        FOREIGN KEY(opportunity_id) REFERENCES opportunities(id)
+                    )
+                    """,
+                ),
+                (
                     "intelligence_setup_snapshots",
                     f"""
                     CREATE TABLE IF NOT EXISTS intelligence_setup_snapshots (
@@ -1553,7 +1576,9 @@ class TradeRepository:
                 existing = self.get_opportunity_context(opportunity_id)
                 if not existing:
                     raise
-        return self.get_opportunity_context(opportunity_id)
+        stored = self.get_opportunity_context(opportunity_id)
+        self._refresh_context_shadow(opportunity_id, stored)
+        return stored
 
     def get_opportunity_context(self, opportunity_id):
         with self.connection() as connection:
@@ -1577,7 +1602,59 @@ class TradeRepository:
         with self.connection() as connection:
             self._execute(connection, "UPDATE opportunity_context SET context_json=? WHERE opportunity_id=?",
                           (json.dumps(context, sort_keys=True, default=str), opportunity_id)).close()
-        return self.get_opportunity_context(opportunity_id)
+        stored = self.get_opportunity_context(opportunity_id)
+        self._refresh_context_shadow(opportunity_id, stored)
+        return stored
+
+    def _refresh_context_shadow(self, opportunity_id, stored):
+        """Research-only upsert; failures are isolated by all production callers."""
+        if not stored:
+            return None
+        from contextual_research import context_shadow_decision
+        decision = context_shadow_decision(stored["context"])
+        scope = stored["context"].get("experiment_scope") or "OUTSIDE_BOUNDARY"
+        with self.connection() as connection:
+            self._execute(connection, """INSERT INTO context_shadow_decisions
+                (opportunity_id,decision,decision_json,evaluated_at,experiment_scope)
+                VALUES (?,?,?,?,?) ON CONFLICT(opportunity_id) DO UPDATE SET
+                decision=excluded.decision,decision_json=excluded.decision_json,
+                evaluated_at=excluded.evaluated_at,experiment_scope=excluded.experiment_scope""", (
+                opportunity_id, decision["decision"], json.dumps(decision,sort_keys=True),
+                decision["evaluated_at"], scope)).close()
+        LOGGER.info(json.dumps({"event":"context_shadow_evaluated","opportunity_id":opportunity_id,
+                                "decision":decision["decision"]},sort_keys=True))
+        return decision
+
+    def record_position_context_mark(self, mark):
+        with self.connection() as connection:
+            self._execute(connection, """INSERT INTO position_context_marks
+                (mark_id,trade_id,opportunity_id,lane,observed_at,setup_health,mark_json)
+                VALUES (?,?,?,?,?,?,?) ON CONFLICT(lane,trade_id,observed_at) DO NOTHING""", (
+                mark["mark_id"],mark["trade_id"],mark["opportunity_id"],mark["lane"],
+                mark["observed_at"],mark["setup_health"],json.dumps(mark,sort_keys=True,default=str))).close()
+        LOGGER.info(json.dumps({"event":"position_context_marked","lane":mark["lane"],
+                                "trade_id":mark["trade_id"],"setup_health":mark["setup_health"]},sort_keys=True))
+        return mark
+
+    def list_context_shadow_decisions(self, *, scope=None, limit=5000):
+        query="""SELECT opportunity_id,decision,decision_json,evaluated_at,experiment_scope
+            FROM context_shadow_decisions"""; params=[]
+        if scope and scope != "ALL": query += " WHERE experiment_scope=?"; params.append(scope.replace(" ","_"))
+        query += " ORDER BY evaluated_at DESC LIMIT ?"; params.append(min(max(int(limit),1),10000))
+        with self.connection() as connection: rows=self._fetchall(connection,query,tuple(params))
+        return [{**json.loads(row.pop("decision_json")),"opportunity_id":row["opportunity_id"],
+                 "experiment_scope":row["experiment_scope"]} for row in rows]
+
+    def list_position_context_marks(self, *, opportunity_ids=None, scope_start=None, limit=10000):
+        query="""SELECT mark_id,trade_id,opportunity_id,lane,observed_at,setup_health,mark_json
+            FROM position_context_marks"""; clauses=[]; params=[]
+        identities=sorted({str(value) for value in (opportunity_ids or []) if value})[:5000]
+        if identities: clauses.append(f"opportunity_id IN ({','.join('?' for _ in identities)})");params.extend(identities)
+        if scope_start: clauses.append("observed_at>=?");params.append(str(scope_start))
+        if clauses:query += " WHERE "+" AND ".join(clauses)
+        query += " ORDER BY observed_at,mark_id LIMIT ?";params.append(min(max(int(limit),1),20000))
+        with self.connection() as connection:rows=self._fetchall(connection,query,tuple(params))
+        return [json.loads(row["mark_json"]) for row in rows]
 
     def list_opportunity_contexts(self, *, start_session=None, end_session=None, limit=5000):
         query = """SELECT opportunity_id,context_json,schema_version,captured_at,eastern_session,

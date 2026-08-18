@@ -333,6 +333,8 @@ def test_repository_reports_schema_operation_boundaries(tmp_path):
         "scanner_locks",
         "legacy_imports",
         "opportunity_context",
+        "context_shadow_decisions",
+        "position_context_marks",
         "intelligence_setup_snapshots",
         "intelligence_outcome_labels",
         "intelligence_shadow_events",

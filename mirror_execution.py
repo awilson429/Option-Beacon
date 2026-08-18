@@ -402,8 +402,10 @@ class MirrorExecutionRepository:
 
     def record_quote_unavailable(self, row, now, *, underlying_price=None):
         with self.repository.connection() as connection:
-            return self._snapshot(connection, row, None, now, underlying_price=underlying_price,
-                                  update_status="QUOTE_UNAVAILABLE")
+            snapshot = self._snapshot(connection, row, None, now, underlying_price=underlying_price,
+                                      update_status="QUOTE_UNAVAILABLE")
+        self._record_research_marks(row, None, now, underlying_price, snapshot)
+        return snapshot
 
     def update_mark(self, row, quote, now, *, underlying_price=None):
         bid, ask = _number(quote.get("bid")), _number(quote.get("ask"))
@@ -414,8 +416,10 @@ class MirrorExecutionRepository:
             self.repository._execute(connection, """UPDATE mirror_execution_trades SET current_bid=?,current_ask=?,
                 current_mark=?,current_value=?,unrealized_pnl=?,last_quote_at=?,updated_at=? WHERE opportunity_id=?""",
                 (bid, ask, mark, value, pnl, utc_iso(now), utc_iso(now), row["opportunity_id"])).close()
-            return self._snapshot(connection, row, quote, now, underlying_price=underlying_price,
-                                  conservative_mark=mark)
+            snapshot = self._snapshot(connection, row, quote, now, underlying_price=underlying_price,
+                                      conservative_mark=mark)
+        self._record_research_marks(row, quote, now, underlying_price, snapshot)
+        return snapshot
 
     def close(self, row, exit_event, quote, now, *, underlying_price=None):
         bid, ask = _number(quote.get("bid")), _number(quote.get("ask"))
@@ -436,7 +440,36 @@ class MirrorExecutionRepository:
                                       update_status="CLOSED", conservative_mark=fill)
         self.journal(row["opportunity_id"], row["mirror_trade_id"], "mirror_trade_closed", "MIRROR_CLOSED", now,
                      {"authoritative_exit_reason": exit_event.get("exit_reason"), "realized_pnl": pnl})
+        self._record_research_marks(row, quote, now, underlying_price, snapshot)
         return snapshot
+
+    def _record_research_marks(self, row, quote, now, underlying_price, snapshot):
+        """Best-effort shadow telemetry from the already-fetched MIRROR quote."""
+        try:
+            from contextual_research import position_context_mark
+            stored = self.repository.get_opportunity_context(row["opportunity_id"])
+            if not stored:
+                return
+            prior = self.repository.list_position_context_marks(opportunity_ids=[row["opportunity_id"]], limit=500)
+            prior = prior[-1] if prior else None
+            base = dict(trade_id=row["mirror_trade_id"], opportunity_id=row["opportunity_id"],
+                symbol=row["symbol"], observed_at=now, context=stored["context"], quote=quote,
+                underlying_price=underlying_price, option_mark=snapshot.get("mark"),
+                unrealized_return=snapshot.get("return_pct"), mfe=snapshot.get("mfe_pct"),
+                mae=snapshot.get("mae_pct"), direction=row.get("direction"), previous=prior)
+            mark = position_context_mark(lane="MIRROR", **base)
+            self.repository.record_position_context_mark(mark)
+            try:
+                with self.repository.connection() as connection:
+                    filtered = self.repository._fetchone(connection, """SELECT filtered_trade_id FROM
+                        filtered_execution_trades WHERE opportunity_id=? AND execution_eligible=1""", (row["opportunity_id"],))
+                if filtered:
+                    self.repository.record_position_context_mark(position_context_mark(
+                        lane="FILTERED", **{**base,"trade_id":filtered["filtered_trade_id"]}))
+            except Exception:
+                pass
+        except Exception:
+            LOGGER.exception("Could not record shadow position context %s", row.get("opportunity_id"))
 
     def exit_pending(self, row, exit_event, now, reason):
         with self.repository.connection() as connection:

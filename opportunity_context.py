@@ -193,6 +193,8 @@ def build_opportunity_context(result, record, *, captured_at=None):
             "confirmed_timestamp": confirmed_at, "authoritative_timestamp": authoritative_at,
             "seconds_from_first_seen_to_authoritative": _elapsed(first_seen, authoritative_at)},
         "structure": {"classification": pullback_structure(result.get("price_structure") or {}, direction), **(result.get("price_structure") or {})},
+        "discovery": {"source": result.get("discovery_source") or result.get("source") or "UNKNOWN",
+            "sources": result.get("discovery_sources") or [], "reason_codes": result.get("discovery_reason_codes") or []},
         "catalyst": {"availability": "AVAILABLE" if result.get("catalyst_context") else "NOT_AVAILABLE", **(result.get("catalyst_context") or {})},
         "option_execution": {**option, "spread_bucket": spread_bucket(spread_pct), "dte_bucket": dte_bucket(option.get("dte"))},
         "checks": {"market_alignment": {"status": alignment, "values": {"spy_direction": spy_direction, "qqq_direction": qqq_direction}},
