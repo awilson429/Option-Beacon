@@ -141,7 +141,7 @@ def execution(rows):
             "median_spread_percent": median(spreads) if spreads else None, "p90_spread_percent": percentile(spreads, .9),
             "signal_age_coverage": len(ages), "average_signal_age_seconds": mean(ages) if ages else None,
             "median_signal_age_seconds": median(ages) if ages else None,
-            "missing_quotes": sum(row.get("opened_at") and number(row.get("entry_fill")) is None for row in rows),
+            "missing_quotes": sum(bool(row.get("opened_at")) and number(row.get("entry_fill")) is None for row in rows),
             "dte": _distribution(rows, "dte"), "option_volume": _summary_values(rows, "option_volume"),
             "open_interest": _summary_values(rows, "open_interest"),
             "quote_age": "NOT PERSISTED", "execution_latency": "AVAILABLE ONLY WHERE SIGNAL AND OPEN TIMESTAMPS EXIST",
@@ -224,6 +224,26 @@ def _score(metrics, quality, dimension):
     return "MODERATE"
 
 
+def _calculate(function, rows, *, substage, metric, fields, scope):
+    """Attach sanitized calculation context while preserving the original error."""
+    try:
+        return function(rows)
+    except Exception as error:
+        error.analytics_diagnostics = {
+            "analytics_substage": substage,
+            "analytics_function": function.__name__,
+            "metric": metric,
+            "fields": list(fields),
+            "field_types": {
+                field: sorted({type(row.get(field)).__name__ for row in rows})
+                for field in fields
+            },
+            "scope": scope,
+            "record_count": len(rows),
+        }
+        raise
+
+
 def build_strategic_audit(snapshot):
     """Build complete audit from normalized, actual persisted observations."""
     lanes = {name: list(snapshot.get("lanes", {}).get(name, ())) for name in SYSTEMS}
@@ -245,12 +265,29 @@ def build_strategic_audit(snapshot):
         "authoritative_trade_events": event_n, "missing_outcomes": max(0, opportunity_n - outcome_n),
         "outcome_coverage_percent": outcome_n / opportunity_n * 100 if opportunity_n else None,
         "grade": "INSUFFICIENT" if not event_n or outcome_n < 5 else quality["AUTHORITATIVE"]["grade"]})
-    metrics = {name: performance(rows) for name, rows in lanes.items()}
-    execution_results = {name: execution(rows) for name, rows in lanes.items()}
-    excursion_results = {name: excursions(rows) for name, rows in lanes.items()}
-    breakdowns = {name: {"direction": grouped(rows, "direction"), "time_of_day": grouped(rows, "time_bucket"),
-                          "setup": grouped(rows, "setup"), "regime": grouped(rows, "regime"),
-                          "signal_age": grouped(rows, "signal_age_bucket")} for name, rows in lanes.items()}
+    metrics, execution_results, excursion_results, breakdowns = {}, {}, {}, {}
+    for name, rows in lanes.items():
+        metrics[name] = _calculate(
+            performance, rows, substage="PERFORMANCE", metric="lane performance",
+            fields=("pnl", "return_pct", "debit", "opened_at", "closed_at", "session"), scope=name,
+        )
+        execution_results[name] = _calculate(
+            execution, rows, substage="EXECUTION", metric="execution and missing quote metrics",
+            fields=("opened_at", "entry_fill", "spread_percent", "signal_age_seconds"), scope=name,
+        )
+        excursion_results[name] = _calculate(
+            excursions, rows, substage="EXCURSIONS", metric="MFE/MAE and giveback metrics",
+            fields=("pnl", "return_pct", "mfe", "mae", "closed_at"), scope=name,
+        )
+        breakdowns[name] = _calculate(
+            lambda values: {
+                "direction": grouped(values, "direction"), "time_of_day": grouped(values, "time_bucket"),
+                "setup": grouped(values, "setup"), "regime": grouped(values, "regime"),
+                "signal_age": grouped(values, "signal_age_bucket"),
+            },
+            rows, substage="BREAKDOWNS", metric="grouped lane metrics",
+            fields=("direction", "time_bucket", "setup", "regime", "signal_age_bucket"), scope=name,
+        )
     spy_qqq = lanes["SPY_QQQ"]
     translation = Counter(row.get("translation_class") or "DATA UNAVAILABLE" for row in spy_qqq)
     scorecard = []

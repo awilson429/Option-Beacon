@@ -173,11 +173,14 @@ def run_production_strategic_audit(database_url, *, dashboard_fingerprint=None, 
         return {"status": "COMPLETED", "reason": None, "database": database,
             "reconciliation": reconciliation, "sessions": reconciliation["sessions"], "report": report}
     except Exception as error:
+        analytics_diagnostics = getattr(error, "analytics_diagnostics", {})
         failure = _failure(getattr(error, "stage", stage), error)
-        LOGGER.error(json.dumps({"event":"production_strategic_audit_failed","stage":failure.stage,
+        log_record = {"event":"production_strategic_audit_failed","stage":failure.stage,
             "exception_class":failure.exception_class,"safe_summary":failure.safe_summary,
             "database_fingerprint":fingerprint or "UNAVAILABLE","session_window":window,
-            "duration_ms":round((monotonic_time.perf_counter()-started)*1000)},default=str,sort_keys=True))
+            "duration_ms":round((monotonic_time.perf_counter()-started)*1000)}
+        log_record.update(analytics_diagnostics)
+        LOGGER.error(json.dumps(log_record, default=str, sort_keys=True))
         raise failure from None
 
 
