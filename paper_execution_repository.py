@@ -313,6 +313,31 @@ class PaperExecutionRepository:
                     position.max_favorable_excursion_percent,position.max_adverse_excursion_percent,
                     utc_iso(position.exit_time),"CLOSED",position.trade_id,
                 )).close()
+        self._record_research_mark(position)
+
+    def _record_research_mark(self, position):
+        """Reuse the refreshed BROAD position; never requests additional market data."""
+        try:
+            from contextual_research import position_context_mark
+            with self.repository.connection() as connection:
+                trade = self.repository._fetchone(connection, """SELECT source_signal_id FROM
+                    paper_execution_trades WHERE trade_id=?""", (position.trade_id,))
+            opportunity_id = (trade or {}).get("source_signal_id")
+            stored = self.repository.get_opportunity_context(opportunity_id) if opportunity_id else None
+            if not stored:
+                return
+            prior = self.repository.list_position_context_marks(opportunity_ids=[opportunity_id], limit=500)
+            prior = next((row for row in reversed(prior) if row.get("lane")=="BROAD"), None)
+            mark = position_context_mark(trade_id=position.trade_id, opportunity_id=opportunity_id,
+                lane="BROAD", symbol=position.ticker, observed_at=position.last_update,
+                context=stored["context"], underlying_price=position.last_underlying_price,
+                option_mark=position.current_mid, unrealized_return=position.current_return_percent,
+                mfe=position.max_favorable_excursion_percent, mae=position.max_adverse_excursion_percent,
+                direction="Bullish" if str(position.option_type).upper().startswith("C") else "Bearish", previous=prior)
+            self.repository.record_position_context_mark(mark)
+        except Exception:
+            # Research telemetry can never interrupt PAPER persistence.
+            return
 
     def append(self, *, checked_at, result, trade, decision, scanner_id=None, run_number=None, risk_state=None, execution_config=None, journal_type="ENTRY_DECISION"):
         import hashlib

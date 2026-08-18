@@ -98,6 +98,7 @@ from filtered_execution import FilteredExecutionRepository, filtered_summary
 from filtered_execution_analytics import filtered_comparison
 from experiment_scorecard_dashboard import render_experiment_scorecard
 from opportunity_context_dashboard import render_opportunity_context_attribution
+from contextual_research_dashboard import render_contextual_research
 from mirror_v2_shadow import MirrorV2Repository, mirror_v2_summary
 from trade_repository import (
     TradeRepository,
@@ -4919,6 +4920,7 @@ def render_developer_tools(trade_state=None):
     render_authoritative_entry_funnel((trade_state or {}).get("repository"))
     render_production_forensic_audit(st)
     render_opportunity_context_attribution(st, (trade_state or {}).get("repository"))
+    render_contextual_research(st, (trade_state or {}).get("repository"))
 
     st.markdown("### System Status")
     status_rows = system_status()

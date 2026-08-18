@@ -2,6 +2,7 @@
 import math
 import pandas as pd
 from experiment_scorecard import ExperimentScorecardRepository
+from contextual_research import ContextualResearchRepository
 
 
 def render_experiment_scorecard(st,repository):
@@ -39,6 +40,14 @@ def render_experiment_scorecard(st,repository):
     with st.expander("Signal Age — observational only",expanded=False):
         st.dataframe(pd.DataFrame([{k:_display(v) for k,v in row.items()} for row in report["signal_age"]]),use_container_width=True,hide_index=True)
     st.caption(f'FILTERED governance: {report["governance"]}')
+    with st.expander("Optional research summary",expanded=False):
+        if st.button("Load scorecard research summary",key="scorecard_phase2_summary"):
+            research=ContextualResearchRepository(repository).load(scope=period,limit=5000)
+            summary={"WOULD_TRADE":research["context_shadow"].get("WOULD_TRADE",0),
+                "WOULD_REJECT":research["context_shadow"].get("WOULD_REJECT",0),
+                "Setup deterioration":research["setup_health"].get("WEAKENING",0)+research["setup_health"].get("BROKEN",0),
+                "Early warnings":research["setup_health"].get("BROKEN",0),"Shadow exit triggers":len(research["shadow_exits"])}
+            st.dataframe(pd.DataFrame([summary]),use_container_width=True,hide_index=True)
     return report
 
 
