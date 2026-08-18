@@ -4902,10 +4902,22 @@ def render_authoritative_entry_funnel(repository):
         st.dataframe(pd.DataFrame(comparison), use_container_width=True, hide_index=True)
 
     with st.expander("Authoritative entry thresholds", expanded=False):
-        st.dataframe(pd.DataFrame([
-            {"Setting": key, "Configured Value": value}
-            for key, value in (cycle.get("thresholds") or {}).items()
-        ]), use_container_width=True, hide_index=True)
+        st.dataframe(
+            authoritative_thresholds_display_frame(cycle.get("thresholds") or {}),
+            width="stretch",
+            hide_index=True,
+        )
+
+
+def authoritative_thresholds_display_frame(thresholds):
+    """Build a PyArrow-safe display copy without changing configured values."""
+    return pd.DataFrame([
+        {
+            "Setting": str(key),
+            "Configured Value": "Unavailable" if value is None else str(value),
+        }
+        for key, value in thresholds.items()
+    ])
 
 
 def render_developer_tools(trade_state=None):
