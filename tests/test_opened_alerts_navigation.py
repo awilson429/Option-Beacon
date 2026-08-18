@@ -152,14 +152,14 @@ def test_manual_validation_fields_are_read_only_not_recorded():
     assert row["Manual Result"] == "Not Recorded"
 
 
-def test_trade_desk_is_first_and_live_guide_is_removed():
-    assert MAIN_NAVIGATION[0] == "Trade Desk"
-    assert MAIN_NAVIGATION[-1] == "Developer Tools"
+def test_command_center_is_first_and_live_guide_is_removed():
+    assert MAIN_NAVIGATION[0] == "Command Center"
+    assert MAIN_NAVIGATION[-1] == "Research / Developer Tools"
     assert MAIN_NAVIGATION == (
-        "Trade Desk",
-        "Positions",
-        "Journal",
-        "Developer Tools",
+        "Command Center",
+        "Performance",
+        "SPY / QQQ",
+        "Research / Developer Tools",
     )
     assert "Trade Journal" not in MAIN_NAVIGATION
     assert "Live Guide" not in MAIN_NAVIGATION
