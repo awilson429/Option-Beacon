@@ -4,17 +4,17 @@ from html import escape
 
 
 MAIN_NAVIGATION = (
-    "Trade Desk",
-    "Positions",
-    "Journal",
-    "Developer Tools",
+    "Command Center",
+    "Performance",
+    "SPY / QQQ",
+    "Research / Developer Tools",
 )
 
 NAVIGATION_SLUGS = {
-    "Trade Desk": "trade-desk",
-    "Positions": "positions",
-    "Journal": "journal",
-    "Developer Tools": "developer-tools",
+    "Command Center": "command-center",
+    "Performance": "performance",
+    "SPY / QQQ": "spy-qqq",
+    "Research / Developer Tools": "research-developer-tools",
 }
 
 NAVIGATION_ICONS = {
@@ -71,24 +71,26 @@ SIDEBAR_CSS = """
 """
 
 CARD_NAVIGATION = (
-    "Trade Desk",
+    "Command Center",
+    "Performance",
     "SPY / QQQ",
-    "Opportunities",
-    "Paper Trading",
-    "Strategy Lab",
-    "Advanced",
+    "Research / Developer Tools",
 )
 
 CARD_NAVIGATION_SLUGS = {
-    "Trade Desk": "trade-desk",
+    "Command Center": "command-center",
+    "Performance": "performance",
     "SPY / QQQ": "spy-qqq",
-    "Opportunities": "opportunities",
-    "Paper Trading": "paper-trading",
-    "Strategy Lab": "strategy-lab",
-    "Advanced": "advanced",
+    "Research / Developer Tools": "research-developer-tools",
 }
+NAVIGATION_ICONS.update({
+    "Command Center": NAVIGATION_ICONS["Trade Desk"],
+    "Performance": NAVIGATION_ICONS["Positions"],
+    "SPY / QQQ": NAVIGATION_ICONS["Journal"],
+    "Research / Developer Tools": NAVIGATION_ICONS["Developer Tools"],
+})
 
-DESKTOP_NAVIGATION_COLUMNS = 6
+DESKTOP_NAVIGATION_COLUMNS = 4
 
 CARD_NAVIGATION_CSS = """
 <style>
@@ -177,10 +179,11 @@ def selected_navigation_page(query_params=None, session_state=None):
     if isinstance(requested, (list, tuple)):
         requested = requested[0] if requested else ""
     aliases = {
-        "history": "Journal",
-        "opportunities": "Trade Desk",
-        "after-hours": "Trade Desk",
-        "tools": "Developer Tools",
+        "trade-desk": "Command Center", "positions": "Command Center",
+        "opportunities": "Command Center", "after-hours": "Command Center",
+        "history": "Performance", "journal": "Performance", "paper-trading": "Performance",
+        "strategy-lab": "Research / Developer Tools", "advanced": "Research / Developer Tools",
+        "developer-tools": "Research / Developer Tools", "tools": "Research / Developer Tools",
     }
     slug_to_page = {slug: page for page, slug in NAVIGATION_SLUGS.items()}
     return slug_to_page.get(str(requested), aliases.get(str(requested), MAIN_NAVIGATION[0]))
@@ -189,6 +192,9 @@ def selected_navigation_page(query_params=None, session_state=None):
 def active_card_workspace(session_state):
     """Return the active internal workspace, initializing a safe default."""
     selected = session_state.get("active_workspace")
+    selected = {"Trade Desk":"Command Center","Positions":"Command Center","Opportunities":"Command Center",
+                "Journal":"Performance","Paper Trading":"Performance","Strategy Lab":"Research / Developer Tools",
+                "Advanced":"Research / Developer Tools","Developer Tools":"Research / Developer Tools"}.get(selected,selected)
     if selected not in CARD_NAVIGATION:
         selected = CARD_NAVIGATION[0]
         session_state["active_workspace"] = selected
@@ -197,12 +203,15 @@ def active_card_workspace(session_state):
 
 def set_active_workspace(workspace, session_state):
     """Select one internal workspace without changing the application route."""
+    workspace = {"Trade Desk":"Command Center","Positions":"Command Center","Opportunities":"Command Center",
+                 "Journal":"Performance","Paper Trading":"Performance","Strategy Lab":"Research / Developer Tools",
+                 "Advanced":"Research / Developer Tools","Developer Tools":"Research / Developer Tools"}.get(workspace,workspace)
     if workspace in CARD_NAVIGATION:
         session_state["active_workspace"] = workspace
 
 
 def _card_key(workspace):
-    return "ob_nav_" + workspace.lower().replace(" ", "_")
+    return "ob_nav_" + workspace.lower().replace(" / ", "_").replace(" ", "_")
 
 
 def _active_card_css(workspace):

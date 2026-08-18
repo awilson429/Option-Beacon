@@ -226,6 +226,7 @@ from ui_modern_style import (
     render_modern_scorecard,
 )
 from intraday_page import render_intraday_page
+from ui_consolidation import LEGACY_ROUTE_ALIASES, PRIMARY_NAVIGATION, render_command_center, render_performance
 
 
 SYMBOL_GROUPS = DEFAULT_SYMBOL_GROUPS
@@ -237,12 +238,10 @@ FALLBACK_LOGO_URL = "https://img1.wsimg.com/isteam/ip/3334c900-83eb-4af4-9363-38
 # app.py directly, so top-level navigation cannot be reconstructed by a cached
 # legacy presentation module.
 PRODUCTION_NAVIGATION = (
-    "Trade Desk",
+    "Command Center",
+    "Performance",
     "SPY / QQQ",
-    "Opportunities",
-    "Paper Trading",
-    "Strategy Lab",
-    "Advanced",
+    "Research / Developer Tools",
 )
 
 PRODUCTION_NAVIGATION_CSS = """
@@ -276,10 +275,11 @@ div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-ob_nav_"])
 
 
 def _production_navigation_key(workspace):
-    return "ob_nav_" + workspace.lower().replace(" ", "_")
+    return "ob_nav_" + workspace.lower().replace(" / ", "_").replace(" ", "_")
 
 
 def set_active_workspace(workspace, session_state):
+    workspace = LEGACY_ROUTE_ALIASES.get(workspace, workspace)
     if workspace in PRODUCTION_NAVIGATION:
         session_state["active_workspace"] = workspace
 
@@ -289,6 +289,7 @@ def render_production_navigation(st_module=None):
     if st_module is None:
         st_module = st
     active_page = st_module.session_state.get("active_workspace")
+    active_page = LEGACY_ROUTE_ALIASES.get(active_page, active_page)
     if active_page not in PRODUCTION_NAVIGATION:
         active_page = PRODUCTION_NAVIGATION[0]
         st_module.session_state["active_workspace"] = active_page
@@ -4907,7 +4908,7 @@ def render_authoritative_entry_funnel(repository):
         ]), use_container_width=True, hide_index=True)
 
 
-def render_developer_tools(trade_state=None):
+def render_developer_tools(trade_state=None, *, include_analytics=True):
     """Render read-only internal diagnostics without exposing provider secrets."""
     render_section_header(
         "Diagnostics",
@@ -4917,10 +4918,11 @@ def render_developer_tools(trade_state=None):
         "Diagnostics are read-only. They do not place trades or "
         "modify production trade history."
     )
-    render_authoritative_entry_funnel((trade_state or {}).get("repository"))
-    render_production_forensic_audit(st)
-    render_opportunity_context_attribution(st, (trade_state or {}).get("repository"))
-    render_contextual_research(st, (trade_state or {}).get("repository"))
+    if include_analytics:
+        render_authoritative_entry_funnel((trade_state or {}).get("repository"))
+        render_production_forensic_audit(st)
+        render_opportunity_context_attribution(st, (trade_state or {}).get("repository"))
+        render_contextual_research(st, (trade_state or {}).get("repository"))
 
     st.markdown("### System Status")
     status_rows = system_status()
@@ -5196,6 +5198,37 @@ def render_advanced(trade_state, latest_results, snapshot_time, symbol_groups,
         render_developer_tools(trade_state)
 
 
+def render_research_developer_tools(trade_state, latest_results, snapshot_time,
+                                    symbol_groups, high_score_history):
+    """Progressive-disclosure home for research, forensics and diagnostics."""
+    render_section_header("Research / Developer Tools", "Deep analysis and diagnostics — loaded only on request")
+    repository=(trade_state or {}).get("repository")
+    group=st.radio("Workspace",("Research","Forensics","System Diagnostics","Raw Data / Advanced"),
+                   horizontal=True,key="research_developer_group")
+    if group=="Research":
+        render_opportunity_context_attribution(st,repository)
+        render_contextual_research(st,repository)
+        with st.expander("Additional Research",expanded=False):
+            if st.button("Load Winner DNA and Strategy Research",key="research_load_strategy_lab"):
+                render_strategy_lab(trade_state,latest_results)
+    elif group=="Forensics":
+        render_production_forensic_audit(st)
+        st.caption("Post-run audit · Full forensic export · AUTH WIN / MIRROR LOSS · MFE/MAE · counterfactual exits · data integrity")
+    elif group=="System Diagnostics":
+        st.caption("Database reconciliation · provider status · worker state · scanner freshness · repository diagnostics")
+        if st.button("Load System Diagnostics",key="research_load_system_diagnostics"):
+            render_authoritative_entry_funnel(repository)
+            render_developer_tools(trade_state,include_analytics=False)
+    else:
+        st.caption("Internal IDs, event history, reason codes and lifecycle records remain available here.")
+        if st.button("Load Event History",key="research_load_raw_events"):
+            rows=projected_trade_event_summaries(repository,limit=200) if repository else []
+            st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
+        with st.expander("Legacy History",expanded=False):
+            if st.button("Load Legacy Trade History",key="research_load_legacy_history"):
+                render_coach_timeline();render_recent_high_scores(high_score_history);render_signal_outcomes();render_trade_journal()
+
+
 def main():
     configure_page()
     render_header()
@@ -5213,46 +5246,17 @@ def main():
 
     active_page = render_production_navigation()
 
-    if active_page == "SPY / QQQ":
+    if active_page == "Command Center":
+        render_command_center(st,trade_state.get("repository"),latest_results,trade_state)
+
+    elif active_page == "Performance":
+        render_performance(st,trade_state.get("repository"),render_experiment_scorecard)
+
+    elif active_page == "SPY / QQQ":
         render_intraday_page(trade_state.get("repository"))
 
-    elif active_page == "Opportunities":
-        render_top_opportunities(
-            latest_results,
-            high_score_history,
-            trade_evidence_history,
-        )
-        st.divider()
-        render_sector_strength(latest_results)
-        st.divider()
-        render_ranked_setup_table(latest_results)
-        with st.expander("Full Scanner"):
-            render_current_scanner(
-                latest_results,
-                symbol_groups,
-                trade_evidence_history,
-            )
-
-    elif active_page == "Paper Trading":
-        render_paper_trading_page()
-
-    elif active_page == "Trade Desk":
-        render_outcome_trade_journal(
-            trade_evidence_history,
-            latest_results,
-            open_trade_prices,
-            open_trade_quote_status,
-            trade_state,
-        )
-
-    elif active_page == "Strategy Lab":
-        render_strategy_lab(trade_state, latest_results)
-
-    elif active_page == "Advanced":
-        render_advanced(
-            trade_state, latest_results, snapshot_time, symbol_groups,
-            high_score_history,
-        )
+    elif active_page == "Research / Developer Tools":
+        render_research_developer_tools(trade_state,latest_results,snapshot_time,symbol_groups,high_score_history)
 
     st.markdown(
         '<div class="ob-disclaimer">Decision-support dashboard only. Not financial advice.</div>',

@@ -3,14 +3,12 @@ from pathlib import Path
 
 
 EXPECTED = (
-    "Trade Desk",
+    "Command Center",
+    "Performance",
     "SPY / QQQ",
-    "Opportunities",
-    "Paper Trading",
-    "Strategy Lab",
-    "Advanced",
+    "Research / Developer Tools",
 )
-REMOVED = {"After Hours", "History", "Tools", "Developer Tools"}
+REMOVED = {"Trade Desk", "Opportunities", "Paper Trading", "Strategy Lab", "Advanced"}
 
 
 def app_tree_and_source():
@@ -41,14 +39,14 @@ def test_entrypoint_owns_and_renders_exact_production_navigation():
     assert "navigation" not in imported_block.lower()
 
 
-def test_production_dispatch_covers_exact_six_destinations():
+def test_production_dispatch_covers_exact_four_destinations():
     _, source = app_tree_and_source()
     main = source.split("def main():", 1)[1]
 
-    assert main.count("active_page ==") == 6
+    assert main.count("active_page ==") == 4
     for page in EXPECTED:
         assert f'active_page == "{page}"' in main
     for page in REMOVED:
         assert f'active_page == "{page}"' not in main
-    assert "render_strategy_lab(trade_state, latest_results)" in main
-    assert "render_advanced(" in main
+    assert "render_command_center(" in main
+    assert "render_performance(" in main

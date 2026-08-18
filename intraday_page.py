@@ -79,7 +79,7 @@ def render_intraday_page(repository, st_module=None):
         column.markdown(f"**{row['direction']} · {row['setup']}** — Confidence {row['confidence']}")
         reasons = json.loads(row.get("reasons_json") or "[]")
         if reasons: column.markdown("Why: " + " · ".join(f"✓ {reason}" for reason in reasons))
-    st_module.markdown("### Active / Armed Setups")
+    st_module.markdown("### Active Setup")
     if model["setups"]:
         st_module.dataframe(pd.DataFrame([{ "Symbol": row["symbol"], "Direction": row["direction"],
             "Setup": row["setup"], "Confidence": row["confidence"], "Trigger": row["trigger_price"],
@@ -87,13 +87,17 @@ def render_intraday_page(repository, st_module=None):
             "Session": row["session_bucket"], "Status": row["state"]} for row in model["setups"]]),
             use_container_width=True, hide_index=True)
     else: st_module.caption("No active setup is currently armed.")
-    st_module.markdown("### Current Paper Positions")
-    mirror, managed = st_module.columns(2)
-    mirror.markdown("**INTRADAY MIRROR**")
-    managed.markdown("**INTRADAY MANAGED**")
-    mirror.dataframe(pd.DataFrame(model["mirror"]), use_container_width=True, hide_index=True) if model["mirror"] else mirror.caption("No open positions.")
-    managed.dataframe(pd.DataFrame(model["managed"]), use_container_width=True, hide_index=True) if model["managed"] else managed.caption("No open positions.")
-    st_module.markdown("### Today Performance")
+    st_module.markdown("### Open Positions")
+    positions=[{"Lane":"MIRROR",**row} for row in model["mirror"]]+[{"Lane":"MANAGED",**row} for row in model["managed"]]
+    if positions:
+        visible=[{key:value for key,value in row.items() if key not in {"trade_id","opportunity_id","metadata_json"}} for row in positions]
+        st_module.dataframe(pd.DataFrame(visible),use_container_width=True,hide_index=True)
+    else:
+        st_module.caption("No open SPY/QQQ positions.")
+    st_module.markdown("### Performance")
     st_module.dataframe(pd.DataFrame([{"Exit model": key.replace("INTRADAY_", "").title(), **value}
                                       for key, value in model["performance"].items()]),
                         use_container_width=True, hide_index=True)
+    if callable(getattr(st_module,"expander",None)):
+        with st_module.expander("Advanced / Runtime",expanded=False):
+            st_module.json(model.get("runtime") or {"status":"Unavailable"})

@@ -124,11 +124,10 @@ def test_workspace_routing_isolated_by_selected_page():
     source = Path("app.py").read_text(encoding="utf-8")
 
     for page, renderer in (
-        ("Trade Desk", "render_outcome_trade_journal("),
-        ("Opportunities", "render_top_opportunities("),
-        ("Paper Trading", "render_paper_trading_page()"),
-        ("Strategy Lab", "render_strategy_lab(trade_state, latest_results)"),
-        ("Advanced", "render_advanced("),
+        ("Command Center", "render_command_center("),
+        ("Performance", "render_performance("),
+        ("SPY / QQQ", "render_intraday_page("),
+        ("Research / Developer Tools", "render_research_developer_tools("),
     ):
         assert f'active_page == "{page}"' in source
         assert renderer in source

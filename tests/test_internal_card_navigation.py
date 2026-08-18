@@ -42,8 +42,8 @@ class FakeStreamlit:
 def test_default_workspace_is_trade_desk():
     state = {}
 
-    assert active_card_workspace(state) == "Trade Desk"
-    assert state["active_workspace"] == "Trade Desk"
+    assert active_card_workspace(state) == "Command Center"
+    assert state["active_workspace"] == "Command Center"
 
 
 def test_each_card_updates_active_workspace_and_navigation_remains_visible():
@@ -58,24 +58,23 @@ def test_each_card_updates_active_workspace_and_navigation_remains_visible():
 
 
 def test_selected_workspace_is_highlighted():
-    fake = FakeStreamlit(session_state={"active_workspace": "Advanced"})
+    fake = FakeStreamlit(session_state={"active_workspace": "Research / Developer Tools"})
 
     render_card_navigation(st_module=fake)
 
     css = "\n".join(fake.markdown_calls)
-    assert "div.st-key-ob_nav_advanced button" in css
-    assert "div.st-key-ob_nav_advanced button p" in css
+    assert "div.st-key-ob_nav_research_developer_tools button" in css
     assert "border: 1px solid var(--ob-active-border)" in css
     assert "color: var(--ob-accent-gold) !important" in css
 
 
-def test_desktop_navigation_is_one_row_of_six_columns_in_order():
+def test_desktop_navigation_is_one_row_of_four_columns_in_order():
     fake = FakeStreamlit()
 
     render_card_navigation(st_module=fake)
 
-    assert DESKTOP_NAVIGATION_COLUMNS == 6
-    assert fake.column_counts == [6]
+    assert DESKTOP_NAVIGATION_COLUMNS == 4
+    assert fake.column_counts == [4]
     assert tuple(fake.rendered) == CARD_NAVIGATION
 
 
@@ -114,18 +113,18 @@ def test_hover_focus_and_active_states_preserve_border_and_dimensions():
     assert "button:hover" in compact
     assert "height:2.75rem" in compact
 
-    active = _active_card_css("Trade Desk").replace(" ", "").replace("\n", "").lower()
+    active = _active_card_css("Command Center").replace(" ", "").replace("\n", "").lower()
     assert "button:hover," in active
     assert "button:focus-visible{" in active
     assert "border:1pxsolidvar(--ob-active-border)" in active
 
 
 def test_invalid_workspace_does_not_replace_selection():
-    state = {"active_workspace": "Advanced"}
+    state = {"active_workspace": "Research / Developer Tools"}
 
     set_active_workspace("Unknown", state)
 
-    assert state["active_workspace"] == "Advanced"
+    assert state["active_workspace"] == "Research / Developer Tools"
 
 
 def test_primary_navigation_has_no_external_page_switching():
@@ -149,16 +148,14 @@ def test_app_routes_only_the_selected_workspace_and_keeps_navigation_above_it():
     route_indexes = [
         main_source.index(f'active_page == "{workspace}"')
             for workspace in (
-                "Trade Desk",
+                "Command Center",
+                "Performance",
                 "SPY / QQQ",
-                "Opportunities",
-            "Paper Trading",
-            "Strategy Lab",
-            "Advanced",
+                "Research / Developer Tools",
         )
     ]
 
     assert navigation_index < min(route_indexes)
     assert main_source.count("\n    if active_page ==") == 1
-    assert main_source.count("\n    elif active_page ==") == 5
+    assert main_source.count("\n    elif active_page ==") == 3
     assert main_source.count("scan_symbols()") == 1
