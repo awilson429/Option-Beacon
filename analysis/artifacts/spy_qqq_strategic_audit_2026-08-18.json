@@ -1,7 +1,7 @@
 {
   "audit_metadata": {
     "database_fingerprint": "8d3007a54ab4f1bc",
-    "generated_at": "2026-08-18T17:45:42.403034+00:00",
+    "generated_at": "2026-08-18T17:47:46.472075+00:00",
     "table_status": {
       "opportunities": "PRESENT",
       "authoritative": "PRESENT",
@@ -195,13 +195,18 @@
       "missing_signal_age": 0
     },
     "AUTHORITATIVE": {
-      "grade": "GOOD",
+      "grade": "INSUFFICIENT",
       "duplicate_identities": 0,
       "missing_entries": 0,
       "missing_exits_or_stale_open": 0,
       "closed_with_missing_outcome": 0,
       "missing_spread": 0,
-      "missing_signal_age": 0
+      "missing_signal_age": 0,
+      "opportunities": 92,
+      "outcome_labels": 1,
+      "authoritative_trade_events": 0,
+      "missing_outcomes": 91,
+      "outcome_coverage_percent": 1.0869565217391304
     },
     "OPPORTUNITY_CONTEXT": {
       "grade": "INSUFFICIENT",

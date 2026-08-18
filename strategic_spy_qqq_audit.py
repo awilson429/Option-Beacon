@@ -234,6 +234,14 @@ def build_strategic_audit(snapshot):
     quality = {name: _quality(rows) for name, rows in lanes.items()}
     for name in ("AUTHORITATIVE", "OPPORTUNITY_CONTEXT", "CONTEXT_SHADOW", "POSITION_CONTEXT", "DAILY_SCORECARD_ANALYTICS"):
         quality[name] = _quality(list(snapshot.get(name, ())), trade_lane=name == "DAILY_SCORECARD_ANALYTICS")
+    source_records = snapshot.get("underlying_records", {})
+    opportunity_n = len(source_records.get("opportunities", ()))
+    outcome_n = len(source_records.get("intelligence_outcome_labels", ()))
+    event_n = len(source_records.get("authoritative", ()))
+    quality["AUTHORITATIVE"].update({"opportunities": opportunity_n, "outcome_labels": outcome_n,
+        "authoritative_trade_events": event_n, "missing_outcomes": max(0, opportunity_n - outcome_n),
+        "outcome_coverage_percent": outcome_n / opportunity_n * 100 if opportunity_n else None,
+        "grade": "INSUFFICIENT" if not event_n or outcome_n < 5 else quality["AUTHORITATIVE"]["grade"]})
     metrics = {name: performance(rows) for name, rows in lanes.items()}
     execution_results = {name: execution(rows) for name, rows in lanes.items()}
     excursion_results = {name: excursions(rows) for name, rows in lanes.items()}

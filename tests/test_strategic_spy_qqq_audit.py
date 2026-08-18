@@ -26,6 +26,7 @@ def test_complete_actual_system_comparison_and_nested_records_preserved():
     assert report["underlying_records"]["intraday_trades"][0]["trade_id"] == "s0"
     assert report["breakdowns"]["SPY"]["setup"][0]["group"] == "VWAP_RECLAIM"
     assert report["audit_metadata"]["read_only"] is True
+    assert report["data_quality"]["AUTHORITATIVE"]["grade"] == "INSUFFICIENT"
 
 
 def test_metrics_include_consistency_risk_execution_and_excursions():
