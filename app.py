@@ -93,6 +93,7 @@ from winner_dna_dashboard import render_winner_dna
 from option_translation_autopsy_dashboard import render_option_translation_autopsy
 from production_forensic_dashboard import render_production_forensic_audit
 from strategic_audit_dashboard import render_production_strategic_audit
+from qqq_forensic_dashboard import render_production_qqq_forensic_audit
 from broad_filter_effectiveness import broad_filter_effectiveness
 from mirror_execution import MirrorExecutionRepository, mirror_summary
 from filtered_execution import FilteredExecutionRepository, filtered_summary
@@ -4933,6 +4934,7 @@ def render_developer_tools(trade_state=None):
     render_authoritative_entry_funnel((trade_state or {}).get("repository"))
     render_production_forensic_audit(st)
     render_production_strategic_audit(st)
+    render_production_qqq_forensic_audit(st)
     render_opportunity_context_attribution(st, (trade_state or {}).get("repository"))
     render_contextual_research(st, (trade_state or {}).get("repository"))
 
