@@ -44,12 +44,16 @@ def test_first_two_governance_edge_pulse_and_current_session_exclusion():
     assert model["mark_coverage"]["earliest_mark"] is None
 
 
-def test_markup_replaces_best_trade_with_compact_sections_and_no_dataframe():
+def test_markup_reflows_as_full_width_three_zone_card_without_dataframe():
     model=build_qqq_command_card_model({},data(),now=NOW,market_open=False)
     markup=qqq_command_card_markup(model)
     for label in ("QQQ COMMAND CARD","CONTEXT QUALITY","SESSION PULSE","FIRST_TWO FORWARD TEST","QQQ EDGE SNAPSHOT","MARK COVERAGE","QQQ DNA"):
         assert label in markup
     assert "Today's Best Trade" not in markup and "Win Probability" not in markup
+    for css_class in ("ob-qqq-wide-layout","ob-qqq-zone-left","ob-qqq-zone-center","ob-qqq-zone-right","ob-qqq-dna"):
+        assert css_class in markup
+    assert "grid-template-columns:minmax(180px,.8fr)" in markup
+    assert "@media(max-width:700px)" in markup
     assert "dataframe" not in inspect.getsource(qqq_command_card_markup).lower()
 
 
