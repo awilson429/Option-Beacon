@@ -3,7 +3,8 @@ from datetime import datetime, timedelta, timezone
 
 import app
 from qqq_command_card import (build_qqq_command_card_model, context_quality,
-    load_qqq_command_data, qqq_command_card_markup)
+    format_card_timestamp, format_contract_label, load_qqq_command_data,
+    qqq_command_card_markup)
 
 NOW=datetime(2026,8,20,15,tzinfo=timezone.utc)
 
@@ -44,17 +45,37 @@ def test_first_two_governance_edge_pulse_and_current_session_exclusion():
     assert model["mark_coverage"]["earliest_mark"] is None
 
 
-def test_markup_reflows_as_full_width_three_zone_card_without_dataframe():
+def test_markup_reflows_as_compact_horizontal_bands_without_dataframe():
     model=build_qqq_command_card_model({},data(),now=NOW,market_open=False)
+    model.update(contract="QQQ260819C00716000",updated_at="2026-08-19T19:55:08.138731+00:00")
+    model["edge_snapshot"].update(profit_factor=3.7607742551224312,payoff_ratio=3.3429104489977166)
     markup=qqq_command_card_markup(model)
-    for label in ("QQQ COMMAND CARD","CONTEXT QUALITY","SESSION PULSE","FIRST_TWO FORWARD TEST","QQQ EDGE SNAPSHOT","MARK COVERAGE","QQQ DNA"):
+    for label in ("QQQ","SESSION COMPLETE","FIRST_TWO","QQQ EDGE","TRADE / DATA QUALITY","QQQ DNA"):
         assert label in markup
     assert "Today's Best Trade" not in markup and "Win Probability" not in markup
-    for css_class in ("ob-qqq-wide-layout","ob-qqq-zone-left","ob-qqq-zone-center","ob-qqq-zone-right","ob-qqq-dna"):
+    for css_class in ("ob-qband-hero","ob-qband-setup","ob-qband-session","ob-qband-intel","ob-qband-dna"):
         assert css_class in markup
-    assert "grid-template-columns:minmax(180px,.8fr)" in markup
+    assert "QQQ $716 Call · Aug 19" in markup and "QQQ260819C00716000" not in markup
+    assert "Updated 3:55 PM ET" in markup and "2026-08-19T19:55" not in markup
+    assert "3.76" in markup and "3.34x" in markup
+    assert "Trade #0" not in markup and "Trade # 0" not in markup and "No active trade" in markup
+    assert "0 marked" not in markup and "awaiting observations" in markup
     assert "@media(max-width:700px)" in markup
     assert "dataframe" not in inspect.getsource(qqq_command_card_markup).lower()
+
+
+def test_human_contract_and_timestamp_helpers_are_presentation_only():
+    assert format_contract_label("QQQ260819P00716000")=="QQQ $716 Put · Aug 19"
+    assert format_contract_label(None,strike=715,expiration="2026-08-21",bias="CALL")=="QQQ $715 Call · Aug 21"
+    assert format_contract_label(None)=="No active contract"
+    assert format_card_timestamp("2026-08-19T19:55:08+00:00")=="Updated 3:55 PM ET"
+
+
+def test_market_open_and_first_two_active_use_adaptive_priority():
+    model=build_qqq_command_card_model({},data(12),now=NOW,market_open=True)
+    markup=qqq_command_card_markup(model)
+    assert 'class="ob-qband is-live"' in markup and "SESSION ACTIVE" in markup
+    assert "INSUFFICIENT DATA" in markup and "2/50 accepted" in markup
 
 
 def test_trade_desk_integration_is_read_only_bounded_provider_free_and_schema_free():
