@@ -241,7 +241,7 @@ def test_empty_positions_switch_shell_to_content_driven_layout():
     from pathlib import Path
     css = Path("ui/theme.py").read_text(encoding="utf-8").replace(" ", "").replace("\n", "")
     assert ".ob-open-positions-empty{box-sizing:border-box;min-height:3.25rem" in css
-    assert '"positionspositions""riskrisk""comparisoncomparison"' in css
+    assert '"commandcommand""positionspositions""comparisoncomparison"' in css
     mobile = css.split("@media(max-width:759px)", 1)[1]
     assert ".ob-open-positions-empty{min-height:3.25rem;width:100%}" in mobile
     assert "overflow-x:visible" not in css
@@ -288,7 +288,7 @@ def test_compact_trade_desk_uses_progressive_disclosure_and_responsive_css():
     assert "dashboard_kpi_model(" in compact
     assert "st.columns(" not in compact
     assert "positions_table_markup(" in compact
-    assert "risk_status_model(" in compact
+    assert "risk_status_model(" not in compact
     assert "activity_rows_markup(" in compact
     assert "render_recently_closed(repository)" not in compact
     assert "### Opened Alerts" not in compact
@@ -331,9 +331,9 @@ def test_approved_dashboard_shell_and_exact_grid_geometry_exist():
     assert ".ob-trade-dashboard" in theme
     compact_css = theme.replace(" ", "").replace("\n", "")
     assert "grid-template-columns:minmax(0,7fr)minmax(280px,3fr)" in compact_css
-    for area in ("header", "kpis", "positions", "risk", "comparison", "authoritative", "activity", "more"):
+    for area in ("header", "kpis", "command", "positions", "comparison", "authoritative", "activity", "more"):
         assert f"ob-grid-{area}" in theme or f'"{area}' in theme
-    assert '"positionsrisk""comparisoncomparison""authoritativeauthoritative""activityactivity""moremore"' in compact_css
+    assert '"commandcommand""positionspositions""comparisoncomparison""authoritativeauthoritative""activityactivity""moremore"' in compact_css
     assert "ob-grid-summary" not in theme and "ob-grid-stats" not in theme
     assert "qqq_command_card_markup(" in desk
     assert "max-width:100%" in theme.replace(" ", "")
@@ -352,12 +352,13 @@ def test_semantic_shell_contains_all_panels_and_inline_activity_controls():
     assert markup.count('class="ob-trade-dashboard"') == 1
     for css_class in (
         "ob-grid-header", "ob-grid-kpis", "ob-grid-comparison", "ob-grid-authoritative",
-        "ob-grid-risk", "ob-grid-positions", "ob-grid-activity",
+        "ob-grid-command", "ob-grid-positions", "ob-grid-activity",
         "ob-grid-more",
     ):
         assert css_class in markup
     assert markup.index("POSITIONS") < markup.index("COMPARISON")
-    assert markup.index("RISK") < markup.index("COMPARISON")
+    assert "RISK" not in markup
+    assert markup.index("BEST") < markup.index("POSITIONS")
     assert markup.index("COMPARISON") < markup.index("AUTHORITATIVE")
     assert "ob-grid-summary" not in markup and "ob-grid-stats" not in markup
     assert 'class="ob-activity-filter is-active"' in markup

@@ -4272,11 +4272,7 @@ def render_outcome_trade_journal(
     dashboard = dashboard_shell_markup(
         status=status_strip_markup(status),
         kpis=kpi_row_markup(kpis),
-        risk=risk_panel_markup(
-            risk_status_model(
-                paper_summary, config, paper_available=paper_available
-            )
-        ),
+        risk="",
         best_trade=qqq_card,
         positions=positions,
         comparison=comparison_markup(

@@ -119,7 +119,8 @@ def configure_page():
             grid-template-areas:
                 "header header"
                 "kpis kpis"
-                "positions risk"
+                "command command"
+                "positions positions"
                 "comparison comparison"
                 "authoritative authoritative"
                 "activity activity"
@@ -131,14 +132,14 @@ def configure_page():
         .ob-grid-header h2 {font-size:1.55rem;line-height:1.1;margin:0}.ob-grid-header p {color:var(--ob-text-muted);font-size:.72rem;margin:.18rem 0 0}
         .ob-grid-header .ob-desk-status {flex:0 1 auto;margin:0}
         .ob-grid-kpis {grid-area:kpis;min-width:0}.ob-grid-kpis .ob-desk-kpis {margin:0}
-        .ob-grid-comparison {grid-area:comparison;min-width:0}.ob-grid-authoritative {grid-area:authoritative;min-width:0}.ob-grid-risk {grid-area:risk;min-width:0}
+        .ob-grid-comparison {grid-area:comparison;min-width:0}.ob-grid-authoritative {grid-area:authoritative;min-width:0}.ob-grid-command {grid-area:command;min-width:0}
         .ob-grid-positions {grid-area:positions;min-width:0}.ob-grid-activity {grid-area:activity;min-width:0}
         .ob-grid-more {grid-area:more;min-width:0}
-        .ob-grid-comparison > .ob-desk-panel,.ob-grid-authoritative > .ob-desk-panel,.ob-grid-risk .ob-desk-panel,.ob-grid-positions > .ob-desk-panel {margin:0}
+        .ob-grid-comparison > .ob-desk-panel,.ob-grid-authoritative > .ob-desk-panel,.ob-grid-command > section,.ob-grid-positions > .ob-desk-panel {margin:0}
         .ob-risk-stack {display:grid;gap:12px}
         .ob-compact-empty {align-items:center;background:var(--ob-bg-card);border:1px solid var(--ob-border-default);border-radius:8px;display:flex;gap:.75rem;justify-content:space-between;min-height:2.15rem;padding:.38rem .65rem}.ob-compact-empty span {color:var(--ob-text-secondary);font-size:.7rem;font-weight:800}.ob-compact-empty strong {color:var(--ob-text-muted);font-size:.68rem;text-align:right}
         .ob-open-positions-empty {box-sizing:border-box;min-height:3.25rem;padding:.55rem .78rem}
-        .ob-trade-dashboard.ob-positions-empty {grid-template-areas:"header header" "kpis kpis" "positions positions" "risk risk" "comparison comparison" "authoritative authoritative" "activity activity" "more more"}
+        .ob-trade-dashboard.ob-positions-empty {grid-template-areas:"header header" "kpis kpis" "command command" "positions positions" "comparison comparison" "authoritative authoritative" "activity activity" "more more"}
         .ob-trade-dashboard.ob-positions-empty .ob-risk-stack {grid-template-columns:repeat(2,minmax(0,1fr))}
         .ob-performance-anchor {align-items:flex-start;display:flex;flex-direction:column;gap:.12rem;padding:.15rem .35rem .6rem}
         .ob-performance-anchor span {color:var(--ob-text-muted);font-size:.62rem;font-weight:800;letter-spacing:.055em}
@@ -181,8 +182,8 @@ def configure_page():
         .ob-paper-status-warning {border-color:var(--ob-warning)}
 
         @media (max-width: 759px) {
-            .ob-trade-dashboard {border-radius:9px;gap:9px;grid-template-areas:"header" "kpis" "positions" "risk" "comparison" "authoritative" "activity" "more";grid-template-columns:minmax(0,1fr);padding:9px}
-            .ob-trade-dashboard.ob-positions-empty {grid-template-areas:"header" "kpis" "positions" "risk" "comparison" "authoritative" "activity" "more"}
+            .ob-trade-dashboard {border-radius:9px;gap:9px;grid-template-areas:"header" "kpis" "command" "positions" "comparison" "authoritative" "activity" "more";grid-template-columns:minmax(0,1fr);padding:9px}
+            .ob-trade-dashboard.ob-positions-empty {grid-template-areas:"header" "kpis" "command" "positions" "comparison" "authoritative" "activity" "more"}
             .ob-trade-dashboard.ob-positions-empty .ob-risk-stack {grid-template-columns:minmax(0,1fr)}
             .ob-open-positions-empty {min-height:3.25rem;width:100%}
             .ob-grid-header {align-items:flex-start;flex-direction:column}.ob-grid-header .ob-desk-status {width:100%}
@@ -201,7 +202,7 @@ def configure_page():
         }
 
         @media (min-width: 760px) and (max-width: 1099px) {
-            .ob-trade-dashboard {grid-template-areas:"header header" "kpis kpis" "positions risk" "comparison comparison" "authoritative authoritative" "activity activity" "more more";grid-template-columns:minmax(0,2fr) minmax(280px,1fr)}
+            .ob-trade-dashboard {grid-template-areas:"header header" "kpis kpis" "command command" "positions positions" "comparison comparison" "authoritative authoritative" "activity activity" "more more";grid-template-columns:minmax(0,2fr) minmax(280px,1fr)}
             .ob-risk-stack {grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
             .ob-desk-kpis {grid-template-columns:repeat(3,minmax(0,1fr))}
             .ob-performance-grid {grid-template-columns:repeat(3,minmax(0,1fr))}
