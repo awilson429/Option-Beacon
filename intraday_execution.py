@@ -162,6 +162,23 @@ class IntradayRepository:
                 scanner_id TEXT PRIMARY KEY, status TEXT NOT NULL, last_cycle_at TEXT,
                 symbols_processed INTEGER, call_count INTEGER, duration_ms REAL,
                 last_error TEXT, fill_model TEXT NOT NULL, updated_at TEXT NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS qqq_first_two_shadow_trades (
+                shadow_trade_id TEXT PRIMARY KEY, source_trade_id TEXT NOT NULL UNIQUE,
+                opportunity_id TEXT, eastern_session TEXT NOT NULL, session_trade_number INTEGER NOT NULL,
+                shadow_status TEXT NOT NULL, rejection_reason TEXT, symbol TEXT NOT NULL, direction TEXT,
+                variant TEXT, option_symbol TEXT, opened_at TEXT NOT NULL, closed_at TEXT,
+                entry_fill REAL, exit_fill REAL, realized_pnl REAL, realized_return_percent REAL,
+                dte INTEGER, spread_percent REAL, baseline_exit_reason TEXT, metadata_json TEXT NOT NULL,
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS intraday_position_marks (
+                mark_id TEXT PRIMARY KEY, trade_id TEXT NOT NULL, opportunity_id TEXT,
+                symbol TEXT NOT NULL, option_symbol TEXT, variant TEXT, eastern_session TEXT NOT NULL,
+                observed_at TEXT NOT NULL, bid REAL, ask REAL, midpoint REAL, underlying_price REAL,
+                mark_return_percent REAL, source TEXT NOT NULL, sequence_number INTEGER NOT NULL,
+                metadata_json TEXT NOT NULL, UNIQUE(trade_id,observed_at))""",
+            """CREATE TABLE IF NOT EXISTS qqq_first_two_experiment (
+                experiment_id TEXT PRIMARY KEY, experiment_start_timestamp TEXT NOT NULL,
+                experiment_start_session TEXT NOT NULL, rule_version TEXT NOT NULL, created_at TEXT NOT NULL)""",
         )
         with self.repository.connection() as connection:
             for ddl in ddls: self.repository._execute(connection, ddl).close()
@@ -267,6 +284,72 @@ class IntradayRepository:
                     # Unique key makes retries idempotent across worker restarts.
                     pass
         return opened
+
+    def record_first_two_shadow(self, trade_id, *, now=None):
+        """Classify one already-persisted QQQ baseline trade without affecting it."""
+        now=now or datetime.now(timezone.utc); row=self.trade(trade_id)
+        if not row or str(row.get("symbol")).upper()!="QQQ": return None
+        session=now.astimezone(EASTERN).date().isoformat(); shadow_id=hashlib.sha256(f"{trade_id}|QQQ_FIRST_TWO_SHADOW".encode()).hexdigest()
+        with self.repository.connection() as connection:
+            existing=self.repository._fetchone(connection,"SELECT * FROM qqq_first_two_shadow_trades WHERE source_trade_id=?",(trade_id,))
+            if existing: return existing
+            self.repository._execute(connection,"""INSERT INTO qqq_first_two_experiment
+                (experiment_id,experiment_start_timestamp,experiment_start_session,rule_version,created_at)
+                SELECT ?,?,?,?,? WHERE NOT EXISTS (SELECT 1 FROM qqq_first_two_experiment WHERE experiment_id=?)""",
+                ("QQQ_FIRST_TWO_SHADOW",utc_iso(now),session,"FIRST_TWO_V1",utc_iso(now),"QQQ_FIRST_TWO_SHADOW")).close()
+            prior=self.repository._fetchone(connection,"SELECT COUNT(*) AS value FROM qqq_first_two_shadow_trades WHERE eastern_session=?",(session,))
+            number=int((prior or {}).get("value") or 0)+1; accepted=number<=2
+            self.repository._execute(connection,"""INSERT INTO qqq_first_two_shadow_trades
+                (shadow_trade_id,source_trade_id,opportunity_id,eastern_session,session_trade_number,shadow_status,rejection_reason,
+                symbol,direction,variant,option_symbol,opened_at,entry_fill,dte,spread_percent,metadata_json,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(shadow_id,trade_id,row.get("opportunity_id"),session,number,
+                "SHADOW_ACCEPTED" if accepted else "SHADOW_REJECTED",None if accepted else "SESSION_SEQUENCE_GT_2",
+                "QQQ",row.get("direction"),row.get("variant"),row.get("option_symbol"),row.get("opened_at"),row.get("entry_fill"),
+                row.get("dte"),row.get("spread_percent"),json.dumps({"version":"FIRST_TWO_V1"}),utc_iso(now),utc_iso(now))).close()
+        return self.shadow_trade(trade_id)
+
+    def shadow_trade(self, source_trade_id):
+        with self.repository.connection() as connection:
+            return self.repository._fetchone(connection,"SELECT * FROM qqq_first_two_shadow_trades WHERE source_trade_id=?",(source_trade_id,))
+
+    def sync_shadow_outcome(self, trade_id, *, now=None):
+        now=now or datetime.now(timezone.utc); row=self.trade(trade_id)
+        if not row or row.get("status")!="CLOSED": return self.shadow_trade(trade_id)
+        with self.repository.connection() as connection:
+            self.repository._execute(connection,"""UPDATE qqq_first_two_shadow_trades SET closed_at=?,exit_fill=?,realized_pnl=?,
+                realized_return_percent=?,baseline_exit_reason=?,updated_at=? WHERE source_trade_id=?""",(row.get("closed_at"),row.get("exit_fill"),
+                row.get("realized_pnl"),row.get("realized_return_percent"),row.get("exit_reason"),utc_iso(now),trade_id)).close()
+        return self.shadow_trade(trade_id)
+
+    def record_position_mark(self, trade_id, quote, *, now=None, underlying_price=None):
+        now=now or datetime.now(timezone.utc); row=self.trade(trade_id)
+        if not row or str(row.get("symbol")).upper()!="QQQ" or row.get("status")!="OPEN" or not usable_quote(quote): return None
+        opened=datetime.fromisoformat(str(row["opened_at"]).replace("Z","+00:00"))
+        closed=datetime.fromisoformat(str(row["closed_at"]).replace("Z","+00:00")) if row.get("closed_at") else None
+        if now < opened or (closed and now > closed): return None
+        observed=utc_iso(now); mark_id=hashlib.sha256(f"{trade_id}|{observed}".encode()).hexdigest()
+        bid,ask=float(quote["bid"]),float(quote["ask"]); midpoint=(bid+ask)/2; entry=float(row["entry_fill"])
+        with self.repository.connection() as connection:
+            prior=self.repository._fetchone(connection,"SELECT COUNT(*) AS value FROM intraday_position_marks WHERE trade_id=?",(trade_id,))
+            if self.repository._fetchone(connection,"SELECT mark_id FROM intraday_position_marks WHERE mark_id=?",(mark_id,)): return None
+            self.repository._execute(connection,"""INSERT INTO intraday_position_marks
+                (mark_id,trade_id,opportunity_id,symbol,option_symbol,variant,eastern_session,observed_at,bid,ask,midpoint,
+                underlying_price,mark_return_percent,source,sequence_number,metadata_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (mark_id,trade_id,row.get("opportunity_id"),"QQQ",row.get("option_symbol"),row.get("variant"),now.astimezone(EASTERN).date().isoformat(),
+                observed,bid,ask,midpoint,underlying_price,(exit_fill(bid,ask)/entry-1)*100,"EXISTING_WORKER_QUOTE_V1",int((prior or {}).get("value") or 0)+1,json.dumps({"version":"QQQ_MARK_V1"}))).close()
+        return mark_id
+
+    def qqq_research_snapshot(self, *, limit=5000):
+        """Bounded explicit projections for read-only forward analytics."""
+        with self.repository.connection() as connection:
+            experiment=self.repository._fetchone(connection,"""SELECT experiment_start_timestamp,experiment_start_session,rule_version
+                FROM qqq_first_two_experiment WHERE experiment_id='QQQ_FIRST_TWO_SHADOW'""")
+            rows=self.repository._fetchall(connection,"""SELECT s.source_trade_id,s.eastern_session,s.session_trade_number,
+                s.shadow_status,s.rejection_reason,s.opened_at,s.closed_at,s.realized_pnl,s.realized_return_percent,s.variant
+                FROM qqq_first_two_shadow_trades s ORDER BY s.opened_at,s.source_trade_id LIMIT ?""",(int(limit),))
+            marks=self.repository._fetchall(connection,"""SELECT trade_id,variant,eastern_session,observed_at,sequence_number
+                FROM intraday_position_marks WHERE symbol='QQQ' ORDER BY observed_at,trade_id LIMIT ?""",(int(limit),))
+        return {"experiment":experiment,"rows":rows,"marks":marks}
 
     def trade(self, trade_id):
         with self.repository.connection() as connection:

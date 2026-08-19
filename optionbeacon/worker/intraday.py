@@ -110,6 +110,14 @@ def _manage_positions(ledger, positions, bars, quote_provider, now):
                        trade_id=trade_id, symbol=position["symbol"], execution_variant=variant,
                        contract=contract, reason=error or "Option quote unavailable")
                 continue
+            if str(position.get("symbol")).upper() == "QQQ":
+                try:
+                    mark_id=ledger.record_position_mark(trade_id,quote,now=now,
+                        underlying_price=(bars.get("QQQ") or [{}])[-1].get("close"))
+                    _event("qqq_position_mark_persisted" if mark_id else "qqq_position_mark_duplicate_prevented",
+                           trade_id=trade_id,execution_variant=variant)
+                except Exception as exc:
+                    _event("qqq_position_mark_persistence_failed",trade_id=trade_id,exception_class=type(exc).__name__)
             if variant == "INTRADAY_MANAGED":
                 updated = ledger.update_managed(
                     trade_id, quote, now=now, config=ledger.config_for(position)
@@ -137,6 +145,8 @@ def _manage_positions(ledger, positions, bars, quote_provider, now):
                     opportunity_id=updated["opportunity_id"], trade_id=trade_id, now=now, payload=payload)
                 _event("intraday_trailing_activated", **payload)
             if updated.get("status") == "CLOSED":
+                try: ledger.sync_shadow_outcome(trade_id,now=now)
+                except Exception as exc: _event("qqq_first_two_shadow_sync_failed",trade_id=trade_id,exception_class=type(exc).__name__)
                 close_payload = {**payload, "realized_pnl": updated.get("realized_pnl"),
                                  "exit_reason": updated.get("exit_reason")}
                 ledger.journal("intraday_trade_closed", opportunity_id=updated["opportunity_id"],
@@ -279,7 +289,7 @@ def run_intraday_cycle(repository, *, bar_provider=tradier_minute_bars,
             for contract in select_contracts(chains, candidate.option_type, candidate.price, now.astimezone(EASTERN).date()):
                 opened = ledger.open_variants(candidate, contract, now=now, config=ManagedConfig())
                 opened_any = opened_any or bool(opened)
-                for trade_id in opened:
+                for trade_id in sorted(opened):
                     row = ledger.trade(trade_id)
                     payload = {"opportunity_id": candidate.opportunity_id, "trade_id": trade_id,
                                "symbol": symbol, "execution_variant": row["variant"],
@@ -287,6 +297,13 @@ def run_intraday_cycle(repository, *, bar_provider=tradier_minute_bars,
                     ledger.journal("intraday_paper_opened", opportunity_id=candidate.opportunity_id,
                                    trade_id=trade_id, now=now, payload=payload)
                     _event("intraday_paper_opened", **payload)
+                    if symbol == "QQQ":
+                        try:
+                            shadow=ledger.record_first_two_shadow(trade_id,now=now)
+                            _event("qqq_first_two_shadow_evaluated",source_trade_id=trade_id,session_trade_number=(shadow or {}).get("session_trade_number"))
+                            _event("qqq_first_two_shadow_accepted" if (shadow or {}).get("shadow_status")=="SHADOW_ACCEPTED" else "qqq_first_two_shadow_rejected",source_trade_id=trade_id)
+                        except Exception as exc:
+                            _event("qqq_first_two_shadow_persistence_failed",source_trade_id=trade_id,exception_class=type(exc).__name__)
             if opened_any:
                 ledger.transition_signal(candidate.opportunity_id, "TRIGGERED", "PAPER_OPENED")
         duration = (time.perf_counter() - started) * 1000
