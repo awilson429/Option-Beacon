@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from html import escape
 from statistics import median
 from zoneinfo import ZoneInfo
+import re
 
 from qqq_forward_research import compare_first_two
 from qqq_forward_research_dashboard import mark_coverage
@@ -139,7 +140,54 @@ def _compact_qqq_command_card_markup(model):
     return f'''<style>.ob-qqq{{border:1px solid #273344;border-radius:14px;background:#101722;padding:16px;color:#e8edf3}}.ob-qqq-head{{display:flex;justify-content:space-between;gap:12px;align-items:center}}.ob-qqq-head h3{{margin:0;font-size:1.25rem}}.ob-qqq-status{{border:1px solid #3b526b;border-radius:999px;padding:4px 9px;font-size:.72rem;font-weight:750}}.ob-qqq-grid{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}}.ob-qqq-metric{{border-left:2px solid #29394c;padding:4px 8px;min-width:0}}.ob-qqq-metric span{{display:block;color:#8f9cab;font-size:.68rem;text-transform:uppercase}}.ob-qqq-metric strong{{font-size:.88rem;overflow-wrap:anywhere}}.ob-qqq-chips{{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}}.ob-qqq-chip{{background:#1b2735;border-radius:999px;padding:4px 8px;font-size:.7rem}}.ob-qqq-section{{border-top:1px solid #263241;padding-top:10px;margin-top:10px}}.ob-qqq-section h4{{font-size:.72rem;letter-spacing:.08em;margin:0 0 7px;color:#9aa7b5}}.ob-qqq-note,.ob-qqq-muted{{color:#8f9cab;font-size:.75rem}}.ob-qqq details summary{{cursor:pointer;font-size:.78rem;font-weight:700}}@media(max-width:700px){{.ob-qqq-grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}</style><section class="ob-qqq"><div class="ob-qqq-head"><div><h3>QQQ COMMAND CARD</h3><span class="ob-qqq-note">{escape(_fmt(model["updated_at"]))}</span></div><span class="ob-qqq-status">{escape(model["status"])}</span></div><div class="ob-qqq-grid">{live}</div><div class="ob-qqq-chips">{chips}</div><div class="ob-qqq-section"><h4>CONTEXT QUALITY</h4><strong>{escape(quality["label"])}{f' · {quality["score"]}/100' if quality["score"] is not None else ''}</strong></div><div class="ob-qqq-section"><h4>SESSION PULSE · {'IN PROGRESS' if model['market_open'] else 'SESSION COMPLETE'}</h4><div class="ob-qqq-grid">{pulse_html}</div></div><div class="ob-qqq-section"><h4>FIRST_TWO FORWARD TEST</h4><span>{first_two}</span></div><div class="ob-qqq-section"><h4>QQQ EDGE SNAPSHOT</h4><div class="ob-qqq-grid">{edge_html}</div><span class="ob-qqq-note">Historical / forward research metrics only</span></div><div class="ob-qqq-section"><h4>MARK COVERAGE</h4><span>{coverage['positions_with_1_or_more_marks']} trades with marks · {_fmt(coverage['average_marks_per_trade'])} average marks/trade · {len(coverage['missing_mark_trades'])} missing</span></div><div class="ob-qqq-section"><details><summary>QQQ DNA</summary><p class="ob-qqq-note">CALL/PUT, DTE, sequence, MIRROR/MANAGED, session and mark attribution remain descriptive research only. Open Developer Tools for the complete forensic detail.</p></details></div></section>'''
 
 
+def format_contract_label(contract, *, strike=None, expiration=None, bias=None):
+    match=re.fullmatch(r"([A-Z]+)(\d{6})([CP])(\d{8})",str(contract or "").upper())
+    if match:
+        symbol,date_value,kind,strike_value=match.groups(); parsed=datetime.strptime(date_value,"%y%m%d")
+        return f'{symbol} ${int(strike_value)/1000:g} {"Call" if kind=="C" else "Put"} · {parsed.strftime("%b")} {parsed.day}'
+    if strike is not None and expiration:
+        try: parsed=datetime.fromisoformat(str(expiration)); date_label=f'{parsed.strftime("%b")} {parsed.day}'
+        except ValueError: date_label=str(expiration)
+        kind="Call" if str(bias).upper()=="CALL" else "Put" if str(bias).upper()=="PUT" else "Option"
+        return f'QQQ ${float(strike):g} {kind} · {date_label}'
+    return "No active contract"
+
+
+def format_card_timestamp(value):
+    if not value: return "Update time unavailable"
+    try:
+        parsed=datetime.fromisoformat(str(value).replace("Z","+00:00"))
+        if parsed.tzinfo is None: parsed=parsed.replace(tzinfo=timezone.utc)
+        return f'Updated {parsed.astimezone(EASTERN).strftime("%I:%M %p").lstrip("0")} ET'
+    except (TypeError,ValueError): return "Update time unavailable"
+
+
+def _ratio(value, suffix=""):
+    number=_number(value)
+    return "—" if number is None else f"{number:.2f}{suffix}"
+
+
 def qqq_command_card_markup(model):
+    """Compact market-adaptive horizontal bands using the existing model."""
+    pulse=model["session_pulse"];edge=model["edge_snapshot"];ft=model.get("first_two");quality=model["context_quality"];coverage=model["mark_coverage"]
+    def metric(label,value,priority=""):
+        return f'<div class="ob-qband-metric {priority}"><span>{escape(label)}</span><strong>{escape(str(value))}</strong></div>'
+    contract=format_contract_label(model.get("contract"),strike=model.get("strike"),expiration=model.get("expiration"),bias=model.get("bias"))
+    sequence=f'Trade #{model["session_trade_number"]}' if (model.get("session_trade_number") or 0)>0 else "No active trade"
+    setup="".join(metric(*item) for item in (("Trigger",_fmt(model["trigger"],"price")),("Contract",contract),("DTE",_fmt(model["dte"])),("Spread",_fmt(model["spread"],"percent")),("State",sequence)))
+    chips="".join(f'<span class="ob-qband-chip">{escape(chip)}</span>' for chip in model["chips"]) or '<span class="ob-qband-muted">Context confirmations unavailable</span>'
+    session="".join(metric(label,value,"is-primary" if label=="P&L" else "") for label,value in (("Trades",pulse["closed_trades"]),("W/L",f'{pulse["wins"]}/{pulse["losses"]}'),("Win Rate",_fmt(pulse["win_rate"],"percent")),("P&L",_fmt(pulse["total_pnl"],"money")),("Average",_fmt(pulse["average_trade"],"money")),("Best",_fmt(pulse["best_trade"],"money")),("Worst",_fmt(pulse["worst_trade"],"money"))))
+    edge_markup="".join(metric(*item) for item in (("Closed",edge["closed_trades"]),("Expectancy",_fmt(edge["expectancy"],"money")),("Profit Factor",_ratio(edge["profit_factor"])),("Win Rate",_fmt(edge["win_rate"],"percent")),("Avg Win",_fmt(edge["average_winner"],"money")),("Avg Loss",_fmt(edge["average_loser"],"money")),("Payoff",_ratio(edge["payoff_ratio"],"x")),("Profitable Sessions",_fmt(edge["profitable_session_percentage"],"percent"))))
+    if ft:
+        shadow=ft["first_two_shadow"]
+        first_two=f'<strong>{escape(ft["governance"])}</strong><span>{shadow["accepted_trades"]}/50 accepted · {shadow["sessions"]}/20 sessions · {_fmt(shadow["total_pnl"],"money")} P&L · {_fmt(shadow["expectancy"],"money")} expectancy</span>'
+    else:first_two='<strong>AWAITING SAMPLE</strong><span>Post-deployment observations have not accumulated.</span>'
+    coverage_text=(f'{coverage["positions_with_1_or_more_marks"]} marked · {_ratio(coverage["average_marks_per_trade"])} avg/trade · {len(coverage["missing_mark_trades"])} missing' if coverage.get("positions_with_1_or_more_marks") else "Ordered-mark coverage awaiting observations")
+    session_state="SESSION ACTIVE" if model["market_open"] else "SESSION COMPLETE";adaptive="is-live" if model["market_open"] else "is-closed"
+    return f'''<style>.ob-qband{{background:#101722;border:1px solid #273344;border-radius:14px;color:#e8edf3;padding:13px}}.ob-qband-hero{{align-items:center;display:flex;gap:13px;justify-content:space-between}}.ob-qband-identity{{align-items:baseline;display:flex;flex-wrap:wrap;gap:7px 14px}}.ob-qband-symbol{{font-size:1.05rem;font-weight:850}}.ob-qband-price{{font-size:1.55rem;font-weight:850}}.ob-qband-bias{{font-size:.82rem;font-weight:800}}.ob-qband-context{{color:#a8b3bf;font-size:.75rem}}.ob-qband-status{{border:1px solid #3b526b;border-radius:999px;font-size:.68rem;font-weight:800;padding:4px 9px;white-space:nowrap}}.ob-qband-update{{color:#7f8d9b;font-size:.62rem;margin-top:2px}}.ob-qband-setup,.ob-qband-session{{display:grid;gap:8px;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:9px}}.ob-qband-session{{background:#151f2b;border:1px solid #273344;border-radius:9px;grid-template-columns:repeat(8,minmax(0,1fr));padding:8px}}.ob-qband-metric{{min-width:0}}.ob-qband-metric span{{color:#82909f;display:block;font-size:.57rem;text-transform:uppercase}}.ob-qband-metric strong{{font-size:.76rem;overflow-wrap:anywhere}}.ob-qband-session .is-primary strong{{font-size:1.12rem}}.ob-qband-chips{{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}}.ob-qband-chip{{background:#1b2735;border-radius:999px;font-size:.62rem;padding:3px 7px}}.ob-qband-intel{{display:grid;gap:9px;grid-template-columns:1.6fr .9fr .9fr;margin-top:9px}}.ob-qband-panel{{border-left:1px solid #273344;min-width:0;padding-left:10px}}.ob-qband-panel:first-child{{border-left:0;padding-left:0}}.ob-qband-panel h4{{color:#8e9baa;font-size:.62rem;letter-spacing:.08em;margin:0 0 5px}}.ob-qband-edge{{display:grid;gap:5px;grid-template-columns:repeat(4,minmax(0,1fr))}}.ob-qband-first{{display:flex;flex-direction:column;font-size:.68rem;gap:3px}}.ob-qband-first span,.ob-qband-muted{{color:#82909f;font-size:.63rem}}.ob-qband-quality{{font-size:.72rem}}.ob-qband-dna{{border-top:1px solid #273344;margin-top:9px;padding-top:7px}}.ob-qband-dna summary{{cursor:pointer;font-size:.68rem;font-weight:800}}.ob-qband.is-closed .ob-qband-session{{border-color:#405165}}.ob-qband.is-closed .ob-qband-setup{{opacity:.7}}@media(max-width:1000px){{.ob-qband-intel{{grid-template-columns:repeat(2,minmax(0,1fr))}}.ob-qband-quality-panel{{grid-column:1/-1}}.ob-qband-session{{grid-template-columns:repeat(4,minmax(0,1fr))}}}}@media(max-width:700px){{.ob-qband-hero{{align-items:flex-start;flex-direction:column;gap:7px}}.ob-qband-setup,.ob-qband-session,.ob-qband-edge,.ob-qband-intel{{grid-template-columns:minmax(0,1fr)}}.ob-qband-panel,.ob-qband-panel:first-child{{border-left:0;border-top:1px solid #273344;padding:8px 0 0}}}}</style><section class="ob-qband {adaptive}"><div class="ob-qband-hero"><div><div class="ob-qband-identity"><span class="ob-qband-symbol">QQQ</span><strong class="ob-qband-price">{escape(_fmt(model["price"],"price"))}</strong><span class="ob-qband-bias">{escape(model["bias"])} BIAS</span><span class="ob-qband-context">{escape(_fmt(model["regime"]))} · {escape(_fmt(model["setup"]))}</span></div><div class="ob-qband-update">{escape(format_card_timestamp(model.get("updated_at")))}</div></div><span class="ob-qband-status">{escape(model["status"])}</span></div><div class="ob-qband-setup">{setup}</div><div class="ob-qband-chips">{chips}</div><div class="ob-qband-session">{metric("Session",session_state)}{session}</div><div class="ob-qband-intel"><div class="ob-qband-panel"><h4>QQQ EDGE</h4><div class="ob-qband-edge">{edge_markup}</div></div><div class="ob-qband-panel"><h4>FIRST_TWO</h4><div class="ob-qband-first">{first_two}</div></div><div class="ob-qband-panel ob-qband-quality-panel"><h4>TRADE / DATA QUALITY</h4><div class="ob-qband-quality"><strong>{escape(quality["label"])}{f' · {quality["score"]}/100' if quality["score"] is not None else ''}</strong><div>{escape(coverage_text)}</div></div></div></div><div class="ob-qband-dna"><details><summary>QQQ DNA</summary><p class="ob-qband-muted">CALL/PUT, DTE, sequence, MIRROR/MANAGED, MFE/MAE, session and mark attribution remain descriptive research only. Complete detail remains in Developer Tools.</p></details></div></section>'''
+
+
+def _three_zone_qqq_command_card_markup(model):
     """Wide three-zone instrument panel; the DNA disclosure remains full-width."""
     def metrics(items, css="ob-qqq-wide-metrics"):
         return f'<div class="{css}">'+"".join(
