@@ -95,6 +95,7 @@ from production_forensic_dashboard import render_production_forensic_audit
 from strategic_audit_dashboard import render_production_strategic_audit
 from qqq_forensic_dashboard import render_production_qqq_forensic_audit
 from qqq_forward_research_dashboard import render_qqq_forward_research
+from qqq_command_card import build_qqq_command_card_model, load_qqq_command_data, qqq_command_card_markup
 from broad_filter_effectiveness import broad_filter_effectiveness
 from mirror_execution import MirrorExecutionRepository, mirror_summary
 from filtered_execution import FilteredExecutionRepository, filtered_summary
@@ -4259,6 +4260,15 @@ def render_outcome_trade_journal(
         "mirror_closed": comparison["mirror"]["closed"],
         "reconciled": comparison["authoritative"]["trades"] == len(persisted_session_entries),
     }, sort_keys=True))
+    qqq_data={}
+    if trade_repository:
+        try: qqq_data=load_qqq_command_data(trade_repository)
+        except Exception: qqq_data={}
+    qqq_result=(latest_results or {}).get("QQQ") or {}
+    qqq_card=qqq_command_card_markup(build_qqq_command_card_model(
+        qqq_result,qqq_data,now=now,market_open=market_open,
+        stale=str((reliability_state or {}).get("scanner_state") or "").upper() in {"STALE","ERROR","FAILED","UNAVAILABLE"},
+        active_setup=bool(qqq_result.get("trade_plan") and actionable_trade_plan(qqq_result))))
     dashboard = dashboard_shell_markup(
         status=status_strip_markup(status),
         kpis=kpi_row_markup(kpis),
@@ -4267,7 +4277,7 @@ def render_outcome_trade_journal(
                 paper_summary, config, paper_available=paper_available
             )
         ),
-        best_trade=trade_desk_best_trade_markup(latest_results, records),
+        best_trade=qqq_card,
         positions=positions,
         comparison=comparison_markup(
             comparison,

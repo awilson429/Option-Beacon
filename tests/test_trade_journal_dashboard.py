@@ -277,7 +277,7 @@ def test_trade_desk_removes_old_history_filters_and_uses_compact_empty_state():
         assert key not in journal
     assert 'key="opened_alert_date"' not in journal
     assert "positions_table_markup(" in journal
-    assert "trade_desk_best_trade_markup(" in journal
+    assert "qqq_command_card_markup(" in journal
     assert "dashboard_shell_markup(" in journal
     assert "trade_desk_activity_filter" in journal
     assert "No trade currently meets the entry requirements." in source
