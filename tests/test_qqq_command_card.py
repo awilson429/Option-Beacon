@@ -53,14 +53,17 @@ def test_card_has_four_pills_and_only_research_owns_dna():
     for label in ("QQQ","OVERVIEW","SESSION","EDGE","RESEARCH","FIRST_TWO","QQQ DNA"):
         assert label in markup
     assert "Today's Best Trade" not in markup and "Win Probability" not in markup
-    for css_class in ("ob-qpill-head","ob-qpill-nav","ob-qpill-panes","is-overview","is-session","is-edge","is-research"):
+    for css_class in ("ob-qpol-head","ob-qpol-nav","ob-qpol-panes","is-overview","is-session","is-edge","is-research"):
         assert css_class in markup
     assert "QQQ $716 Call · Aug 19" in markup and "QQQ260819C00716000" not in markup
     assert "Updated 3:55 PM ET" in markup and "2026-08-19T19:55" not in markup
     assert "3.76" in markup and "3.34x" in markup
     assert "Trade #0" not in markup and "Trade # 0" not in markup and "No active trade" in markup
     assert "0 marked" not in markup and "awaiting observations" in markup.lower()
-    assert markup.index('class="ob-qpill-pane is-research"') < markup.index("QQQ DNA")
+    assert markup.index('class="ob-qpol-pane is-research"') < markup.index("QQQ DNA")
+    assert "ob-qpol-group-grid" in markup and markup.count("ob-qpol-tile") >= 8
+    assert "ob-qpol-edge" in markup and "ob-qpol-research" in markup
+    assert "min-height:" not in markup
     assert "@media(max-width:560px)" in markup and "overflow-x:auto" in markup
     assert "dataframe" not in inspect.getsource(qqq_command_card_markup).lower()
 
@@ -75,7 +78,7 @@ def test_human_contract_and_timestamp_helpers_are_presentation_only():
 def test_market_open_and_first_two_active_use_adaptive_priority():
     model=build_qqq_command_card_model({},data(12),now=NOW,market_open=True)
     markup=qqq_command_card_markup(model)
-    assert 'id="qqq-view-overview" checked' in markup and 'id="qqq-view-session">' in markup
+    assert 'id="qpol-overview" checked' in markup and 'id="qpol-session">' in markup
     assert "SESSION ACTIVE" in markup
     assert "INSUFFICIENT DATA" in markup and "2/50 accepted" in markup
 
@@ -83,7 +86,7 @@ def test_market_open_and_first_two_active_use_adaptive_priority():
 def test_market_closed_defaults_to_session_and_first_two_awaiting_is_compact():
     model=build_qqq_command_card_model({},data(),now=NOW,market_open=False)
     markup=qqq_command_card_markup(model)
-    assert 'id="qqq-view-session" checked' in markup and 'id="qqq-view-overview">' in markup
+    assert 'id="qpol-session" checked' in markup and 'id="qpol-overview">' in markup
     assert "SESSION COMPLETE" in markup and "AWAITING SAMPLE" in markup
     assert markup.count('name="qqq-command-view"')==4
 
