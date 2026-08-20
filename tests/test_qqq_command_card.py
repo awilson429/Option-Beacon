@@ -45,24 +45,25 @@ def test_first_two_governance_edge_pulse_and_current_session_exclusion():
     assert model["mark_coverage"]["earliest_mark"] is None
 
 
-def test_card_has_four_pills_and_only_research_owns_dna():
+def test_card_has_three_pills_combined_live_session_and_research_owns_dna():
     model=build_qqq_command_card_model({},data(),now=NOW,market_open=False)
     model.update(contract="QQQ260819C00716000",updated_at="2026-08-19T19:55:08.138731+00:00")
     model["edge_snapshot"].update(profit_factor=3.7607742551224312,payoff_ratio=3.3429104489977166)
     markup=qqq_command_card_markup(model)
-    for label in ("QQQ","OVERVIEW","SESSION","EDGE","RESEARCH","FIRST_TWO","QQQ DNA"):
+    for label in ("QQQ","LIVE / SESSION","EDGE","RESEARCH","FIRST_TWO","QQQ DNA"):
         assert label in markup
+    assert ">OVERVIEW<" not in markup and ">SESSION<" not in markup
     assert "Today's Best Trade" not in markup and "Win Probability" not in markup
-    for css_class in ("ob-qpol-head","ob-qpol-nav","ob-qpol-panes","is-overview","is-session","is-edge","is-research"):
+    for css_class in ("ob-qcomb-head","ob-qcomb-nav","ob-qcomb-panes","is-live-session","is-edge","is-research"):
         assert css_class in markup
     assert "QQQ $716 Call · Aug 19" in markup and "QQQ260819C00716000" not in markup
     assert "Updated 3:55 PM ET" in markup and "2026-08-19T19:55" not in markup
     assert "3.76" in markup and "3.34x" in markup
     assert "Trade #0" not in markup and "Trade # 0" not in markup and "No active trade" in markup
     assert "0 marked" not in markup and "awaiting observations" in markup.lower()
-    assert markup.index('class="ob-qpol-pane is-research"') < markup.index("QQQ DNA")
-    assert "ob-qpol-group-grid" in markup and markup.count("ob-qpol-tile") >= 8
-    assert "ob-qpol-edge" in markup and "ob-qpol-research" in markup
+    assert markup.index('class="ob-qcomb-pane is-research"') < markup.index("QQQ DNA")
+    assert "ob-qcomb-setup" in markup and markup.count("ob-qcomb-cell") >= 8
+    assert "ob-qcomb-edge" in markup and "ob-qcomb-research" in markup
     assert "min-height:" not in markup
     assert "@media(max-width:560px)" in markup and "overflow-x:auto" in markup
     assert "dataframe" not in inspect.getsource(qqq_command_card_markup).lower()
@@ -78,17 +79,34 @@ def test_human_contract_and_timestamp_helpers_are_presentation_only():
 def test_market_open_and_first_two_active_use_adaptive_priority():
     model=build_qqq_command_card_model({},data(12),now=NOW,market_open=True)
     markup=qqq_command_card_markup(model)
-    assert 'id="qpol-overview" checked' in markup and 'id="qpol-session">' in markup
-    assert "SESSION ACTIVE" in markup
+    assert 'class="ob-qcomb-live" type="radio" name="qqq-command-view" checked' in markup
+    assert "CURRENT QQQ SETUP" in markup and "SESSION ACTIVE" in markup
     assert "INSUFFICIENT DATA" in markup and "2/50 accepted" in markup
 
 
-def test_market_closed_defaults_to_session_and_first_two_awaiting_is_compact():
+def test_market_closed_defaults_to_combined_pane_and_first_two_awaiting_is_compact():
     model=build_qqq_command_card_model({},data(),now=NOW,market_open=False)
     markup=qqq_command_card_markup(model)
-    assert 'id="qpol-session" checked' in markup and 'id="qpol-overview">' in markup
-    assert "SESSION COMPLETE" in markup and "AWAITING SAMPLE" in markup
-    assert markup.count('name="qqq-command-view"')==4
+    assert 'class="ob-qcomb-live" type="radio" name="qqq-command-view" checked' in markup
+    assert "LAST SESSION SETUP" in markup and "SESSION COMPLETE" in markup and "AWAITING SAMPLE" in markup
+    assert markup.count('name="qqq-command-view"')==3
+
+
+def test_tab_controls_are_local_unique_and_support_every_direct_transition():
+    markup=qqq_command_card_markup(build_qqq_command_card_model({},data(),now=NOW,market_open=False))
+    assert markup.count('type="radio"')==3
+    assert markup.count(' checked')==1
+    assert " id=" not in markup and " for=" not in markup
+    for control,label,pane in (
+        ("ob-qcomb-live","LIVE / SESSION","is-live-session"),
+        ("ob-qcomb-edge-control","EDGE","is-edge"),
+        ("ob-qcomb-research-control","RESEARCH","is-research"),
+    ):
+        assert markup.count(f'class="{control}"')==1
+        assert f':has(.{control}:checked)' in markup
+        assert f'<input class="{control}"' in markup
+        assert f'<span>{label}</span></label>' in markup
+        assert f'.{pane}' in markup
 
 
 def test_pill_switching_is_client_side_and_cannot_rerun_data_loading():
