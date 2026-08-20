@@ -1,4 +1,5 @@
 import inspect
+import re
 from datetime import datetime, timedelta, timezone
 
 import app
@@ -54,16 +55,17 @@ def test_card_has_three_pills_combined_live_session_and_research_owns_dna():
         assert label in markup
     assert ">OVERVIEW<" not in markup and ">SESSION<" not in markup
     assert "Today's Best Trade" not in markup and "Win Probability" not in markup
-    for css_class in ("ob-qcomb-head","ob-qcomb-nav","ob-qcomb-panes","is-live-session","is-edge","is-research"):
+    for css_class in ("ob-qfinal-head","ob-qfinal-nav","ob-qfinal-panes","is-live-session","is-edge","is-research"):
         assert css_class in markup
     assert "QQQ $716 Call · Aug 19" in markup and "QQQ260819C00716000" not in markup
     assert "Updated 3:55 PM ET" in markup and "2026-08-19T19:55" not in markup
     assert "3.76" in markup and "3.34x" in markup
-    assert "Trade #0" not in markup and "Trade # 0" not in markup and "No active trade" in markup
+    assert "Trade #0" not in markup and "Trade # 0" not in markup and "No active trade" not in markup
     assert "0 marked" not in markup and "awaiting observations" in markup.lower()
-    assert markup.index('class="ob-qcomb-pane is-research"') < markup.index("QQQ DNA")
-    assert "ob-qcomb-setup" in markup and markup.count("ob-qcomb-cell") >= 8
-    assert "ob-qcomb-edge" in markup and "ob-qcomb-research" in markup
+    assert markup.index('class="ob-qfinal-pane is-research"') < markup.index("QQQ DNA")
+    assert "ob-qfinal-contract" in markup and "ob-qfinal-setup-metrics" in markup
+    assert "ob-qfinal-pnl" in markup and "ob-qfinal-session-row" in markup
+    assert "ob-qfinal-edge" in markup and "ob-qfinal-research" in markup
     assert "min-height:" not in markup
     assert "@media(max-width:560px)" in markup and "overflow-x:auto" in markup
     assert "dataframe" not in inspect.getsource(qqq_command_card_markup).lower()
@@ -79,7 +81,7 @@ def test_human_contract_and_timestamp_helpers_are_presentation_only():
 def test_market_open_and_first_two_active_use_adaptive_priority():
     model=build_qqq_command_card_model({},data(12),now=NOW,market_open=True)
     markup=qqq_command_card_markup(model)
-    assert 'class="ob-qcomb-live" type="radio" name="qqq-command-view" checked' in markup
+    assert 'data-qqq-tab="live-session" class="ob-qfinal-tab is-active" aria-selected="true"' in markup
     assert "CURRENT QQQ SETUP" in markup and "SESSION ACTIVE" in markup
     assert "INSUFFICIENT DATA" in markup and "2/50 accepted" in markup
 
@@ -87,32 +89,43 @@ def test_market_open_and_first_two_active_use_adaptive_priority():
 def test_market_closed_defaults_to_combined_pane_and_first_two_awaiting_is_compact():
     model=build_qqq_command_card_model({},data(),now=NOW,market_open=False)
     markup=qqq_command_card_markup(model)
-    assert 'class="ob-qcomb-live" type="radio" name="qqq-command-view" checked' in markup
+    assert 'data-qqq-tab="live-session" class="ob-qfinal-tab is-active" aria-selected="true"' in markup
     assert "LAST SESSION SETUP" in markup and "SESSION COMPLETE" in markup and "AWAITING SAMPLE" in markup
-    assert markup.count('name="qqq-command-view"')==3
+    assert 'data-qqq-pane="live-session"' in markup and "No active trade" not in markup
+    assert "CONTEXT COVERAGE" in markup and "Known factors:" in markup and "LIMITED" in markup
 
 
 def test_tab_controls_are_local_unique_and_support_every_direct_transition():
     markup=qqq_command_card_markup(build_qqq_command_card_model({},data(),now=NOW,market_open=False))
-    assert markup.count('type="radio"')==3
-    assert markup.count(' checked')==1
-    assert " id=" not in markup and " for=" not in markup
-    for control,label,pane in (
-        ("ob-qcomb-live","LIVE / SESSION","is-live-session"),
-        ("ob-qcomb-edge-control","EDGE","is-edge"),
-        ("ob-qcomb-research-control","RESEARCH","is-research"),
-    ):
-        assert markup.count(f'class="{control}"')==1
-        assert f':has(.{control}:checked)' in markup
-        assert f'<input class="{control}"' in markup
-        assert f'<span>{label}</span></label>' in markup
-        assert f'.{pane}' in markup
+    buttons=re.findall(r'<button type="button" data-qqq-tab="([^"]+)"[^>]+onclick="([^"]+)">([^<]+)</button>',markup)
+    panes=re.findall(r'data-qqq-pane="([^"]+)"',markup)
+    assert [(view,label) for view,_,label in buttons]==[("live-session","LIVE / SESSION"),("edge","EDGE"),("research","RESEARCH")]
+    assert panes==["live-session","edge","research"]
+    assert markup.count('aria-selected="true"')==1 and markup.count('aria-selected="false"')==2
+    assert " id=" not in markup and 'type="radio"' not in markup and ":has(" not in markup
+    for _,controller,_ in buttons:
+        assert "closest('.ob-qfinal')" in controller
+        assert "x.dataset.qqqPane===v" in controller
+        assert "x.hidden=!a" in controller
+    # Every source can select either other target because handlers are target-only.
+    assert {(source,target) for source,_,_ in buttons for target,_,_ in buttons if source!=target}=={
+        ("live-session","edge"),("live-session","research"),("edge","live-session"),
+        ("edge","research"),("research","live-session"),("research","edge")}
+
+
+def test_expiration_is_formatted_and_closed_setup_preserves_source_value():
+    model=build_qqq_command_card_model({},data(),now=NOW,market_open=False)
+    model.update(contract=None,strike=716,expiration="2026-08-19",bias="PUT")
+    original=dict(model)
+    markup=qqq_command_card_markup(model)
+    assert "QQQ $716 Put" in markup and "Aug 19" in markup and ">Aug 19</strong>" in markup
+    assert "2026-08-19" not in markup and model==original
 
 
 def test_pill_switching_is_client_side_and_cannot_rerun_data_loading():
     source=inspect.getsource(qqq_command_card_markup).lower()
-    assert 'type="radio"' in source and "session_state" not in source
-    for forbidden in ("load_qqq_command_data","repository","select ","st.","dataframe"):
+    assert 'onclick=' in source and "closest('.ob-qfinal')" in source and "session_state" not in source
+    for forbidden in ("load_qqq_command_data","repository","select ","st.markdown","dataframe"):
         assert forbidden not in source
 
 
