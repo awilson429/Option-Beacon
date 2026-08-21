@@ -313,7 +313,7 @@ def test_polish_geometry_empty_states_encoding_and_segmented_controls():
     assert ".ob-activity-filter.is-active" in theme
     assert ".ob-disclaimer" in theme
     assert "notice notice-warning\">Decision-support" not in source
-    assert "qqq_command_card_markup(" in desk
+    assert "render_qqq_command_card_fragment(qqq_model)" in desk
     assert "No qualifying setup" in source
     assert "Â·" not in desk
     assert "Ã" not in desk
@@ -335,7 +335,7 @@ def test_approved_dashboard_shell_and_exact_grid_geometry_exist():
         assert f"ob-grid-{area}" in theme or f'"{area}' in theme
     assert '"commandcommand""positionspositions""comparisoncomparison""authoritativeauthoritative""activityactivity""moremore"' in compact_css
     assert "ob-grid-summary" not in theme and "ob-grid-stats" not in theme
-    assert "qqq_command_card_markup(" in desk
+    assert "render_qqq_command_card_fragment(qqq_model)" in desk
     assert "max-width:100%" in theme.replace(" ", "")
     assert "min-height:13.2rem" not in theme
     assert "min-height:12.5rem" not in theme
