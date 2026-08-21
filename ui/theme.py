@@ -3,7 +3,6 @@
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 from ui.design_tokens import css_variables
-from ui.product_shell import PRODUCT_SHELL_CSS
 
 
 def configure_page():
@@ -1448,4 +1447,3 @@ def configure_page():
         theme_css.replace("/* OPTIONBEACON_THEME_TOKENS */", css_variables()),
         unsafe_allow_html=True,
     )
-    st.markdown(PRODUCT_SHELL_CSS, unsafe_allow_html=True)

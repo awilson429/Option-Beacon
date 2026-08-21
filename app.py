@@ -11,7 +11,6 @@ from textwrap import dedent
 import pandas as pd
 import streamlit as st
 from ui.theme import configure_page
-from ui.product_shell import status_strip_markup
 
 from after_hours import after_hours_focus_rows, fetch_after_hours_briefing
 from authoritative_entry_funnel import (
@@ -253,11 +252,6 @@ PRODUCTION_NAVIGATION = (
     "Strategy Lab",
     "Advanced",
 )
-PRODUCTION_NAVIGATION_GROUPS = (
-    ("MAIN", (("⌂", "Trade Desk"), ("⌁", "SPY / QQQ"), ("⌕", "Opportunities"))),
-    ("RESEARCH", (("▤", "Paper Trading"), ("⌁", "Strategy Lab"))),
-    ("DEVELOPER", (("⚙", "Advanced"),)),
-)
 
 PRODUCTION_NAVIGATION_CSS = """
 <style>
@@ -317,24 +311,15 @@ div.st-key-{active_key} button p {{
 }}
 </style>"""
     st_module.markdown(PRODUCTION_NAVIGATION_CSS + active_css, unsafe_allow_html=True)
-    sidebar=getattr(st_module,"sidebar",None)
-    if sidebar is not None and hasattr(sidebar,"button"):
-        sidebar.markdown('<div class="ob-nav-brand"><strong>OptionBeacon</strong><span>Follow the edge</span></div>',unsafe_allow_html=True)
-        for group,items in PRODUCTION_NAVIGATION_GROUPS:
-            sidebar.markdown(f'<div class="ob-nav-group">{group}</div>',unsafe_allow_html=True)
-            for icon,workspace in items:
-                sidebar.button(f"{icon}  {workspace}",key=_production_navigation_key(workspace),
-                    on_click=set_active_workspace,args=(workspace,st_module.session_state),width="stretch")
-    else:
-        columns = st_module.columns(len(PRODUCTION_NAVIGATION))
-        for column, workspace in zip(columns, PRODUCTION_NAVIGATION):
-            column.button(
-                workspace,
-                key=_production_navigation_key(workspace),
-                on_click=set_active_workspace,
-                args=(workspace, st_module.session_state),
-                width="stretch",
-            )
+    columns = st_module.columns(len(PRODUCTION_NAVIGATION))
+    for column, workspace in zip(columns, PRODUCTION_NAVIGATION):
+        column.button(
+            workspace,
+            key=_production_navigation_key(workspace),
+            on_click=set_active_workspace,
+            args=(workspace, st_module.session_state),
+            width="stretch",
+        )
     selected = st_module.session_state.get("active_workspace")
     return selected if selected in PRODUCTION_NAVIGATION else PRODUCTION_NAVIGATION[0]
 
@@ -773,9 +758,7 @@ def render_header():
     market_open = is_market_open_now()
     refreshed_at = eastern_now().strftime("%I:%M:%S %p ET")
     st.markdown(
-        '<div class="ob-terminal-bar"><div><strong>OPTIONBEACON</strong><span>Decision intelligence terminal</span></div>'
-        f'<aside><b class="{"is-live" if market_open else ""}">● {"MARKET LIVE" if market_open else "MARKET CLOSED"}</b>'
-        f'<span>Updated {escape(refreshed_at)}</span></aside></div>',
+        header_markup(market_open, refreshed_at, logo_source()),
         unsafe_allow_html=True,
     )
 
@@ -5299,14 +5282,6 @@ def main():
             trade_state, latest_results, snapshot_time, symbol_groups,
             high_score_history,
         )
-
-    snapshot_label=(snapshot_time.strftime("%I:%M:%S %p ET").lstrip("0")
-        if hasattr(snapshot_time,"strftime") else "Awaiting snapshot")
-    st.markdown(status_strip_markup((
-        ("System","Operational"),("Market","Open" if is_market_open_now() else "Closed"),
-        ("Data",snapshot_label),("Options","Configured" if tradier_configured() else "Unavailable"),
-        ("Refresh","60 seconds"),
-    )),unsafe_allow_html=True)
 
     st.markdown(
         '<div class="ob-disclaimer">Decision-support dashboard only. Not financial advice.</div>',
