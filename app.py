@@ -94,6 +94,7 @@ from option_translation_autopsy_dashboard import render_option_translation_autop
 from production_forensic_dashboard import render_production_forensic_audit
 from strategic_audit_dashboard import render_production_strategic_audit
 from qqq_forensic_dashboard import render_production_qqq_forensic_audit
+from whole_app_audit_dashboard import render_whole_app_audit
 from qqq_forward_research_dashboard import render_qqq_forward_research
 from qqq_command_card import (
     build_qqq_command_card_model, load_qqq_command_data,
@@ -4516,22 +4517,15 @@ def render_paper_trading_page():
     )
     st.caption(f"CURRENT WORKER PROFILE: {worker_profile}")
 
-    mirror_status = mirror_status_model(mirror_runtime, worker_health)
-    st.markdown(
-        f'<div class="ob-paper-status ob-paper-status-{mirror_status["treatment"]}" '
-        f'style="display:inline-flex;width:auto;padding:7px 12px;margin-top:4px">'
-        f'<span>{escape(mirror_status["label"])}</span></div>',
-        unsafe_allow_html=True,
-    )
-
     broad_tab, mirror_tab, filtered_tab, v2_tab, compare_tab = st.tabs(
-        ["BROAD", "MIRROR CONTROL", "FILTERED", "MIRROR V2 SHADOW", "COMPARE"]
+        ["BROAD", "CONTROL RESEARCH", "FILTERED", "CONTROL V2 RESEARCH", "COMPARE"]
     )
     with broad_tab:
         st.caption("Existing risk-filtered PAPER portfolio. Its policy and ledger are unchanged.")
     with mirror_tab:
         mirror_metrics = mirror_summary(mirror_rows)
-        st.caption("MIRROR · 1 CONTRACT / AUTH TRADE · Railway writer · read-only UI")
+        st.warning("RESEARCH ONLY — FULL-PARTICIPATION CONTROL")
+        st.caption("MIRROR CONTROL · 1 contract per authoritative trade · persistence and execution unchanged")
         for metric_row in (
             (("Authoritative Entries", mirror_metrics["authoritative_entries"]), ("Attempted", mirror_metrics["attempted"]),
              ("Opened", mirror_metrics["opened"]), ("Unexecutable", mirror_metrics["unexecutable"]),
@@ -4608,8 +4602,8 @@ def render_paper_trading_page():
         comparison = portfolio_comparison(
             authoritative_events, raw_journal, captures, positions, mirror_rows
         )
-        st.markdown("#### OPTIONBEACON vs BROAD vs MIRROR")
-        st.caption("OptionBeacon returns are underlying percentages; BROAD and MIRROR P&L are simulated option-contract dollars.")
+        st.markdown("#### OPTIONBEACON vs BROAD vs FULL-PARTICIPATION CONTROL")
+        st.caption("Advanced benchmark comparison. Control P&L is simulated option-contract dollars.")
         st.dataframe(pd.DataFrame(comparison["metrics"]), use_container_width=True, hide_index=True)
         missed = comparison["missed"]
         st.caption(
@@ -4952,6 +4946,7 @@ def render_developer_tools(trade_state=None):
     render_production_forensic_audit(st)
     render_production_strategic_audit(st)
     render_production_qqq_forensic_audit(st)
+    render_whole_app_audit(st)
     render_qqq_forward_research(st, (trade_state or {}).get("repository"))
     render_opportunity_context_attribution(st, (trade_state or {}).get("repository"))
     render_contextual_research(st, (trade_state or {}).get("repository"))

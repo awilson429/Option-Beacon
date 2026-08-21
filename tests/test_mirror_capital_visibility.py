@@ -73,16 +73,14 @@ def test_missing_persisted_values_remain_unknown_instead_of_fabricated_zero():
     assert summary["return_on_peak_capital_percent"] is None
 
 
-def test_trade_desk_card_reports_no_limit_and_experiment_capital_concepts():
+def test_trade_desk_primary_card_hides_control_capital_but_model_preserves_it():
     rows = [position("a", 200, unrealized=20)]
     model = trade_comparison_model(
         [], [], [], [], session_date=date(2026, 8, 6), mirror_rows=rows,
         mirror_runtime={"enabled": 1, "status": "ACTIVE", "experiment_start_date": "2026-08-06"},
     )
     markup = comparison_markup(model)
-    assert "MIRROR CAPITAL DEPLOYED" in markup
-    assert "$200.00" in markup and "Peak $200.00 · No limit" in markup
-    assert "Cumulative gross debit" in markup and "Open contracts" in markup
+    assert "MIRROR CAPITAL DEPLOYED" not in markup
     assert model["mirror"]["capital_limit"] is None
 
 
@@ -93,7 +91,7 @@ def test_unknown_capital_renders_honestly_and_streamlit_stays_read_only():
         mirror_runtime={"enabled": 1, "status": "ACTIVE", "experiment_start_date": "2026-08-06"},
     )
     markup = comparison_markup(model)
-    assert "MIRROR CAPITAL DEPLOYED</span><strong>—</strong>" in markup
+    assert "MIRROR CAPITAL DEPLOYED" not in markup
     source = inspect.getsource(app.render_outcome_trade_journal)
     for forbidden in ("run_mirror_execution", "record_disposition", "update_mark", "save_runtime_state"):
         assert forbidden not in source
