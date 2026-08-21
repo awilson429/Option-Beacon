@@ -141,7 +141,7 @@ def test_markup_labels_underlying_auth_return_and_paper_option_pnl_distinctly():
     assert "Today's OptionBeacon Trades" in table
     assert "AUTH RETURN" in table and "PAPER OPTION P&L" in table
     assert "SCORE_TOO_LOW" in table and "Why missed?" in table
-    assert "OptionBeacon vs PAPER" in summary
+    assert "OptionBeacon vs BROAD PAPER" in summary
     assert "MISSED AUTHORITATIVE WINNERS" in summary
     assert "Avg auth underlying return" in summary
 
@@ -174,7 +174,7 @@ def test_unproven_match_is_pending_instead_of_symbol_time_guessing():
     assert model["rows"][0]["paper_disposition"] == "PENDING"
 
 
-def test_three_equal_cards_include_persisted_mirror_metrics_and_status():
+def test_primary_cards_hide_persisted_mirror_metrics_but_model_preserves_control():
     model = trade_comparison_model(
         [
             event("win-opened", "TRADE_ENTERED", 1, "NVDA"),
@@ -196,15 +196,14 @@ def test_three_equal_cards_include_persisted_mirror_metrics_and_status():
         "return_on_peak_capital_percent": 27.6, "capital_limit": None,
     }
     markup = comparison_markup(model)
-    assert "OptionBeacon vs PAPER vs MIRROR" in markup
-    assert markup.count('class="ob-compare-column"') == 3
-    assert "BROAD PAPER" in markup and "MIRROR · ACTIVE" in markup
+    assert "OptionBeacon vs BROAD PAPER" in markup
+    assert markup.count('class="ob-compare-column"') == 2
+    assert "BROAD PAPER" in markup and "MIRROR · ACTIVE" not in markup
     assert 'class="ob-experiment-summary"' in markup
     assert "PARTICIPATION" in markup and "OPTION P&amp;L" in markup
-    assert "BROAD</small><strong>0 / 2" in markup
-    assert "MIRROR</small><strong>1 / 2" in markup
-    assert "BROAD</small><strong>$+0.00" in markup
-    assert "MIRROR</small><strong>$+34.50" in markup
+    assert "BROAD PAPER</small><strong>0 / 2" in markup
+    assert "MIRROR</small>" not in markup
+    assert "BROAD PAPER</small><strong>$+0.00" in markup
     for redundant in (
         "Authoritative Entries", "BROAD: Evaluated", "MIRROR: Evaluated",
         "Unexecutable", "Pending",
@@ -212,7 +211,7 @@ def test_three_equal_cards_include_persisted_mirror_metrics_and_status():
         assert redundant not in markup
 
 
-def test_compact_experiment_summary_keeps_missing_values_honest_and_capital_visible():
+def test_compact_experiment_summary_hides_control_capital_from_primary_ui():
     model = trade_comparison_model(
         [event("opened", "TRADE_ENTERED", 1, "ARKG")], [], [], [],
         session_date=NOW.astimezone().date(),
@@ -222,10 +221,7 @@ def test_compact_experiment_summary_keeps_missing_values_honest_and_capital_visi
     model["paper"]["pnl"] = None
     markup = comparison_markup(model, has_previous=True, selected="PREVIOUS")
     assert markup.count("—") >= 2
-    assert "MIRROR CAPITAL DEPLOYED" in markup
-    assert "Peak" in markup and "Cumulative gross debit" in markup
-    assert "Open contracts" in markup and "Return on peak" in markup
-    assert "No limit" in markup
+    assert "MIRROR CAPITAL DEPLOYED" not in markup
     assert "desk_session=TODAY" in markup
     assert "desk_session=PREVIOUS" in markup
     assert 'class="ob-session-tab is-active" href="?page=trade-desk&amp;desk_session=PREVIOUS"' in markup
@@ -264,8 +260,7 @@ def test_pre_experiment_session_is_not_interpreted_as_zero_performance():
     assert model["mirror"]["available"] is False
     assert model["rows"][0]["mirror_disposition"] == "NO MIRROR DATA"
     markup = comparison_markup(model, selected="PREVIOUS")
-    assert "MIRROR</small><strong>—" in markup
-    assert "MIRROR</small><strong>$" not in markup
+    assert "MIRROR</small>" not in markup
 
 
 @pytest.mark.parametrize("runtime,label", [
@@ -278,7 +273,7 @@ def test_pre_experiment_session_is_not_interpreted_as_zero_performance():
 def test_mirror_status_rendering(runtime, label):
     model = trade_comparison_model([], [], [], [], session_date=NOW.astimezone().date(),
                                    mirror_rows=[], mirror_runtime=runtime)
-    assert label in comparison_markup(model)
+    assert label not in comparison_markup(model)
 
 
 def test_exact_id_join_only_and_trade_table_has_three_system_units():
@@ -292,7 +287,7 @@ def test_exact_id_join_only_and_trade_table_has_three_system_units():
     assert row["mirror_disposition"] == "NOT RECORDED" and row["mirror_pnl"] is None
     markup = authoritative_trades_markup(model)
     assert "AUTH RETURN" in markup
-    assert "BROAD PAPER OPTION P&L" in markup and "MIRROR OPTION P&L" in markup
+    assert "BROAD PAPER OPTION P&L" in markup and "MIRROR OPTION P&L" not in markup
 
 
 def test_opened_mirror_uses_persisted_contract_and_quote_fields_in_trade_table():
@@ -310,9 +305,8 @@ def test_opened_mirror_uses_persisted_contract_and_quote_fields_in_trade_table()
     assert "Entry bid: $1.10" in row["mirror_contract_details"]
     assert "Current mark: $1.40" in row["mirror_contract_details"]
     markup = authoritative_trades_markup(model)
-    assert "MIRROR CONTRACT" in markup and "MIRROR ENTRY" in markup
-    assert "ARKG 08/07/26 $40 PUT" in markup
-    assert "Contract details" in markup and "ARKG260807P00040000" in markup
+    assert "MIRROR CONTRACT" not in markup and "MIRROR ENTRY" not in markup
+    assert "ARKG260807P00040000" not in markup
 
 
 def test_closed_mirror_shows_persisted_exit_fill_and_unopened_has_no_contract():

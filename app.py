@@ -11,6 +11,7 @@ from textwrap import dedent
 import pandas as pd
 import streamlit as st
 from ui.theme import configure_page
+from ui.product_shell import status_strip_markup
 
 from after_hours import after_hours_focus_rows, fetch_after_hours_briefing
 from authoritative_entry_funnel import (
@@ -94,6 +95,7 @@ from option_translation_autopsy_dashboard import render_option_translation_autop
 from production_forensic_dashboard import render_production_forensic_audit
 from strategic_audit_dashboard import render_production_strategic_audit
 from qqq_forensic_dashboard import render_production_qqq_forensic_audit
+from whole_app_audit_dashboard import render_whole_app_audit
 from qqq_forward_research_dashboard import render_qqq_forward_research
 from qqq_command_card import (
     build_qqq_command_card_model, load_qqq_command_data,
@@ -251,6 +253,11 @@ PRODUCTION_NAVIGATION = (
     "Strategy Lab",
     "Advanced",
 )
+PRODUCTION_NAVIGATION_GROUPS = (
+    ("MAIN", (("⌂", "Trade Desk"), ("⌁", "SPY / QQQ"), ("⌕", "Opportunities"))),
+    ("RESEARCH", (("▤", "Paper Trading"), ("⌁", "Strategy Lab"))),
+    ("DEVELOPER", (("⚙", "Advanced"),)),
+)
 
 PRODUCTION_NAVIGATION_CSS = """
 <style>
@@ -310,15 +317,24 @@ div.st-key-{active_key} button p {{
 }}
 </style>"""
     st_module.markdown(PRODUCTION_NAVIGATION_CSS + active_css, unsafe_allow_html=True)
-    columns = st_module.columns(len(PRODUCTION_NAVIGATION))
-    for column, workspace in zip(columns, PRODUCTION_NAVIGATION):
-        column.button(
-            workspace,
-            key=_production_navigation_key(workspace),
-            on_click=set_active_workspace,
-            args=(workspace, st_module.session_state),
-            width="stretch",
-        )
+    sidebar=getattr(st_module,"sidebar",None)
+    if sidebar is not None and hasattr(sidebar,"button"):
+        sidebar.markdown('<div class="ob-nav-brand"><strong>OptionBeacon</strong><span>Follow the edge</span></div>',unsafe_allow_html=True)
+        for group,items in PRODUCTION_NAVIGATION_GROUPS:
+            sidebar.markdown(f'<div class="ob-nav-group">{group}</div>',unsafe_allow_html=True)
+            for icon,workspace in items:
+                sidebar.button(f"{icon}  {workspace}",key=_production_navigation_key(workspace),
+                    on_click=set_active_workspace,args=(workspace,st_module.session_state),width="stretch")
+    else:
+        columns = st_module.columns(len(PRODUCTION_NAVIGATION))
+        for column, workspace in zip(columns, PRODUCTION_NAVIGATION):
+            column.button(
+                workspace,
+                key=_production_navigation_key(workspace),
+                on_click=set_active_workspace,
+                args=(workspace, st_module.session_state),
+                width="stretch",
+            )
     selected = st_module.session_state.get("active_workspace")
     return selected if selected in PRODUCTION_NAVIGATION else PRODUCTION_NAVIGATION[0]
 
@@ -757,7 +773,9 @@ def render_header():
     market_open = is_market_open_now()
     refreshed_at = eastern_now().strftime("%I:%M:%S %p ET")
     st.markdown(
-        header_markup(market_open, refreshed_at, logo_source()),
+        '<div class="ob-terminal-bar"><div><strong>OPTIONBEACON</strong><span>Decision intelligence terminal</span></div>'
+        f'<aside><b class="{"is-live" if market_open else ""}">● {"MARKET LIVE" if market_open else "MARKET CLOSED"}</b>'
+        f'<span>Updated {escape(refreshed_at)}</span></aside></div>',
         unsafe_allow_html=True,
     )
 
@@ -4516,22 +4534,15 @@ def render_paper_trading_page():
     )
     st.caption(f"CURRENT WORKER PROFILE: {worker_profile}")
 
-    mirror_status = mirror_status_model(mirror_runtime, worker_health)
-    st.markdown(
-        f'<div class="ob-paper-status ob-paper-status-{mirror_status["treatment"]}" '
-        f'style="display:inline-flex;width:auto;padding:7px 12px;margin-top:4px">'
-        f'<span>{escape(mirror_status["label"])}</span></div>',
-        unsafe_allow_html=True,
-    )
-
     broad_tab, mirror_tab, filtered_tab, v2_tab, compare_tab = st.tabs(
-        ["BROAD", "MIRROR CONTROL", "FILTERED", "MIRROR V2 SHADOW", "COMPARE"]
+        ["BROAD", "CONTROL RESEARCH", "FILTERED", "CONTROL V2 RESEARCH", "COMPARE"]
     )
     with broad_tab:
         st.caption("Existing risk-filtered PAPER portfolio. Its policy and ledger are unchanged.")
     with mirror_tab:
         mirror_metrics = mirror_summary(mirror_rows)
-        st.caption("MIRROR · 1 CONTRACT / AUTH TRADE · Railway writer · read-only UI")
+        st.warning("RESEARCH ONLY — FULL-PARTICIPATION CONTROL")
+        st.caption("MIRROR CONTROL · 1 contract per authoritative trade · persistence and execution unchanged")
         for metric_row in (
             (("Authoritative Entries", mirror_metrics["authoritative_entries"]), ("Attempted", mirror_metrics["attempted"]),
              ("Opened", mirror_metrics["opened"]), ("Unexecutable", mirror_metrics["unexecutable"]),
@@ -4608,8 +4619,8 @@ def render_paper_trading_page():
         comparison = portfolio_comparison(
             authoritative_events, raw_journal, captures, positions, mirror_rows
         )
-        st.markdown("#### OPTIONBEACON vs BROAD vs MIRROR")
-        st.caption("OptionBeacon returns are underlying percentages; BROAD and MIRROR P&L are simulated option-contract dollars.")
+        st.markdown("#### OPTIONBEACON vs BROAD vs FULL-PARTICIPATION CONTROL")
+        st.caption("Advanced benchmark comparison. Control P&L is simulated option-contract dollars.")
         st.dataframe(pd.DataFrame(comparison["metrics"]), use_container_width=True, hide_index=True)
         missed = comparison["missed"]
         st.caption(
@@ -4952,6 +4963,7 @@ def render_developer_tools(trade_state=None):
     render_production_forensic_audit(st)
     render_production_strategic_audit(st)
     render_production_qqq_forensic_audit(st)
+    render_whole_app_audit(st)
     render_qqq_forward_research(st, (trade_state or {}).get("repository"))
     render_opportunity_context_attribution(st, (trade_state or {}).get("repository"))
     render_contextual_research(st, (trade_state or {}).get("repository"))
@@ -5287,6 +5299,14 @@ def main():
             trade_state, latest_results, snapshot_time, symbol_groups,
             high_score_history,
         )
+
+    snapshot_label=(snapshot_time.strftime("%I:%M:%S %p ET").lstrip("0")
+        if hasattr(snapshot_time,"strftime") else "Awaiting snapshot")
+    st.markdown(status_strip_markup((
+        ("System","Operational"),("Market","Open" if is_market_open_now() else "Closed"),
+        ("Data",snapshot_label),("Options","Configured" if tradier_configured() else "Unavailable"),
+        ("Refresh","60 seconds"),
+    )),unsafe_allow_html=True)
 
     st.markdown(
         '<div class="ob-disclaimer">Decision-support dashboard only. Not financial advice.</div>',
