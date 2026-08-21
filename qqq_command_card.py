@@ -101,6 +101,66 @@ def _duration(opened_at,closed_at):
     return f"{minutes}m {remainder}s" if minutes else f"{remainder}s"
 
 
+def _direction_kind(value):
+    value=str(value or "").upper()
+    if value in {"BULLISH","CALL","C"}: return "CALL"
+    if value in {"BEARISH","PUT","P"}: return "PUT"
+    return None
+
+
+def _contract_kind(row):
+    explicit=_direction_kind(_value(row,"option_type"))
+    if explicit: return explicit
+    match=re.fullmatch(r"[A-Z]+\d{6}([CP])\d{8}",str(_value(row,"option_symbol") or "").upper())
+    return _direction_kind(match.group(1)) if match else None
+
+
+def _expiration_date(row):
+    value=_value(row,"expiration")
+    if value:
+        try: return datetime.fromisoformat(str(value)).date()
+        except (TypeError,ValueError): pass
+    match=re.fullmatch(r"[A-Z]+(\d{6})[CP]\d{8}",str(_value(row,"option_symbol") or "").upper())
+    if match:
+        try: return datetime.strptime(match.group(1),"%y%m%d").date()
+        except ValueError: return None
+    return None
+
+
+def _contract_consistency(row, *, direction, opportunity_id, today, require_identity=False):
+    expiration=_expiration_date(row); expected=_direction_kind(direction); actual=_contract_kind(row)
+    if expiration is None or expiration < today: return False,"EXPIRED" if expiration and expiration<today else "EXPIRATION UNAVAILABLE"
+    if expected and actual != expected: return False,"DIRECTION / OPTION TYPE MISMATCH"
+    row_identity=_value(row,"opportunity_id")
+    if require_identity and opportunity_id and str(row_identity or "")!=str(opportunity_id): return False,"OPPORTUNITY IDENTITY MISMATCH"
+    return True,None
+
+
+def current_qqq_contract(trades, signal, plan, *, now):
+    """Select only a current-session, identity-consistent contract for the setup panel."""
+    today=now.astimezone(EASTERN).date(); opportunity_id=signal.get("opportunity_id") or plan.get("opportunity_id")
+    direction=plan.get("direction") or signal.get("direction")
+    current=[row for row in trades if str(_value(row,"variant") or "").upper()=="INTRADAY_MANAGED"
+        and _trade_session(row)==today.isoformat() and str(_value(row,"status") or "").upper()=="OPEN"]
+    if current:
+        exact=[row for row in current if not opportunity_id or str(_value(row,"opportunity_id") or "")==str(opportunity_id)]
+        row=(exact or current)[0]
+        valid,reason=_contract_consistency(row,direction=direction or _value(row,"direction"),opportunity_id=opportunity_id,
+            today=today,require_identity=bool(opportunity_id))
+        return (row if valid else None),("CURRENT CONTRACT" if valid else "CONTRACT DATA MISMATCH"),reason
+    selected_contract=plan.get("option_symbol") or plan.get("contract")
+    if selected_contract:
+        selected=dict(plan);selected["option_symbol"]=selected_contract
+        selected.setdefault("option_type",plan.get("option_type"));selected.setdefault("opportunity_id",plan.get("opportunity_id"))
+        selected_at=_parse_timestamp(plan.get("selected_at"))
+        current_selection=bool(selected_at and selected_at.astimezone(EASTERN).date()==today)
+        valid,reason=_contract_consistency(selected,direction=direction,opportunity_id=opportunity_id,today=today,
+            require_identity=bool(opportunity_id))
+        if current_selection and valid: return selected,"CURRENT CONTRACT",None
+        return None,"CONTRACT DATA MISMATCH" if reason and reason!="EXPIRED" else "AWAITING CONTRACT SELECTION",reason
+    return None,"AWAITING CONTRACT SELECTION",None
+
+
 def build_qqq_trade_coverage(trades, signal, plan, *, now, stale=False):
     """Build a presentation-only lifecycle from authoritative, already-loaded state."""
     today=now.astimezone(EASTERN).date().isoformat()
@@ -114,6 +174,10 @@ def build_qqq_trade_coverage(trades, signal, plan, *, now, stale=False):
         closed=str(_value(row,"status") or "").upper()=="CLOSED"
         management=str(_value(row,"management_state") or "").upper()
         state="CLOSED" if closed else "MANAGING" if management not in {"","OPEN","ENTERED"} else "ENTERED"
+        valid,mismatch_reason=_contract_consistency(row,direction=_value(row,"direction"),
+            opportunity_id=signal.get("opportunity_id"),today=now.astimezone(EASTERN).date(),
+            require_identity=bool(not closed and signal.get("opportunity_id")))
+        if not valid: state="CONTRACT DATA MISMATCH"
         stamp=_value(row,"closed_at") if closed else (_value(row,"last_quote_at") or _value(row,"updated_at") or _value(row,"opened_at"))
         bid=_number(_value(row,"entry_bid"));ask=_number(_value(row,"entry_ask"))
         midpoint=(bid+ask)/2 if bid is not None and ask is not None else None
@@ -126,14 +190,24 @@ def build_qqq_trade_coverage(trades, signal, plan, *, now, stale=False):
         row_stale=bool(parsed_stamp and (now.astimezone(timezone.utc)-parsed_stamp.astimezone(timezone.utc)).total_seconds()>300)
         coverage.update(state=state,updated_at=stamp,midpoint=midpoint,trigger=signal.get("trigger_price") or plan.get("trigger_price"),
             stale=bool(row_stale and not closed),duration=_duration(_value(row,"opened_at"),_value(row,"closed_at")),
+            mismatch_reason=mismatch_reason,display_dte=((_expiration_date(row)-now.astimezone(EASTERN).date()).days if _expiration_date(row) else None),
             contract_label=format_contract_label(_value(row,"option_symbol"),strike=_value(row,"strike"),expiration=_value(row,"expiration"),bias=_value(row,"direction")))
-        coverage["copy_line"]=(f'{format_trade_timestamp(_value(row,"opened_at"))} | {_value(row,"direction") or "—"} | '
+        coverage["copy_line"]=None if not valid else (f'{format_trade_timestamp(_value(row,"opened_at"))} | {_value(row,"direction") or "—"} | '
             f'{coverage["contract_label"]} | OCC {_value(row,"option_symbol") or "—"} | DTE {_value(row,"dte") if _value(row,"dte") is not None else "—"} | '
             f'Fill {_fmt(_value(row,"entry_fill"),"price")} | QQQ {_fmt(_value(row,"underlying_entry_price"),"price")} | {_value(row,"variant")}')
         return coverage
     signal_state=str(signal.get("state") or "").upper()
-    state="CONTRACT SELECTED" if selected_contract else "ENTRY TRIGGERED" if signal_state=="TRIGGERED" else "WATCHING" if signal_state in {"ARMED","SETUP_DETECTED"} else "NO TRADE"
+    mismatch_reason=None
+    if selected_contract:
+        selected=dict(plan);selected["option_symbol"]=selected_contract
+        selected_stamp=_parse_timestamp(plan.get("selected_at"))
+        current_selected=bool(selected_stamp and selected_stamp.astimezone(EASTERN).date()==now.astimezone(EASTERN).date())
+        valid,mismatch_reason=_contract_consistency(selected,direction=plan.get("direction") or signal.get("direction"),
+            opportunity_id=signal.get("opportunity_id"),today=now.astimezone(EASTERN).date(),require_identity=bool(signal.get("opportunity_id")))
+        state="CONTRACT SELECTED" if current_selected and valid else "CONTRACT DATA MISMATCH" if mismatch_reason else "AWAITING CONTRACT SELECTION"
+    else: state="ENTRY TRIGGERED" if signal_state=="TRIGGERED" else "WATCHING" if signal_state in {"ARMED","SETUP_DETECTED"} else "NO TRADE"
     return {"state":state,"stale":bool(stale and state!="NO TRADE"),"updated_at":signal.get("updated_at"),
+        "mismatch_reason":mismatch_reason,
         "opportunity_id":signal.get("opportunity_id"),"direction":plan.get("direction") or signal.get("direction"),
         "option_symbol":selected_contract,"contract_label":format_contract_label(selected_contract,strike=plan.get("strike"),expiration=plan.get("expiration"),bias=plan.get("direction") or signal.get("direction")),
         "selected_at":plan.get("selected_at"),"strike":plan.get("strike"),"expiration":plan.get("expiration"),"dte":plan.get("dte"),"entry_bid":plan.get("bid"),
@@ -160,7 +234,8 @@ def build_qqq_command_card_model(latest_qqq, data, *, now, market_open, stale=Fa
     else: status="DATA UNAVAILABLE" if not live and not trades else "NO QUALIFYING SETUP"
     direction=plan.get("direction") or signal.get("direction") or live.get("bias") or latest_trade.get("direction") or "NEUTRAL"
     direction="CALL" if str(direction).upper() in {"BULLISH","CALL"} else "PUT" if str(direction).upper() in {"BEARISH","PUT"} else "NEUTRAL"
-    spread=_number(latest_trade.get("spread_percent")); sequence=max((int(r.get("session_trade_number") or 0) for r in data.get("shadow") or [] if r.get("eastern_session")==today),default=0)
+    setup_contract,contract_status,contract_issue=current_qqq_contract(trades,signal,plan,now=now)
+    spread=_number(_value(setup_contract,"spread_percent")); sequence=max((int(r.get("session_trade_number") or 0) for r in data.get("shadow") or [] if r.get("eastern_session")==today),default=0)
     evidence={"vwap_aligned":live.get("price_vs_vwap") is not None,"ema_aligned":live.get("ema_aligned"),
         "trend_aligned":live.get("multi_timeframe_alignment") is not None,"orb_aligned":live.get("opening_range_state") is not None,
         "cross_confirmed":bool(live.get("cross_market") or signal.get("cross_market_json")),"spread_tight":None if spread is None else spread<=15,
@@ -183,13 +258,14 @@ def build_qqq_command_card_model(latest_qqq, data, *, now, market_open, stale=Fa
     return {"status":status,"price":live.get("price") or signal.get("underlying_price"),"bias":direction,
         "regime":signal.get("regime") or live.get("regime"),"setup":plan.get("setup_type") or plan.get("setup") or signal.get("setup"),
         "tradeability":signal.get("state"),"trigger":plan.get("trigger_price") or signal.get("trigger_price"),
-        "contract":latest_trade.get("option_symbol"),"strike":latest_trade.get("strike"),"expiration":latest_trade.get("expiration"),
-        "dte":latest_trade.get("dte"),"bid":latest_trade.get("entry_bid"),"ask":latest_trade.get("entry_ask"),
-        "midpoint":((_number(latest_trade.get("entry_bid"))+_number(latest_trade.get("entry_ask")))/2 if _number(latest_trade.get("entry_bid")) is not None and _number(latest_trade.get("entry_ask")) is not None else None),
+        "contract":_value(setup_contract,"option_symbol"),"strike":_value(setup_contract,"strike"),"expiration":_value(setup_contract,"expiration"),
+        "dte":((_expiration_date(setup_contract)-now_et.date()).days if setup_contract and _expiration_date(setup_contract) else None),
+        "bid":_value(setup_contract,"entry_bid",_value(setup_contract,"bid")),"ask":_value(setup_contract,"entry_ask",_value(setup_contract,"ask")),
+        "midpoint":((_number(_value(setup_contract,"entry_bid",_value(setup_contract,"bid")))+_number(_value(setup_contract,"entry_ask",_value(setup_contract,"ask"))))/2 if _number(_value(setup_contract,"entry_bid",_value(setup_contract,"bid"))) is not None and _number(_value(setup_contract,"entry_ask",_value(setup_contract,"ask"))) is not None else None),
         "spread":spread,"updated_at":stamp,"chips":chips,"context_quality":context_quality(evidence,stale=stale),
         "session_pulse":pulse,"session_trade_number":sequence,"first_two":first_two,"edge_snapshot":edge,
         "mark_coverage":mark_coverage(data.get("shadow") or [],data.get("marks") or []),"dna_summary":dna,"market_open":market_open,
-        "trade_coverage":trade_coverage}
+        "trade_coverage":trade_coverage,"contract_status":contract_status,"contract_issue":contract_issue}
 
 
 def _compact_qqq_command_card_markup(model):
@@ -250,9 +326,12 @@ def _display_expiration(value):
 def _trade_coverage_markup(coverage):
     state=coverage.get("state") or "NO TRADE"; badge="DATA STALE" if coverage.get("stale") else state
     def item(label,value): return f'<div><span>{escape(label)}</span><strong>{escape(str(value))}</strong></div>'
-    if state in {"WATCHING","ENTRY TRIGGERED","NO TRADE"}:
+    if state in {"WATCHING","ENTRY TRIGGERED","NO TRADE","AWAITING CONTRACT SELECTION"}:
         details=(("Direction",_fmt(coverage.get("direction"))),("QQQ",_fmt(coverage.get("underlying_entry_price"),"price")),("Entry trigger",_fmt(coverage.get("trigger"),"price")),("Updated",format_trade_timestamp(coverage.get("updated_at"))))
         note="Trigger observed; no managed entry is persisted." if state=="ENTRY TRIGGERED" else "No managed entry is persisted for this session."
+    elif state=="CONTRACT DATA MISMATCH":
+        details=(("Status","NOT ACTIONABLE"),("Reason",_fmt(coverage.get("mismatch_reason"))),("Opportunity",_fmt(coverage.get("opportunity_id"))),("Updated",format_trade_timestamp(coverage.get("updated_at"))))
+        note="Replication is unavailable until authoritative contract identity is consistent."
     elif state=="CONTRACT SELECTED":
         details=(("Contract",coverage.get("contract_label")),("Raw OCC",_fmt(coverage.get("option_symbol"))),("Selected",format_trade_timestamp(coverage.get("selected_at"))),("Bid / Ask",f'{_fmt(coverage.get("entry_bid"),"price")} / {_fmt(coverage.get("entry_ask"),"price")}'),("Mid / Spread",f'{_fmt(coverage.get("midpoint"),"price")} / {_fmt(coverage.get("spread_percent"),"percent")}'),("QQQ / Trigger",f'{_fmt(coverage.get("underlying_entry_price"),"price")} / {_fmt(coverage.get("trigger"),"price")}'),("Status","WAITING FOR ENTRY"))
         note="Contract selection is not an entry."
@@ -272,7 +351,8 @@ def qqq_command_card_markup(model, *, view="LIVE / SESSION"):
     pulse=model["session_pulse"];edge=model["edge_snapshot"];ft=model.get("first_two");quality=model["context_quality"];coverage=model["mark_coverage"]
     def metric(label,value):
         return f'<div class="ob-qnative-metric"><span>{escape(label)}</span><strong>{escape(str(value))}</strong></div>'
-    contract=format_contract_label(model.get("contract"),strike=model.get("strike"),expiration=model.get("expiration"),bias=model.get("bias"))
+    contract=(format_contract_label(model.get("contract"),strike=model.get("strike"),expiration=model.get("expiration"),bias=model.get("bias"))
+        if model.get("contract") else model.get("contract_status") or "NO CURRENT CONTRACT")
     setup_items=(("Strike",_fmt(model["strike"],"price")),("DTE",_fmt(model["dte"])),("Spread",_fmt(model["spread"],"percent")),("Expiration",_display_expiration(model["expiration"])))
     if model["market_open"] and (model.get("session_trade_number") or 0)>0:
         setup_items+=(('Trade State',f'Trade #{model["session_trade_number"]}'),)

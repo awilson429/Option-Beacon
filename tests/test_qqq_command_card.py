@@ -89,8 +89,8 @@ def test_trade_coverage_never_promotes_selection_or_trigger_to_entered():
         "trigger_price":479.80,"updated_at":"2026-08-20T14:30:59+00:00"}
     triggered=build_qqq_trade_coverage([],signal,{},now=NOW)
     assert triggered["state"]=="ENTRY TRIGGERED" and triggered.get("entry_fill") is None
-    selected=build_qqq_trade_coverage([],signal,{"option_symbol":"QQQ260820C00480000","strike":480,
-        "expiration":"2026-08-20","dte":0,"bid":1.10,"ask":1.20},now=NOW)
+    selected=build_qqq_trade_coverage([],signal,{"opportunity_id":"opp-1","option_symbol":"QQQ260820C00480000","strike":480,
+        "expiration":"2026-08-20","dte":0,"bid":1.10,"ask":1.20,"selected_at":"2026-08-20T14:30:59+00:00"},now=NOW)
     assert selected["state"]=="CONTRACT SELECTED" and selected["option_symbol"]=="QQQ260820C00480000"
     assert selected.get("entry_fill") is None
 
@@ -126,6 +126,65 @@ def test_live_trade_coverage_is_prominent_copy_friendly_and_presentation_only():
     for value in ("CLOSED","10:31:02 AM ET","10:46:12 AM ET","QQQ260820C00480000","INTRADAY_MANAGED","TARGET"):
         assert value in markup
     assert "user-select:all" in markup and source==original
+
+
+def test_production_aug_21_put_setup_never_splices_aug_19_call_contract():
+    now=datetime(2026,8,21,14,20,tzinfo=timezone.utc)
+    historical=managed_trade(option_symbol="QQQ260819C00716000",strike=716,expiration="2026-08-19",
+        opened_at="2026-08-19T14:31:02+00:00",closed_at="2026-08-19T15:00:00+00:00",status="CLOSED")
+    live={"price":710.24,"timestamp":"2026-08-21T14:20:00+00:00","bias":"Bearish","regime":"TRENDING DOWN",
+        "trade_plan":{"direction":"Bearish","setup_type":"Bearish breakdown","trigger_price":709.41}}
+    signal={"opportunity_id":"aug21-put","direction":"PUT","setup":"Bearish breakdown","trigger_price":709.41,
+        "state":"ARMED","updated_at":"2026-08-21T14:20:00+00:00"}
+    model=build_qqq_command_card_model(live,dict(data(),trades=[historical],signals=[signal]),now=now,market_open=True)
+    assert model["contract"] is None and model["strike"] is None and model["dte"] is None
+    markup=qqq_command_card_markup(model)
+    assert "AWAITING CONTRACT SELECTION" in markup and "QQQ260819C00716000" not in markup
+    assert "QQQ $716 Call" not in markup and "CURRENT QQQ SETUP" in markup
+
+
+def test_current_contract_requires_current_session_direction_and_exact_identity():
+    now=datetime(2026,8,21,15,tzinfo=timezone.utc)
+    signal={"opportunity_id":"current-put","direction":"PUT","state":"TRIGGERED","updated_at":"2026-08-21T15:00:00+00:00"}
+    previous=managed_trade(opportunity_id="current-put",direction="PUT",option_type="PUT",option_symbol="QQQ260820P00480000",
+        expiration="2026-08-20",opened_at="2026-08-20T15:00:00+00:00")
+    assert build_qqq_command_card_model({},dict(data(),trades=[previous],signals=[signal]),now=now,market_open=True)["contract"] is None
+    expired=managed_trade(opportunity_id="current-put",direction="PUT",option_type="PUT",option_symbol="QQQ260820P00480000",
+        expiration="2026-08-20",opened_at="2026-08-21T14:30:00+00:00")
+    expired_model=build_qqq_command_card_model({},dict(data(),trades=[expired],signals=[signal]),now=now,market_open=True)
+    assert expired_model["contract_status"]=="CONTRACT DATA MISMATCH" and expired_model["trade_coverage"]["copy_line"] is None
+    wrong_identity=managed_trade(opportunity_id="other",direction="PUT",option_type="PUT",option_symbol="QQQ260821P00710000",
+        expiration="2026-08-21",opened_at="2026-08-21T14:30:00+00:00")
+    mismatch=build_qqq_command_card_model({},dict(data(),trades=[wrong_identity],signals=[signal]),now=now,market_open=True)
+    assert mismatch["contract_status"]=="CONTRACT DATA MISMATCH"
+    assert mismatch["trade_coverage"]["state"]=="CONTRACT DATA MISMATCH" and mismatch["trade_coverage"]["copy_line"] is None
+
+
+def test_valid_current_call_put_zero_and_future_dte_are_derived_from_expiration():
+    now=datetime(2026,8,21,15,tzinfo=timezone.utc)
+    for direction,kind,symbol,expiration,expected_dte in (
+        ("CALL","CALL","QQQ260821C00710000","2026-08-21",0),
+        ("PUT","PUT","QQQ260822P00710000","2026-08-22",1),
+    ):
+        signal={"opportunity_id":f"opp-{kind}","direction":direction,"state":"PAPER_OPENED","updated_at":"2026-08-21T15:00:00+00:00"}
+        trade=managed_trade(opportunity_id=f"opp-{kind}",direction=direction,option_type=kind,option_symbol=symbol,
+            expiration=expiration,dte=99,opened_at="2026-08-21T14:30:00+00:00")
+        model=build_qqq_command_card_model({},dict(data(),trades=[trade],signals=[signal]),now=now,market_open=True)
+        assert model["contract"]==symbol and model["dte"]==expected_dte
+        assert model["trade_coverage"]["display_dte"]==expected_dte and model["trade_coverage"]["copy_line"]
+
+
+def test_current_selected_contract_requires_timestamp_expiration_direction_and_identity():
+    now=datetime(2026,8,21,15,tzinfo=timezone.utc)
+    signal={"opportunity_id":"selected-put","direction":"PUT","state":"TRIGGERED","updated_at":"2026-08-21T15:00:00+00:00"}
+    base={"opportunity_id":"selected-put","direction":"PUT","option_type":"PUT","option_symbol":"QQQ260821P00710000",
+        "expiration":"2026-08-21","strike":710,"selected_at":"2026-08-21T14:59:50+00:00"}
+    selected=build_qqq_trade_coverage([],signal,base,now=now)
+    assert selected["state"]=="CONTRACT SELECTED" and selected.get("entry_fill") is None
+    for changes in ({"selected_at":"2026-08-20T14:59:50+00:00"},{"expiration":"2026-08-20"},
+        {"option_type":"CALL","option_symbol":"QQQ260821C00710000"},{"opportunity_id":"other"}):
+        invalid=build_qqq_trade_coverage([],signal,{**base,**changes},now=now)
+        assert invalid["state"]!="CONTRACT SELECTED" and invalid.get("copy_line") is None
 
 
 def test_market_open_and_first_two_active_use_adaptive_priority():
@@ -213,7 +272,7 @@ def test_native_navigation_has_no_custom_javascript_radio_or_data_access():
 
 def test_expiration_is_formatted_and_closed_setup_preserves_source_value():
     model=build_qqq_command_card_model({},data(),now=NOW,market_open=False)
-    model.update(contract=None,strike=716,expiration="2026-08-19",bias="PUT")
+    model.update(contract="QQQ260819P00716000",strike=716,expiration="2026-08-19",bias="PUT")
     original=dict(model)
     markup=qqq_command_card_markup(model)
     assert "QQQ $716 Put" in markup and "Aug 19" in markup and ">Aug 19</strong>" in markup
