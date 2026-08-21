@@ -240,7 +240,8 @@ def trade_comparison_model(
 
 
 def comparison_markup(model, *, has_previous=False, selected="TODAY"):
-    auth, paper, mirror = model["authoritative"], model["paper"], model["mirror"]
+    """Primary comparison; MIRROR control remains available in research tools."""
+    auth, paper = model["authoritative"], model["paper"]
     selected = selected if selected in {"TODAY", "PREVIOUS"} else "TODAY"
     tabs = (
         f'<a class="ob-session-tab {"is-active" if selected == "TODAY" else ""}" href="?page=trade-desk&amp;desk_session=TODAY">Today</a>'
@@ -249,35 +250,19 @@ def comparison_markup(model, *, has_previous=False, selected="TODAY"):
     metrics = (
         ("OPTIONBEACON", "Trades", auth["trades"], "Wins", auth["wins"], "Losses", auth["losses"], "Win Rate", f'{auth["win_rate"]:.1f}%', "Avg Auth Return", _percent(auth["average_return"])),
         ("BROAD PAPER", "Opened", paper["opened"], "Closed", paper["closed"], "Wins / Losses", f'{paper["wins"]} / {paper["losses"]}', "Participation", f'{paper["participation_rate"]:.1f}%', "Option P&L", _money(paper["pnl"])),
-        (f'MIRROR · {mirror["status"]}', "Opened", mirror["opened"] if mirror["available"] else "—", "Closed", mirror["closed"] if mirror["available"] else "—", "Wins / Losses", f'{mirror["wins"]} / {mirror["losses"]}' if mirror["available"] else "—", "Participation", f'{mirror["participation_rate"]:.1f}%' if mirror["available"] else "—", "Option P&L", _money(mirror["pnl"]) if mirror["available"] else "—"),
     )
     columns = "".join(
         '<div class="ob-compare-column"><h4>' + escape(str(values[0])) + '</h4>'
         + "".join(f'<div><span>{escape(str(values[index]))}</span><strong>{escape(str(values[index + 1]))}</strong></div>' for index in range(1, len(values), 2))
         + '</div>' for values in metrics
     )
-    mirror_participation = (
-        f'{mirror["opened"]} / {auth["trades"]}' if mirror["available"] else "—"
-    )
     experiment_summary = (
         '<div class="ob-experiment-summary">'
         '<div class="ob-experiment-metric"><span>PARTICIPATION</span>'
-        f'<div><small>BROAD</small><strong>{paper["opened"]} / {auth["trades"]}</strong></div>'
-        f'<div><small>MIRROR</small><strong>{mirror_participation}</strong></div></div>'
+        f'<div><small>BROAD PAPER</small><strong>{paper["opened"]} / {auth["trades"]}</strong></div></div>'
         '<div class="ob-experiment-metric"><span>OPTION P&amp;L</span>'
-        f'<div><small>BROAD</small><strong>{_money(paper["pnl"])}</strong></div>'
-        f'<div><small>MIRROR</small><strong>{_money(mirror["pnl"]) if mirror["available"] else "—"}</strong></div></div>'
+        f'<div><small>BROAD PAPER</small><strong>{_money(paper["pnl"])}</strong></div></div>'
         '</div>'
-    )
-    capital = (
-        '<div class="ob-mirror-capital"><span>MIRROR CAPITAL DEPLOYED</span>'
-        f'<strong>{_money_unsigned(mirror["current_capital_required"])}</strong>'
-        f'<small>Peak {_money_unsigned(mirror["peak_capital_required"])} · No limit</small>'
-        '<div>'
-        f'<span>Open contracts <strong>{mirror["open_contracts"]}</strong></span>'
-        f'<span>Cumulative gross debit <strong>{_money_unsigned(mirror["cumulative_gross_debit"])}</strong></span>'
-        f'<span>Return on peak <strong>{_percent(mirror["return_on_peak_capital_percent"])}</strong></span>'
-        '</div></div>'
     )
     missed = model["missed_winners"]
     reasons = ", ".join(f'{key}: {value}' for key, value in missed["rejection_counts"].items()) or "None recorded"
@@ -286,9 +271,9 @@ def comparison_markup(model, *, has_previous=False, selected="TODAY"):
         f'<strong>{missed["count"]}</strong><small>Avg auth underlying return {_percent(missed["average_return"])} · {escape(reasons)}</small></div>'
     )
     return (
-        '<section class="ob-desk-panel"><div class="ob-compare-header"><h3>SESSION COMPARISON — OptionBeacon vs PAPER vs MIRROR · BROAD PAPER ONLY</h3>'
+        '<section class="ob-desk-panel"><div class="ob-compare-header"><h3>SESSION COMPARISON — OptionBeacon vs BROAD PAPER</h3>'
         f'<nav class="ob-session-tabs">{tabs}</nav></div><div class="ob-compare-grid">{columns}</div>'
-        f'{experiment_summary}{capital}{missed_block}</section>'
+        f'{experiment_summary}{missed_block}</section>'
     )
 
 
@@ -321,12 +306,6 @@ def authoritative_trades_markup(model, *, selected="TODAY"):
                     f'Rejection {row["paper_reason"]}'
                 )
                 diagnostics = f'<details><summary>Why missed?</summary><div>{escape(details)}</div></details>'
-            mirror_contract = escape(str(row["mirror_contract"]))
-            if row.get("mirror_contract_details"):
-                mirror_contract += (
-                    '<details><summary>Contract details</summary><div>'
-                    + escape(row["mirror_contract_details"]) + '</div></details>'
-                )
             rows.append(
                 '<tr>'
                 f'<td>{escape(row["time"])}</td><td><strong>{escape(row["symbol"])}</strong></td>'
@@ -334,13 +313,9 @@ def authoritative_trades_markup(model, *, selected="TODAY"):
                 f'<td class="ob-value-{treatment}">{escape(row["auth_result"])}</td>'
                 f'<td class="ob-value-{treatment}">{_percent(row["auth_return"])}</td><td>{escape(row["status"])}</td>'
                 f'<td>{escape(row["paper_disposition"])}</td><td>{escape(row["paper_reason"])}</td>'
-                f'<td>{_money(row["paper_pnl"]) if row["paper_pnl"] is not None else "—"}{diagnostics}</td>'
-                f'<td>{escape(row["mirror_disposition"])}</td><td>{mirror_contract}</td>'
-                f'<td>{_price(row["mirror_entry"]) if row["mirror_entry"] is not None else "—"}</td>'
-                f'<td>{escape(row["mirror_reason"])}</td>'
-                f'<td>{_money(row["mirror_pnl"]) if row["mirror_pnl"] is not None else "—"}</td></tr>'
+                f'<td>{_money(row["paper_pnl"]) if row["paper_pnl"] is not None else "—"}{diagnostics}</td></tr>'
             )
-        headers = ("TIME", "SYMBOL", "DIRECTION", "ENTRY", "EXIT / CURRENT", "RESULT", "AUTH RETURN", "STATUS", "BROAD", "BROAD REASON", "BROAD PAPER OPTION P&L", "MIRROR", "MIRROR CONTRACT", "MIRROR ENTRY", "MIRROR REASON", "MIRROR OPTION P&L")
+        headers = ("TIME", "SYMBOL", "DIRECTION", "ENTRY", "EXIT / CURRENT", "RESULT", "AUTH RETURN", "STATUS", "BROAD", "BROAD REASON", "BROAD PAPER OPTION P&L")
         body = '<div class="ob-position-scroll"><table class="ob-position-table ob-auth-table"><thead><tr>' + "".join(f'<th>{value}</th>' for value in headers) + '</tr></thead><tbody>' + "".join(rows) + '</tbody></table></div>'
     title = "Today's OptionBeacon Trades" if selected == "TODAY" else "Previous Session OptionBeacon Trades"
     return f'<section class="ob-desk-panel"><h3>{title}</h3>{summary}{body}</section>'
