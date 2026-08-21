@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import app
 from qqq_command_card import (build_qqq_command_card_model, context_quality,
-    format_card_timestamp, format_contract_label, load_qqq_command_data,
+    build_qqq_trade_coverage, format_card_timestamp, format_contract_label, format_trade_timestamp, load_qqq_command_data,
     qqq_command_card_markup, render_qqq_command_card,
     QQQ_COMMAND_CARD_VIEWS, QQQ_COMMAND_CARD_VIEW_KEY)
 
@@ -72,6 +72,60 @@ def test_human_contract_and_timestamp_helpers_are_presentation_only():
     assert format_contract_label(None,strike=715,expiration="2026-08-21",bias="CALL")=="QQQ $715 Call · Aug 21"
     assert format_contract_label(None)=="No active contract"
     assert format_card_timestamp("2026-08-19T19:55:08+00:00")=="Updated 3:55 PM ET"
+    assert format_trade_timestamp("2026-08-19T19:55:08+00:00")=="3:55:08 PM ET"
+
+
+def managed_trade(**updates):
+    row={"trade_id":"managed-1","opportunity_id":"opp-1","variant":"INTRADAY_MANAGED","direction":"CALL",
+        "option_symbol":"QQQ260820C00480000","expiration":"2026-08-20","dte":0,"strike":480,"quantity":1,
+        "underlying_entry_price":479.75,"entry_bid":1.10,"entry_ask":1.20,"entry_fill":1.15,"spread_percent":8.7,
+        "status":"OPEN","management_state":"OPEN","opened_at":"2026-08-20T14:31:02+00:00",
+        "last_quote_at":"2026-08-20T14:32:03+00:00","updated_at":"2026-08-20T14:32:03+00:00"}
+    row.update(updates);return row
+
+
+def test_trade_coverage_never_promotes_selection_or_trigger_to_entered():
+    signal={"opportunity_id":"opp-1","state":"TRIGGERED","direction":"CALL","underlying_price":479.75,
+        "trigger_price":479.80,"updated_at":"2026-08-20T14:30:59+00:00"}
+    triggered=build_qqq_trade_coverage([],signal,{},now=NOW)
+    assert triggered["state"]=="ENTRY TRIGGERED" and triggered.get("entry_fill") is None
+    selected=build_qqq_trade_coverage([],signal,{"option_symbol":"QQQ260820C00480000","strike":480,
+        "expiration":"2026-08-20","dte":0,"bid":1.10,"ask":1.20},now=NOW)
+    assert selected["state"]=="CONTRACT SELECTED" and selected["option_symbol"]=="QQQ260820C00480000"
+    assert selected.get("entry_fill") is None
+
+
+def test_trade_coverage_uses_managed_lane_and_preserves_exact_entry_fields():
+    mirror=managed_trade(trade_id="mirror-1",variant="INTRADAY_MIRROR",entry_fill=9.99)
+    coverage=build_qqq_trade_coverage([mirror,managed_trade()],{"trigger_price":479.80},{},now=NOW)
+    assert coverage["state"]=="ENTERED" and coverage["trade_id"]=="managed-1"
+    assert coverage["entry_fill"]==1.15 and coverage["midpoint"]==1.15 and coverage["quantity"]==1
+    assert "10:31:02 AM ET" in coverage["copy_line"] and "OCC QQQ260820C00480000" in coverage["copy_line"]
+    assert "INTRADAY_MANAGED" in coverage["copy_line"] and "9.99" not in coverage["copy_line"]
+
+
+def test_trade_coverage_managing_closed_recent_session_and_stale_states():
+    managing=build_qqq_trade_coverage([managed_trade(management_state="TRAILING",current_mark=1.35,
+        unrealized_pnl=20,mfe_pct=18,mae_pct=-4)],{}, {},now=NOW,stale=True)
+    assert managing["state"]=="MANAGING" and managing["stale"] is True
+    assert managing["current_mark"]==1.35 and managing["unrealized_pnl"]==20
+    closed=build_qqq_trade_coverage([managed_trade(status="CLOSED",management_state="CLOSED",
+        closed_at="2026-08-20T14:46:12+00:00",exit_fill=1.40,realized_return_percent=21.7,
+        realized_pnl=25,exit_reason="TRAILING_STOP",mfe_pct=30,mae_pct=-4)],{}, {},now=NOW,stale=True)
+    assert closed["state"]=="CLOSED" and closed["stale"] is False and closed["duration"]=="15m 10s"
+    assert closed["exit_fill"]==1.40 and closed["exit_reason"]=="TRAILING_STOP"
+
+
+def test_live_trade_coverage_is_prominent_copy_friendly_and_presentation_only():
+    source=[managed_trade(status="CLOSED",management_state="CLOSED",closed_at="2026-08-20T14:46:12+00:00",
+        exit_fill=1.40,realized_return_percent=21.7,realized_pnl=25,exit_reason="TARGET")]
+    original=[dict(source[0])]
+    model=build_qqq_command_card_model({},dict(data(),trades=source),now=NOW,market_open=True)
+    markup=qqq_command_card_markup(model)
+    assert markup.index("QQQ TRADE COVERAGE") < markup.index("CURRENT QQQ SETUP")
+    for value in ("CLOSED","10:31:02 AM ET","10:46:12 AM ET","QQQ260820C00480000","INTRADAY_MANAGED","TARGET"):
+        assert value in markup
+    assert "user-select:all" in markup and source==original
 
 
 def test_market_open_and_first_two_active_use_adaptive_priority():

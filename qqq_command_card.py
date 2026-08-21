@@ -36,8 +36,9 @@ def load_qqq_command_data(repository, *, limit=500):
     """One bounded, explicit, read-only snapshot; never initializes schema."""
     with repository.connection() as connection:
         trades=repository._fetchall(connection,"""SELECT trade_id,opportunity_id,variant,symbol,direction,option_symbol,
-            expiration,dte,strike,entry_bid,entry_ask,entry_fill,spread_percent,status,management_state,opened_at,closed_at,
-            exit_fill,exit_reason,realized_pnl,realized_return_percent,mfe_pct,mae_pct,last_quote_at,updated_at
+            option_type,expiration,dte,strike,quantity,underlying_entry_price,entry_bid,entry_ask,entry_fill,spread_percent,
+            status,management_state,opened_at,closed_at,current_mark,current_value,unrealized_pnl,peak_return_pct,
+            exit_fill,exit_reason,realized_pnl,realized_return_percent,mfe_pct,mae_pct,last_quote_at,update_status,updated_at
             FROM intraday_paper_trades WHERE symbol='QQQ' ORDER BY opened_at DESC,trade_id LIMIT ?""",(int(limit),))
         signals=repository._fetchall(connection,"""SELECT opportunity_id,direction,setup,underlying_price,trigger_price,state,
             session_bucket,regime,cross_market_json,detected_at,updated_at FROM intraday_signals
@@ -74,16 +75,81 @@ def _performance(rows):
         "best_trade":max(pnl,default=None),"worst_trade":min(pnl,default=None),"average_trade":sum(pnl)/len(pnl) if pnl else None}
 
 
+def _parse_timestamp(value):
+    if not value: return None
+    try:
+        parsed=datetime.fromisoformat(str(value).replace("Z","+00:00"))
+        return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
+    except (TypeError,ValueError): return None
+
+
+def _trade_session(row):
+    parsed=_parse_timestamp(_value(row,"opened_at"))
+    return parsed.astimezone(EASTERN).date().isoformat() if parsed else None
+
+
+def format_trade_timestamp(value):
+    parsed=_parse_timestamp(value)
+    return "—" if parsed is None else f'{parsed.astimezone(EASTERN).strftime("%I:%M:%S %p").lstrip("0")} ET'
+
+
+def _duration(opened_at,closed_at):
+    opened=_parse_timestamp(opened_at);closed=_parse_timestamp(closed_at)
+    if not opened or not closed: return None
+    seconds=max(0,int((closed-opened).total_seconds()))
+    minutes,remainder=divmod(seconds,60)
+    return f"{minutes}m {remainder}s" if minutes else f"{remainder}s"
+
+
+def build_qqq_trade_coverage(trades, signal, plan, *, now, stale=False):
+    """Build a presentation-only lifecycle from authoritative, already-loaded state."""
+    today=now.astimezone(EASTERN).date().isoformat()
+    managed=[row for row in trades if str(_value(row,"variant") or "").upper()=="INTRADAY_MANAGED"]
+    session_rows=[row for row in managed if _trade_session(row)==today]
+    open_rows=[row for row in session_rows if str(_value(row,"status") or "").upper()=="OPEN"]
+    closed_rows=[row for row in session_rows if str(_value(row,"status") or "").upper()=="CLOSED"]
+    row=(open_rows or closed_rows or [None])[0]
+    selected_contract=plan.get("option_symbol") or plan.get("contract")
+    if row:
+        closed=str(_value(row,"status") or "").upper()=="CLOSED"
+        management=str(_value(row,"management_state") or "").upper()
+        state="CLOSED" if closed else "MANAGING" if management not in {"","OPEN","ENTERED"} else "ENTERED"
+        stamp=_value(row,"closed_at") if closed else (_value(row,"last_quote_at") or _value(row,"updated_at") or _value(row,"opened_at"))
+        bid=_number(_value(row,"entry_bid"));ask=_number(_value(row,"entry_ask"))
+        midpoint=(bid+ask)/2 if bid is not None and ask is not None else None
+        coverage={key:_value(row,key) for key in (
+            "trade_id","opportunity_id","variant","direction","option_symbol","option_type","expiration","dte","strike",
+            "quantity","underlying_entry_price","entry_bid","entry_ask","entry_fill","spread_percent","opened_at","closed_at",
+            "current_mark","current_value","unrealized_pnl","peak_return_pct","exit_fill","exit_reason","realized_pnl",
+            "realized_return_percent","mfe_pct","mae_pct","management_state","last_quote_at","update_status")}
+        parsed_stamp=_parse_timestamp(stamp)
+        row_stale=bool(parsed_stamp and (now.astimezone(timezone.utc)-parsed_stamp.astimezone(timezone.utc)).total_seconds()>300)
+        coverage.update(state=state,updated_at=stamp,midpoint=midpoint,trigger=signal.get("trigger_price") or plan.get("trigger_price"),
+            stale=bool(row_stale and not closed),duration=_duration(_value(row,"opened_at"),_value(row,"closed_at")),
+            contract_label=format_contract_label(_value(row,"option_symbol"),strike=_value(row,"strike"),expiration=_value(row,"expiration"),bias=_value(row,"direction")))
+        coverage["copy_line"]=(f'{format_trade_timestamp(_value(row,"opened_at"))} | {_value(row,"direction") or "—"} | '
+            f'{coverage["contract_label"]} | OCC {_value(row,"option_symbol") or "—"} | DTE {_value(row,"dte") if _value(row,"dte") is not None else "—"} | '
+            f'Fill {_fmt(_value(row,"entry_fill"),"price")} | QQQ {_fmt(_value(row,"underlying_entry_price"),"price")} | {_value(row,"variant")}')
+        return coverage
+    signal_state=str(signal.get("state") or "").upper()
+    state="CONTRACT SELECTED" if selected_contract else "ENTRY TRIGGERED" if signal_state=="TRIGGERED" else "WATCHING" if signal_state in {"ARMED","SETUP_DETECTED"} else "NO TRADE"
+    return {"state":state,"stale":bool(stale and state!="NO TRADE"),"updated_at":signal.get("updated_at"),
+        "opportunity_id":signal.get("opportunity_id"),"direction":plan.get("direction") or signal.get("direction"),
+        "option_symbol":selected_contract,"contract_label":format_contract_label(selected_contract,strike=plan.get("strike"),expiration=plan.get("expiration"),bias=plan.get("direction") or signal.get("direction")),
+        "selected_at":plan.get("selected_at"),"strike":plan.get("strike"),"expiration":plan.get("expiration"),"dte":plan.get("dte"),"entry_bid":plan.get("bid"),
+        "entry_ask":plan.get("ask"),"midpoint":plan.get("midpoint"),"spread_percent":plan.get("spread_percent"),
+        "underlying_entry_price":signal.get("underlying_price"),"trigger":plan.get("trigger_price") or signal.get("trigger_price"),
+        "copy_line":None}
+
+
 def build_qqq_command_card_model(latest_qqq, data, *, now, market_open, stale=False, active_setup=False):
     now_et=now.astimezone(EASTERN); trades=list(data.get("trades") or []); signals=list(data.get("signals") or [])
     signal=signals[0] if signals else {}; live=latest_qqq or {}; plan=live.get("trade_plan") or {}; today=now_et.date().isoformat()
-    def session(row):
-        try: return datetime.fromisoformat(str(row.get("opened_at")).replace("Z","+00:00")).astimezone(EASTERN).date().isoformat()
-        except (TypeError,ValueError): return None
-    today_rows=[row for row in trades if session(row)==today]
-    completed=[row for row in trades if session(row)!=today]
+    today_rows=[row for row in trades if _trade_session(row)==today]
+    completed=[row for row in trades if _trade_session(row)!=today]
     pulse=_performance(today_rows); edge=_performance(completed)
-    latest_trade=trades[0] if trades else {}; stamp=signal.get("updated_at") or live.get("timestamp") or latest_trade.get("updated_at")
+    managed=[row for row in trades if str(row.get("variant") or "").upper()=="INTRADAY_MANAGED"]
+    latest_trade=(managed or trades or [{}])[0]; stamp=signal.get("updated_at") or live.get("timestamp") or latest_trade.get("updated_at")
     try:
         parsed=datetime.fromisoformat(str(stamp).replace("Z","+00:00")); age=(now-parsed.astimezone(timezone.utc)).total_seconds(); stale=stale or age>300
     except (TypeError,ValueError): age=None
@@ -113,6 +179,7 @@ def build_qqq_command_card_model(latest_qqq, data, *, now, market_open, stale=Fa
         "dte":{str(key):_performance([r for r in completed if r.get("dte")==key]) for key in (0,1)},
         "average_mfe":sum(float(r["mfe_pct"]) for r in completed if r.get("mfe_pct") is not None)/sum(r.get("mfe_pct") is not None for r in completed) if any(r.get("mfe_pct") is not None for r in completed) else None,
         "average_mae":sum(float(r["mae_pct"]) for r in completed if r.get("mae_pct") is not None)/sum(r.get("mae_pct") is not None for r in completed) if any(r.get("mae_pct") is not None for r in completed) else None}
+    trade_coverage=build_qqq_trade_coverage(trades,signal,plan,now=now,stale=stale)
     return {"status":status,"price":live.get("price") or signal.get("underlying_price"),"bias":direction,
         "regime":signal.get("regime") or live.get("regime"),"setup":plan.get("setup_type") or plan.get("setup") or signal.get("setup"),
         "tradeability":signal.get("state"),"trigger":plan.get("trigger_price") or signal.get("trigger_price"),
@@ -121,7 +188,8 @@ def build_qqq_command_card_model(latest_qqq, data, *, now, market_open, stale=Fa
         "midpoint":((_number(latest_trade.get("entry_bid"))+_number(latest_trade.get("entry_ask")))/2 if _number(latest_trade.get("entry_bid")) is not None and _number(latest_trade.get("entry_ask")) is not None else None),
         "spread":spread,"updated_at":stamp,"chips":chips,"context_quality":context_quality(evidence,stale=stale),
         "session_pulse":pulse,"session_trade_number":sequence,"first_two":first_two,"edge_snapshot":edge,
-        "mark_coverage":mark_coverage(data.get("shadow") or [],data.get("marks") or []),"dna_summary":dna,"market_open":market_open}
+        "mark_coverage":mark_coverage(data.get("shadow") or [],data.get("marks") or []),"dna_summary":dna,"market_open":market_open,
+        "trade_coverage":trade_coverage}
 
 
 def _compact_qqq_command_card_markup(model):
@@ -179,6 +247,25 @@ def _display_expiration(value):
     except (TypeError,ValueError): return str(value)
 
 
+def _trade_coverage_markup(coverage):
+    state=coverage.get("state") or "NO TRADE"; badge="DATA STALE" if coverage.get("stale") else state
+    def item(label,value): return f'<div><span>{escape(label)}</span><strong>{escape(str(value))}</strong></div>'
+    if state in {"WATCHING","ENTRY TRIGGERED","NO TRADE"}:
+        details=(("Direction",_fmt(coverage.get("direction"))),("QQQ",_fmt(coverage.get("underlying_entry_price"),"price")),("Entry trigger",_fmt(coverage.get("trigger"),"price")),("Updated",format_trade_timestamp(coverage.get("updated_at"))))
+        note="Trigger observed; no managed entry is persisted." if state=="ENTRY TRIGGERED" else "No managed entry is persisted for this session."
+    elif state=="CONTRACT SELECTED":
+        details=(("Contract",coverage.get("contract_label")),("Raw OCC",_fmt(coverage.get("option_symbol"))),("Selected",format_trade_timestamp(coverage.get("selected_at"))),("Bid / Ask",f'{_fmt(coverage.get("entry_bid"),"price")} / {_fmt(coverage.get("entry_ask"),"price")}'),("Mid / Spread",f'{_fmt(coverage.get("midpoint"),"price")} / {_fmt(coverage.get("spread_percent"),"percent")}'),("QQQ / Trigger",f'{_fmt(coverage.get("underlying_entry_price"),"price")} / {_fmt(coverage.get("trigger"),"price")}'),("Status","WAITING FOR ENTRY"))
+        note="Contract selection is not an entry."
+    else:
+        details=(("Entry",format_trade_timestamp(coverage.get("opened_at"))),("Contract",coverage.get("contract_label")),("Raw OCC",_fmt(coverage.get("option_symbol"))),("DTE / Qty",f'{_fmt(coverage.get("dte"))} / {_fmt(coverage.get("quantity"))}'),("Fill",_fmt(coverage.get("entry_fill"),"price")),("Bid / Ask",f'{_fmt(coverage.get("entry_bid"),"price")} / {_fmt(coverage.get("entry_ask"),"price")}'),("Mid / Spread",f'{_fmt(coverage.get("midpoint"),"price")} / {_fmt(coverage.get("spread_percent"),"percent")}'),("QQQ / Trigger",f'{_fmt(coverage.get("underlying_entry_price"),"price")} / {_fmt(coverage.get("trigger"),"price")}'),("Variant",_fmt(coverage.get("variant"))))
+        if state=="MANAGING": details+=(('Current mark',_fmt(coverage.get("current_mark"),"price")),('Unrealized',_fmt(coverage.get("unrealized_pnl"),"money")),('MFE / MAE',f'{_fmt(coverage.get("mfe_pct"),"percent")} / {_fmt(coverage.get("mae_pct"),"percent")}'),('Management',_fmt(coverage.get("management_state"))))
+        if state=="CLOSED": details+=(('Exit',format_trade_timestamp(coverage.get("closed_at"))),('Exit fill',_fmt(coverage.get("exit_fill"),"price")),('Return / P&L',f'{_fmt(coverage.get("realized_return_percent"),"percent")} / {_fmt(coverage.get("realized_pnl"),"money")}'),('Exit reason',_fmt(coverage.get("exit_reason"))),('Duration',_fmt(coverage.get("duration"))),('MFE / MAE',f'{_fmt(coverage.get("mfe_pct"),"percent")} / {_fmt(coverage.get("mae_pct"),"percent")}'))
+        note="Canonical manual lane: INTRADAY_MANAGED."
+    copy=f'<div class="ob-qnative-copy">{escape(coverage["copy_line"])}</div>' if coverage.get("copy_line") else ""
+    style='''<style>.ob-qnative-coverage{background:#182433;border:1px solid #38506a;border-radius:9px;margin-bottom:9px;padding:10px}.ob-qnative-coverage-head{align-items:center;display:flex;justify-content:space-between}.ob-qnative-coverage-head h4{color:#a9bad0;font-size:.64rem;letter-spacing:.08em;margin:0}.ob-qnative-coverage-grid{display:grid;gap:7px 11px;grid-template-columns:repeat(4,minmax(0,1fr));margin:8px 0}.ob-qnative-coverage-grid span{color:#82909f;display:block;font-size:.52rem;text-transform:uppercase}.ob-qnative-coverage-grid strong{font-size:.7rem;overflow-wrap:anywhere}.ob-qnative-copy{background:#0d141e;border-radius:5px;font-family:monospace;font-size:.64rem;margin:7px 0;padding:7px;user-select:all}@media(max-width:560px){.ob-qnative-coverage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}</style>'''
+    return style+f'<div class="ob-qnative-coverage"><div class="ob-qnative-coverage-head"><h4>QQQ TRADE COVERAGE</h4><span class="ob-qnative-status">{escape(badge)}</span></div><div class="ob-qnative-coverage-grid">{"".join(item(*entry) for entry in details)}</div>{copy}<span class="ob-qnative-muted">{escape(note)}</span></div>'
+
+
 def qqq_command_card_markup(model, *, view="LIVE / SESSION"):
     """Render exactly one server-selected pane; navigation is owned by Streamlit."""
     if view not in QQQ_COMMAND_CARD_VIEWS: view="LIVE / SESSION"
@@ -199,7 +286,8 @@ def qqq_command_card_markup(model, *, view="LIVE / SESSION"):
         first_two=f'<span class="ob-qnative-chip">{escape(ft["governance"])}</span><strong>{shadow["accepted_trades"]}/50 accepted</strong><span>{shadow["sessions"]}/20 sessions</span><span>Expectancy {_fmt(ft["baseline"]["expectancy"],"money")} → {_fmt(shadow["expectancy"],"money")}</span><span>PF {_ratio(ft["baseline"]["profit_factor"])} → {_ratio(shadow["profit_factor"])}</span>'
     else:first_two='<span class="ob-qnative-chip is-muted">AWAITING SAMPLE</span>'
     coverage_label="LIMITED" if quality["score"] is None or not model["chips"] else quality["label"]
-    live=f'''<div class="ob-qnative-live-grid"><div class="ob-qnative-panel"><h4>{'CURRENT QQQ SETUP' if model['market_open'] else 'LAST SESSION SETUP'}</h4>{setup}</div><div class="ob-qnative-panel"><h4>{'SESSION ACTIVE' if model['market_open'] else 'SESSION COMPLETE'}</h4>{session}</div><div class="ob-qnative-support"><div class="ob-qnative-strip"><h4>CONTEXT COVERAGE</h4><strong>{escape(coverage_label)}</strong><div class="ob-qnative-chips"><span class="ob-qnative-muted">Known factors:</span>{chips}</div></div><div class="ob-qnative-strip"><h4>FIRST TWO</h4><div class="ob-qnative-first">{first_two}</div></div></div></div>'''
+    trade_coverage=_trade_coverage_markup(model.get("trade_coverage") or {"state":"NO TRADE"})
+    live=f'''{trade_coverage}<div class="ob-qnative-live-grid"><div class="ob-qnative-panel"><h4>{'CURRENT QQQ SETUP' if model['market_open'] else 'LAST SESSION SETUP'}</h4>{setup}</div><div class="ob-qnative-panel"><h4>{'SESSION ACTIVE' if model['market_open'] else 'SESSION COMPLETE'}</h4>{session}</div><div class="ob-qnative-support"><div class="ob-qnative-strip"><h4>CONTEXT COVERAGE</h4><strong>{escape(coverage_label)}</strong><div class="ob-qnative-chips"><span class="ob-qnative-muted">Known factors:</span>{chips}</div></div><div class="ob-qnative-strip"><h4>FIRST TWO</h4><div class="ob-qnative-first">{first_two}</div></div></div></div>'''
     edge_markup="".join(metric(*item) for item in (("Closed Trades",edge["closed_trades"]),("Expectancy",_fmt(edge["expectancy"],"money")),("Profit Factor",_ratio(edge["profit_factor"])),("Win Rate",_fmt(edge["win_rate"],"percent")),("Avg Winner",_fmt(edge["average_winner"],"money")),("Avg Loser",_fmt(edge["average_loser"],"money")),("Payoff",_ratio(edge["payoff_ratio"],"x")),("Profitable Sessions",_fmt(edge["profitable_session_percentage"],"percent"))))
     edge_view=f'<span class="ob-qnative-muted">Historical / forward research metrics only</span><div class="ob-qnative-edge">{edge_markup}</div>'
     marks=(f'<strong>{coverage["positions_with_1_or_more_marks"]} marked</strong><span>{_ratio(coverage["average_marks_per_trade"])} avg/trade · {len(coverage["missing_mark_trades"])} missing</span>' if coverage.get("positions_with_1_or_more_marks") else '<span class="ob-qnative-chip is-muted">AWAITING OBSERVATIONS</span>')
