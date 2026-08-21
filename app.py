@@ -95,7 +95,10 @@ from production_forensic_dashboard import render_production_forensic_audit
 from strategic_audit_dashboard import render_production_strategic_audit
 from qqq_forensic_dashboard import render_production_qqq_forensic_audit
 from qqq_forward_research_dashboard import render_qqq_forward_research
-from qqq_command_card import build_qqq_command_card_model, load_qqq_command_data, qqq_command_card_markup
+from qqq_command_card import (
+    build_qqq_command_card_model, load_qqq_command_data,
+    render_qqq_command_card,
+)
 from broad_filter_effectiveness import broad_filter_effectiveness
 from mirror_execution import MirrorExecutionRepository, mirror_summary
 from filtered_execution import FilteredExecutionRepository, filtered_summary
@@ -3983,6 +3986,12 @@ def trade_desk_best_trade_markup(latest_results, trade_history):
     )
 
 
+@st.fragment
+def render_qqq_command_card_fragment(model):
+    """Isolate native QQQ view changes from Trade Desk data loading."""
+    return render_qqq_command_card(st, model)
+
+
 def render_outcome_trade_journal(
     records=None,
     latest_results=None,
@@ -4265,15 +4274,15 @@ def render_outcome_trade_journal(
         try: qqq_data=load_qqq_command_data(trade_repository)
         except Exception: qqq_data={}
     qqq_result=(latest_results or {}).get("QQQ") or {}
-    qqq_card=qqq_command_card_markup(build_qqq_command_card_model(
+    qqq_model=build_qqq_command_card_model(
         qqq_result,qqq_data,now=now,market_open=market_open,
         stale=str((reliability_state or {}).get("scanner_state") or "").upper() in {"STALE","ERROR","FAILED","UNAVAILABLE"},
-        active_setup=bool(qqq_result.get("trade_plan") and actionable_trade_plan(qqq_result))))
+        active_setup=bool(qqq_result.get("trade_plan") and actionable_trade_plan(qqq_result)))
     dashboard = dashboard_shell_markup(
         status=status_strip_markup(status),
         kpis=kpi_row_markup(kpis),
         risk="",
-        best_trade=qqq_card,
+        best_trade="",
         positions=positions,
         comparison=comparison_markup(
             comparison,
@@ -4304,6 +4313,7 @@ def render_outcome_trade_journal(
         if message:
             (st.error if status["severity"] == "error" else st.warning)(message)
     render_critical_trade_event(trade_repository)
+    render_qqq_command_card_fragment(qqq_model)
     st.markdown(dashboard, unsafe_allow_html=True)
 
 
