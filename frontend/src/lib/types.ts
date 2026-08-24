@@ -46,3 +46,24 @@ export interface SystemStatus {
   status: string; market_status: string; database: string; data_freshness: string;
   worker_status: string; worker_last_success: string | null; provider_status: string; timestamp: string;
 }
+
+export interface TradeRow {
+  id: string; opportunity_id: string; symbol: string | null; direction: string | null;
+  setup: string | null; status: string; opened_at: string | null; closed_at: string | null;
+  entry_price: number | null; last_price: number | null; exit_price: number | null;
+  realized_result: number | null; exit_reason: string | null; metadata: Record<string, unknown>;
+}
+
+export interface HomeTrade {
+  id: string; symbol: string | null; direction: string | null; strategy: string; lane_role: string;
+  status: string; setup: string | null; entry_price: number | null; current_price: number | null;
+  contract: string | null; pnl: number | null; opened_at: string | null; closed_at: string | null; event: string;
+}
+
+export interface TradeDeskHome {
+  as_of: string; data_status: string;
+  session: { realized_pnl:number|null; unrealized_pnl:number|null; total_pnl:number|null; trades:number; wins:number; losses:number; win_rate:number|null; active_trades:number };
+  active: HomeTrade[];
+  lanes: { key:string; label:string; role:string; active_trades:number; trades_today:number; realized_pnl:number|null; description:string }[];
+  recent_activity: HomeTrade[];
+}

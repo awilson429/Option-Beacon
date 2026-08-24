@@ -1,4 +1,4 @@
-# OptionBeacon API (Phase 1)
+# OptionBeacon API (Phase 2)
 
 The FastAPI service is a read-only boundary over existing OptionBeacon persistence. It runs alongside, and independently from, the Streamlit dashboard.
 
@@ -16,11 +16,14 @@ The API requires `DATABASE_URL` for authoritative production reads. It never rea
 OPTIONBEACON_CORS_ORIGINS=http://localhost:3000,https://app.example.com
 ```
 
-The default is only `http://localhost:3000`; wildcard origins are rejected. Phase 1 has no mutation, execution, authentication, or provider endpoints.
+The default is only `http://localhost:3000`; wildcard origins are rejected. Phase 2 has no mutation, execution, authentication, or provider endpoints.
 # SPY/QQQ Options Desk and scalp research
 
 The React-ready, read-only contracts are:
 
+- `GET /api/trade-desk` — persisted session summary, active-trade projection, conservative OB/BROAD/control lane rollups, and recent activity for the React home.
+- `GET /api/trades/active` — persisted active trades used as a separately refreshable home section.
+- `GET /api/trades/recent` — persisted recent trades used as a separately refreshable home section.
 - `GET /api/options-desk` — independent persisted existing-strategy projections for SPY and QQQ.
 - `GET /api/options-desk/{symbol}` — one detailed existing-strategy projection.
 - `GET /api/scalp/{symbol}` — latest persisted `SCALP_RESEARCH` / `SHADOW` observation.

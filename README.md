@@ -4,7 +4,7 @@ Streamlit dashboard for ETF and single-stock option signal scanning.
 
 ## React migration preview
 
-The isolated Next.js Phase 1 frontend lives in `frontend/` and currently implements only the SPY / QQQ Options Desk. See `frontend/README.md` for exact FastAPI and Next.js development commands. Streamlit remains the existing production UI during migration.
+The isolated Next.js Phase 2 frontend lives in `frontend/` and implements the Trade Desk home at `/` plus the SPY / QQQ Options Desk at `/options`. See `frontend/README.md` for exact FastAPI and Next.js development commands. Streamlit remains the existing production UI during migration.
 
 ## License and use
 
