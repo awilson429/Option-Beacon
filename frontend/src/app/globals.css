@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+:root {
+  --canvas: #070a11;
+  --surface: #0c111d;
+  --surface-raised: #111827;
+  --line: #202a3a;
+  --text: #f4f7fb;
+  --muted: #8e9bad;
+  --brand: #8b5cf6;
+  --brand-soft: #a78bfa;
+  --positive: #38d996;
+  --negative: #fb7185;
+  --warning: #f6c453;
+  --info: #4cc9f0;
+}
+
+@theme inline {
+  --color-background: var(--canvas);
+  --color-foreground: var(--text);
+  --font-sans: "Inter", "Segoe UI", Arial, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--canvas); }
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: radial-gradient(circle at 78% -10%, rgba(111,72,218,.12), transparent 31rem), var(--canvas);
+  color: var(--text);
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+}
+button, a { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--brand-soft); outline-offset: 3px; }
+::selection { background: rgba(139,92,246,.35); }
+
+@layer components {
+  .surface { @apply rounded-xl border; background: rgba(12,17,29,.94); border-color: var(--line); box-shadow: 0 18px 60px rgba(0,0,0,.22); }
+  .eyebrow { @apply text-[10px] font-semibold uppercase tracking-[.18em]; color: var(--muted); }
+  .metric-label { @apply text-[10px] font-medium uppercase tracking-[.13em]; color: var(--muted); }
+  .metric-value { @apply mt-1 block text-sm font-semibold tabular-nums; color: var(--text); }
+  .badge { @apply inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-[.11em]; }
+  .skeleton { @apply animate-pulse rounded-md; background: #172033; }
+}
