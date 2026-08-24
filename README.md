@@ -6,6 +6,8 @@ Streamlit dashboard for ETF and single-stock option signal scanning.
 
 The isolated Next.js Phase 2 frontend lives in `frontend/` and implements the Trade Desk home at `/` plus the SPY / QQQ Options Desk at `/options`. See `frontend/README.md` for exact FastAPI and Next.js development commands. Streamlit remains the existing production UI during migration.
 
+OB/BROAD real-money readiness is evaluated through independent simulated-capital ledgers only. It does not submit brokerage orders or enable live execution. See `docs/ob-broad-readiness-audit.md` and `docs/capital-readiness.md`.
+
 ## License and use
 
 Copyright (c) 2026 Option Beacon LLC. All rights reserved.

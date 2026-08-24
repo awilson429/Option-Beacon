@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import math
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,6 +18,12 @@ from option_position_tracker import (
 )
 from option_trade_engine import OptionTradeLedger, capture_qualified_signal
 from signal_history import deserialize_trade_outcome
+from capital_readiness import (
+    CapitalCandidate,
+    CapitalDecision,
+    DecisionState,
+    evaluate_capital_candidate,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -137,6 +143,7 @@ def run_paper_execution(
     scanner_id=None,
     run_number=None,
     refreshed_positions=None,
+    capital_repository=None,
 ):
     """Refresh exits first, then evaluate and persist new PAPER entries."""
     config = config or ExecutionConfig.from_environment()
@@ -158,6 +165,8 @@ def run_paper_execution(
             trade_ledger=trade_ledger, position_store=position_store,
             journal=journal, scanner_id=scanner_id, run_number=run_number,
         )
+    if capital_repository is not None:
+        capital_repository.sync_paper_positions(positions, now=checked_at)
 
     opened = []
     decisions = []
@@ -180,29 +189,39 @@ def run_paper_execution(
                     "reason": "NOT_AUTHORITATIVE_OR_NOT_QUALIFIED",
                 }, sort_keys=True))
                 continue
+            legacy_config = config
+            if capital_repository is not None:
+                # Preserve historical signal/data filters while replacing the old
+                # $5k premium-cost caps with independent lane capital controls.
+                legacy_config = replace(
+                    config, account_size=1_000_000_000.0,
+                    max_dollars_per_trade=1_000_000_000.0,
+                    max_total_deployed_capital=1_000_000_000.0,
+                    max_trades_per_day=1_000_000, max_open_positions=1_000_000,
+                    max_daily_loss_dollars=1_000_000_000.0,
+                    max_consecutive_losses=0, loss_cooldown_minutes=0,
+                )
             decision = evaluate_execution(
-                result, trade, positions, config, now=checked_at, market_open=market_open
+                result, trade, positions, legacy_config, now=checked_at, market_open=market_open
             )
             risk_state = asdict(daily_risk_state(positions, checked_at))
             risk_state["trading_date"] = str(risk_state["trading_date"])
             if risk_state["last_loss_time"] is not None:
                 risk_state["last_loss_time"] = risk_state["last_loss_time"].isoformat()
-            journal.append(
-                checked_at=checked_at, result=result, trade=trade, decision=decision,
-                scanner_id=scanner_id, run_number=run_number, risk_state=risk_state,
-                execution_config=config,
-            )
-            try:
-                context_repository = getattr(journal, "repository", None)
-                if context_repository is not None:
-                    context_repository.enrich_opportunity_context(
-                        result.get("_authoritative_entry_id"),
-                        {"lifecycle": {"broad_decided_at": checked_at.isoformat()}},
-                    )
-            except Exception:
-                LOGGER.exception("Could not enrich shadow opportunity context %s", result.get("_authoritative_entry_id"))
-            decisions.append(decision)
             if not decision.eligible:
+                if capital_repository is not None:
+                    capital_repository.record_decision(_legacy_capital_rejection(
+                        "BROAD", result, trade, decision.reason, checked_at
+                    ), metadata={"historical_filter": True})
+                    capital_repository.record_decision(_legacy_capital_rejection(
+                        "OB", result, trade, "INDEPENDENT_OPTION_LIFECYCLE_UNAVAILABLE",
+                        checked_at
+                    ), metadata={"broad_filter_reason": decision.reason})
+                _journal_execution_decision(
+                    journal, checked_at, result, trade, decision, scanner_id,
+                    run_number, risk_state, config,
+                )
+                decisions.append(decision)
                 rejected += 1
                 LOGGER.info(json.dumps({
                     "event": "broad_authoritative_handoff", "scanner_id": scanner_id,
@@ -212,6 +231,55 @@ def run_paper_execution(
                     "reason": decision.reason,
                 }, sort_keys=True))
                 continue
+            ob_capital_decision = broad_capital_decision = None
+            if capital_repository is not None:
+                candidate = _capital_candidate(result, trade, config, checked_at)
+                broad_capital_decision = evaluate_capital_candidate(
+                    candidate, capital_repository.account_snapshot("BROAD", now=checked_at),
+                    capital_repository.configs["BROAD"], now=checked_at,
+                )
+                capital_repository.record_decision(broad_capital_decision)
+                if broad_capital_decision.state == DecisionState.TAKE:
+                    ob_capital_decision = evaluate_capital_candidate(
+                        candidate, capital_repository.account_snapshot("OB", now=checked_at),
+                        capital_repository.configs["OB"], now=checked_at,
+                    )
+                else:
+                    ob_capital_decision = _legacy_capital_rejection(
+                        "OB", result, trade, "INDEPENDENT_OPTION_LIFECYCLE_UNAVAILABLE",
+                        checked_at,
+                    )
+                capital_repository.record_decision(ob_capital_decision)
+                if broad_capital_decision.state != DecisionState.TAKE:
+                    decision = replace(
+                        decision, eligible=False,
+                        reason=broad_capital_decision.reason_code,
+                        position_size=0,
+                        maximum_cost=broad_capital_decision.proposed_capital_required,
+                        paper_fill_price=broad_capital_decision.realistic_entry,
+                    )
+                    _journal_execution_decision(
+                        journal, checked_at, result, trade, decision, scanner_id,
+                        run_number, risk_state, config,
+                    )
+                    decisions.append(decision)
+                    rejected += 1
+                    LOGGER.info(json.dumps({
+                        "event":"broad_capital_decision","scanner_id":scanner_id,
+                        "run_number":run_number,"opportunity_id":result.get("_authoritative_entry_id"),
+                        "disposition":"REJECTED","reason":decision.reason,
+                    },sort_keys=True))
+                    continue
+                decision = replace(
+                    decision, position_size=broad_capital_decision.proposed_quantity,
+                    maximum_cost=broad_capital_decision.proposed_capital_required,
+                    paper_fill_price=broad_capital_decision.realistic_entry,
+                )
+            _journal_execution_decision(
+                journal, checked_at, result, trade, decision, scanner_id,
+                run_number, risk_state, config,
+            )
+            decisions.append(decision)
             position = position_from_trade(
                 trade,
                 execution_time=checked_at,
@@ -231,6 +299,8 @@ def run_paper_execution(
                     "quantity": position.quantity, "debit": position.total_entry_cost,
                     "disposition": "OPENED", "reason": "ELIGIBLE",
                 }, sort_keys=True))
+                if capital_repository is not None:
+                    capital_repository.sync_paper_positions(positions, now=checked_at)
                 LOGGER.info(json.dumps({
                     "event": "paper_position_opened", "scanner_id": scanner_id,
                     "run_number": run_number, "execution_lane": "BROAD PAPER",
@@ -249,6 +319,8 @@ def run_paper_execution(
                 "disposition": "FAILED", "reason": type(exc).__name__,
             }, sort_keys=True))
     position_store.save(positions)
+    if capital_repository is not None:
+        capital_repository.sync_paper_positions(positions, now=checked_at)
     LOGGER.info(json.dumps({
         "event": "paper_cycle_completed", "scanner_id": scanner_id,
         "run_number": run_number, "opened": len(opened),
@@ -258,6 +330,71 @@ def run_paper_execution(
         "open_positions": sum(p.status == "OPEN" for p in positions),
     }, sort_keys=True))
     return {"positions": positions, "opened": opened, "decisions": decisions}
+
+
+def _capital_candidate(result, trade, config, checked_at):
+    plan = (result or {}).get("trade_plan") or {}
+    midpoint = trade.mid
+    stop = midpoint * (1 + config.stop_loss_percent / 100) if midpoint is not None else None
+    expiration = str(trade.expiration or "") or None
+    dte = None
+    try:
+        dte = max(0, (datetime.fromisoformat(expiration).date() - checked_at.date()).days)
+    except (TypeError, ValueError):
+        pass
+    return CapitalCandidate(
+        opportunity_id=str((result or {}).get("_authoritative_entry_id") or trade.source_signal_id),
+        symbol=trade.ticker, direction=trade.direction,
+        observed_at=trade.created_timestamp, option_symbol=trade.option_symbol,
+        expiration=expiration, strike=trade.strike, dte=dte,
+        bid=trade.bid, ask=trade.ask, midpoint=midpoint, stop_price=stop,
+        open_interest=trade.open_interest, volume=trade.volume,
+        underlying_price=trade.underlying_entry_price,
+        maximum_chase=plan.get("maximum_chase") or plan.get("max_chase"),
+        data_complete=bool(trade.entry_snapshot_complete), provider_healthy=True,
+        opportunity_expired=False,
+    )
+
+
+def _journal_execution_decision(journal, checked_at, result, trade, decision,
+                                scanner_id, run_number, risk_state, config):
+    journal.append(
+        checked_at=checked_at,result=result,trade=trade,decision=decision,
+        scanner_id=scanner_id,run_number=run_number,risk_state=risk_state,
+        execution_config=config,
+    )
+    try:
+        context_repository = getattr(journal,"repository",None)
+        if context_repository is not None:
+            context_repository.enrich_opportunity_context(
+                result.get("_authoritative_entry_id"),
+                {"lifecycle":{"broad_decided_at":checked_at.isoformat()}},
+            )
+    except Exception:
+        LOGGER.exception("Could not enrich shadow opportunity context %s",
+                         result.get("_authoritative_entry_id"))
+
+
+def _legacy_capital_rejection(lane, result, trade, reason, checked_at):
+    data_reasons = {"CONTRACT_QUOTE_UNAVAILABLE", "NO_VALID_CONTRACT",
+                    "STALE_AUTHORITATIVE_ENTRY", "AUTHORITATIVE_ENTRY_TIME_UNAVAILABLE",
+                    "INDEPENDENT_OPTION_LIFECYCLE_UNAVAILABLE"}
+    blocked_reasons = {"TRADING_DISABLED", "MODE_NOT_CONFIGURED", "MARKET_CLOSED",
+                       "OUTSIDE_ENTRY_WINDOW", "DUPLICATE_SIGNAL"}
+    state = (DecisionState.DATA_UNSAFE if reason in data_reasons else
+             DecisionState.BLOCKED if reason in blocked_reasons else DecisionState.PASS)
+    explanations = {
+        "INDEPENDENT_OPTION_LIFECYCLE_UNAVAILABLE":
+            "OB capital cannot open because the current quote lifecycle is historically coupled to a BROAD paper position.",
+    }
+    return CapitalDecision(
+        state=str(state), reason_code=reason,
+        explanation=explanations.get(reason, f"Existing execution filter rejected the opportunity: {reason.replace('_',' ').lower()}."),
+        timestamp=checked_at, lane=lane,
+        opportunity_id=str((result or {}).get("_authoritative_entry_id") or trade.source_signal_id),
+        symbol=trade.ticker, direction=trade.direction,
+        proposed_contract=trade.option_symbol,
+    )
 
 
 def refresh_paper_positions(

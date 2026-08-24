@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
+from api.schemas.capital import CapitalDecisionResponse, CapitalLaneState
 
 
 class Bias(BaseModel):
@@ -106,4 +107,6 @@ class TradeDeskHomeResponse(BaseModel):
     active: list[HomeTrade] = Field(default_factory=list)
     lanes: list[LaneSummary] = Field(default_factory=list)
     recent_activity: list[HomeTrade] = Field(default_factory=list)
+    accounts: list[CapitalLaneState] = Field(default_factory=list)
+    capital_decisions: list[CapitalDecisionResponse] = Field(default_factory=list)
     data_status: str

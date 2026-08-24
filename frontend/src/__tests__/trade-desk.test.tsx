@@ -27,6 +27,11 @@ const home = {
     {key:"BROAD",label:"BROAD",role:"PAPER",active_trades:1,trades_today:1,realized_pnl:null,description:"Broad-universe paper participation"},
     {key:"CONTROL_RESEARCH",label:"MIRROR / CONTROL RESEARCH",role:"RESEARCH_CONTROL",active_trades:0,trades_today:0,realized_pnl:null,description:"Research/control comparison only; not a primary live lane"},
   ],
+  accounts:[
+    {lane:"OB",data_status:"persisted",starting_capital:25000,current_equity:25640,cash_available:24400,capital_committed:1240,net_pnl:640,return_pct:2.56,realized_pnl:600,unrealized_pnl:40,fees:12,slippage:18,peak_equity:25800,current_drawdown_pct:.62,maximum_drawdown_pct:3.4,daily_pnl:90,open_risk:240,open_positions:2,risk_state:"NORMAL",readiness_status:"DEVELOPING",metrics:{trades:44,rejected_opportunities:7},updated_at:"2026-08-24T14:30:00Z"},
+    {lane:"BROAD",data_status:"persisted",starting_capital:25000,current_equity:25120,cash_available:25120,capital_committed:0,net_pnl:120,return_pct:.48,realized_pnl:120,unrealized_pnl:0,fees:8,slippage:14,peak_equity:25300,current_drawdown_pct:.71,maximum_drawdown_pct:4.1,daily_pnl:25,open_risk:0,open_positions:0,risk_state:"WARNING",readiness_status:"EARLY_RESEARCH",metrics:{trades:22,rejected_opportunities:13},updated_at:"2026-08-24T14:30:00Z"},
+  ],
+  capital_decisions:[{decision_id:"d-1",lane:"OB",opportunity_id:"opp-1",symbol:"SPY",direction:"CALL",state:"TAKE",reason_code:"ALL_RISK_CONTROLS_PASSED",explanation:"Setup qualifies and all simulated-capital risk controls passed.",proposed_contract:"SPY260824C00643000",proposed_quantity:8,proposed_capital_required:1136,proposed_dollar_risk:112,proposed_account_risk_pct:.45,decided_at:"2026-08-24T14:30:00Z"}],
 };
 
 const system = {status:"ok",market_status:"open",database:"connected",data_freshness:"fresh",worker_status:"healthy",worker_last_success:"2026-08-24T14:29:00Z",provider_status:"not_queried",timestamp:"2026-08-24T14:30:00Z"};
@@ -57,6 +62,10 @@ describe("Trade Desk home",()=>{
     expect(await screen.findByText("SPY260824C00643000")).toBeInTheDocument();
     expect(screen.getByText("MIRROR / CONTROL RESEARCH")).toBeInTheDocument();
     expect(screen.getByText("SHADOW")).toBeInTheDocument();
+    expect(screen.getByText("Independent OB / BROAD accounts")).toBeInTheDocument();
+    expect(screen.getByText("$25,640.00")).toBeInTheDocument();
+    expect(screen.getByText("Why capital is or is not participating")).toBeInTheDocument();
+    expect(screen.getByText("ALL RISK CONTROLS PASSED")).toBeInTheDocument();
     expect(await screen.findByText("Persisted trade events")).toBeInTheDocument();
     expect(screen.getByText("Operational summary")).toBeInTheDocument();
   });

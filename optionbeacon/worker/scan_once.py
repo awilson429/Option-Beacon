@@ -33,6 +33,8 @@ from paper_execution import (
     run_paper_execution,
 )
 from paper_execution_repository import PaperExecutionRepository
+from capital_readiness import lane_configs
+from capital_repository import CapitalRepository
 from mirror_execution import (
     MirrorExecutionRepository,
     mirror_enabled,
@@ -232,6 +234,7 @@ def run_scan_once(
         with performance.measure("configuration_resolution"):
             paper_repository = PaperExecutionRepository(repository)
             paper_config = ExecutionConfig.from_environment()
+            capital_repository = CapitalRepository(repository, configs=lane_configs())
             mirror_repository = MirrorExecutionRepository(repository)
             mirror_is_enabled = mirror_enabled()
             mirror_v2_repository = MirrorV2Repository(repository)
@@ -478,6 +481,7 @@ def run_scan_once(
                 scanner_id=scanner_id,
                 run_number=run_number,
                 refreshed_positions=refreshed_paper_positions,
+                capital_repository=capital_repository,
             )
         stage = "mirror_execution"
         lease.ensure_owned()
