@@ -48,6 +48,23 @@ class ReadOnlyTradeRepository(TradeRepository):
                 connection.rollback()
                 connection.close()
 
+    def list_scalp_observations(self, *, symbol, limit=5000):
+        """Read additive scalp state; return no state before its schema is deployed."""
+        with self.connection() as connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute("""SELECT payload FROM scalp_research_observations
+                    WHERE symbol=%s AND strategy='SCALP_RESEARCH' AND mode='SHADOW'
+                    ORDER BY observed_at DESC LIMIT %s""", (symbol, int(limit)))
+                rows = cursor.fetchall()
+                return [dict(row.get("payload") or {}) for row in rows]
+            except Exception as exc:
+                if type(exc).__name__ == "UndefinedTable":
+                    return []
+                raise
+            finally:
+                cursor.close()
+
 
 def market_is_open(now: datetime | None = None) -> bool:
     current = now or datetime.now(UTC)
@@ -141,6 +158,34 @@ class OptionBeaconReadService:
             "confirmations": {"state": "unavailable", "items": []}, "market_condition": {"regime": metadata.get("regime") or evidence.get("regime")},
             "session": {"pnl": sum(results) if results else None, "trades": len(session_rows), "wins": wins, "losses": losses,
                 "win_rate": wins / (wins + losses) * 100 if wins + losses else None}}
+
+    def options_desk(self):
+        """Independent persisted projections; a peer is never used as fallback."""
+        return {"instruments": {symbol: self.trade_desk(symbol) for symbol in ("SPY", "QQQ")}}
+
+    def _scalp_rows(self, symbol, limit=5000):
+        repository = self.repository()
+        reader = getattr(repository, "list_scalp_observations", None)
+        if reader is None:
+            return []
+        return [row for row in reader(symbol=symbol, limit=limit)
+                if str(row.get("symbol") or "").upper() == symbol and row.get("strategy", "SCALP_RESEARCH") == "SCALP_RESEARCH"]
+
+    def scalp_state(self, symbol):
+        rows = self._scalp_rows(symbol, 1)
+        return {"symbol": symbol, "strategy": "SCALP_RESEARCH", "mode": "SHADOW",
+                "market_status": "open" if market_is_open(self._now()) else "closed",
+                "data_status": "persisted" if rows else "unavailable", "current": rows[0] if rows else None}
+
+    def scalp_performance(self, symbol):
+        from scalp.analytics import performance
+        return {"symbol": symbol, "strategy": "SCALP_RESEARCH", "metrics": performance(self._scalp_rows(symbol))}
+
+    def scalp_compare(self):
+        from scalp.analytics import compare
+        result = compare(self._scalp_rows("SPY"), self._scalp_rows("QQQ"))
+        normalization = result.pop("normalization")
+        return {"strategy": "SCALP_RESEARCH", "symbols": result, "normalization": normalization}
 
     def system_status(self):
         now = self._now(); database = "connected" if self.database_available() else "unavailable"
