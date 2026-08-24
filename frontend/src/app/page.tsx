@@ -1,5 +1,6 @@
-import { redirect } from "next/navigation";
+import { AppShell } from "@/components/app-shell";
+import { TradeDesk } from "@/components/trade-desk";
 
 export default function Home() {
-  redirect("/options");
+  return <AppShell><TradeDesk/></AppShell>;
 }

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "OptionBeacon · Options Desk",
-  description: "SPY and QQQ decision support with isolated scalp research.",
+  title: "OptionBeacon · Trade Desk",
+  description: "OptionBeacon trading command center and decision support.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

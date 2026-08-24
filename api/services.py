@@ -84,6 +84,32 @@ def _number(value):
         return None
 
 
+def _trade_lane(trade):
+    metadata = trade.get("metadata") or {}
+    values = " ".join(str(metadata.get(key) or "") for key in
+                      ("execution_lane", "simulation_profile", "variant", "source_strategy"))
+    values = f'{values} {trade.get("setup") or ""}'.upper()
+    if "MIRROR" in values or "CONTROL" in values:
+        return "CONTROL_RESEARCH", "MIRROR / CONTROL RESEARCH", "RESEARCH_CONTROL"
+    if "BROAD" in values:
+        return "BROAD", "BROAD", "PAPER"
+    return "OB", "OB", "AUTHORITATIVE"
+
+
+def _home_trade(trade, *, event):
+    metadata = trade.get("metadata") or {}
+    key, label, role = _trade_lane(trade)
+    return {"id": str(trade.get("id")), "symbol": trade.get("symbol"),
+            "direction": trade.get("direction"), "strategy": label, "lane_role": role,
+            "status": str(trade.get("status") or "UNKNOWN"), "setup": trade.get("setup"),
+            "entry_price": _number(trade.get("entry_price")),
+            "current_price": _number(trade.get("last_price")),
+            "contract": metadata.get("option_symbol") or metadata.get("contract"),
+            "pnl": _number(trade.get("realized_result") if event == "CLOSED" else metadata.get("unrealized_pnl")),
+            "opened_at": parse_utc(trade.get("opened_at")), "closed_at": parse_utc(trade.get("closed_at")),
+            "event": event, "_lane_key": key}
+
+
 class OptionBeaconReadService:
     def __init__(self, repository=None, *, now=None):
         self._repository = repository
@@ -162,6 +188,46 @@ class OptionBeaconReadService:
     def options_desk(self):
         """Independent persisted projections; a peer is never used as fallback."""
         return {"instruments": {symbol: self.trade_desk(symbol) for symbol in ("SPY", "QQQ")}}
+
+    def trade_desk_home(self):
+        now = self._now(); today = now.astimezone(EASTERN).date()
+        active_rows = self.active_trades(); recent_rows = self.recent_trades(200)
+        today_rows = [row for row in recent_rows if
+                      (parse_utc(row.get("opened_at")) or datetime.min.replace(tzinfo=UTC)).astimezone(EASTERN).date() == today]
+        closed_today = [row for row in today_rows if str(row.get("status") or "").upper() == "CLOSED"]
+        realized_values = [_number(row.get("realized_result")) for row in closed_today]
+        realized_values = [value for value in realized_values if value is not None]
+        unrealized_values = [_number((row.get("metadata") or {}).get("unrealized_pnl")) for row in active_rows]
+        known_unrealized = [value for value in unrealized_values if value is not None]
+        realized = sum(realized_values) if realized_values else None
+        unrealized = sum(known_unrealized) if known_unrealized else None
+        wins = sum(value > 0 for value in realized_values); losses = sum(value < 0 for value in realized_values)
+        lane_definitions = {
+            "OB": ("OB", "AUTHORITATIVE", "Authoritative OptionBeacon strategy"),
+            "BROAD": ("BROAD", "PAPER", "Broad-universe paper participation"),
+            "CONTROL_RESEARCH": ("MIRROR / CONTROL RESEARCH", "RESEARCH_CONTROL", "Research/control comparison only; not a primary live lane"),
+        }
+        lanes = []
+        for key, (label, role, description) in lane_definitions.items():
+            lane_today = [row for row in today_rows if _trade_lane(row)[0] == key]
+            lane_active = [row for row in active_rows if _trade_lane(row)[0] == key]
+            lane_realized = [_number(row.get("realized_result")) for row in lane_today
+                             if str(row.get("status") or "").upper() == "CLOSED"]
+            lane_realized = [value for value in lane_realized if value is not None]
+            lanes.append({"key": key, "label": label, "role": role, "active_trades": len(lane_active),
+                          "trades_today": len(lane_today), "realized_pnl": sum(lane_realized) if lane_realized else None,
+                          "description": description})
+        active = [_home_trade(row, event="ACTIVE") for row in active_rows]
+        activity = [_home_trade(row, event="CLOSED" if str(row.get("status") or "").upper() == "CLOSED" else "OPENED")
+                    for row in recent_rows[:12]]
+        for row in active + activity: row.pop("_lane_key", None)
+        return {"as_of": now, "data_status": "persisted" if active_rows or recent_rows else "unavailable",
+                "session": {"realized_pnl": realized, "unrealized_pnl": unrealized,
+                            "total_pnl": ((realized or 0) + (unrealized or 0)) if realized is not None or unrealized is not None else None,
+                            "trades": len(today_rows), "wins": wins, "losses": losses,
+                            "win_rate": wins / (wins + losses) * 100 if wins + losses else None,
+                            "active_trades": len(active_rows)},
+                "active": active, "lanes": lanes, "recent_activity": activity}
 
     def _scalp_rows(self, symbol, limit=5000):
         repository = self.repository()

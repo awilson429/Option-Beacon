@@ -60,3 +60,50 @@ class TradeDeskResponse(BaseModel):
     confirmations: Confirmations
     market_condition: MarketCondition
     session: SessionSummary
+
+
+class HomeSessionSummary(BaseModel):
+    realized_pnl: float | None = None
+    unrealized_pnl: float | None = None
+    total_pnl: float | None = None
+    trades: int = 0
+    wins: int = 0
+    losses: int = 0
+    win_rate: float | None = None
+    active_trades: int = 0
+
+
+class HomeTrade(BaseModel):
+    id: str
+    symbol: str | None = None
+    direction: str | None = None
+    strategy: str
+    lane_role: str
+    status: str
+    setup: str | None = None
+    entry_price: float | None = None
+    current_price: float | None = None
+    contract: str | None = None
+    pnl: float | None = None
+    opened_at: datetime | None = None
+    closed_at: datetime | None = None
+    event: str
+
+
+class LaneSummary(BaseModel):
+    key: str
+    label: str
+    role: str
+    active_trades: int = 0
+    trades_today: int = 0
+    realized_pnl: float | None = None
+    description: str
+
+
+class TradeDeskHomeResponse(BaseModel):
+    as_of: datetime
+    session: HomeSessionSummary
+    active: list[HomeTrade] = Field(default_factory=list)
+    lanes: list[LaneSummary] = Field(default_factory=list)
+    recent_activity: list[HomeTrade] = Field(default_factory=list)
+    data_status: str

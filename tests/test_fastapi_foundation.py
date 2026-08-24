@@ -30,6 +30,15 @@ class FakeService:
             "context": {"level": "unavailable", "known_factors": [], "details": None},
             "confirmations": {"state": "unavailable", "items": []}, "market_condition": {"regime": None},
             "session": {"pnl": None, "trades": 0, "wins": 0, "losses": 0, "win_rate": None}}
+    def trade_desk_home(self):
+        return {"as_of": NOW, "data_status": "persisted",
+            "session": {"realized_pnl": 0.2, "unrealized_pnl": 0.1, "total_pnl": 0.3,
+                "trades": 1, "wins": 1, "losses": 0, "win_rate": 100.0, "active_trades": 1},
+            "active": [],
+            "lanes": [{"key": "CONTROL_RESEARCH", "label": "MIRROR / CONTROL RESEARCH",
+                "role": "RESEARCH_CONTROL", "active_trades": 0, "trades_today": 0,
+                "realized_pnl": None, "description": "Research/control comparison only; not a primary live lane"}],
+            "recent_activity": []}
     def system_status(self):
         return {"status": "ok" if self.available else "degraded", "market_status": "closed",
             "database": "connected" if self.available else "unavailable", "data_freshness": "unavailable",
@@ -59,6 +68,15 @@ def test_trade_desk_schema_preserves_unavailable_values():
     assert body["confirmations"] == {"state": "unavailable", "items": []}
 
 
+def test_trade_desk_home_contract_keeps_control_research_demoted():
+    response = client().get("/api/trade-desk")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["session"]["total_pnl"] == 0.3
+    assert body["lanes"][0]["role"] == "RESEARCH_CONTROL"
+    assert "primary live lane" in body["lanes"][0]["description"]
+
+
 def test_invalid_symbol_is_rejected():
     response = client().get("/api/trade-desk/AAPL")
     assert response.status_code == 404 and "Unsupported symbol" in response.json()["detail"]
@@ -81,6 +99,7 @@ def test_market_and_system_status_contracts():
 
 def test_openapi_and_safe_cors_configuration():
     schema = client().get("/openapi.json").json()
+    assert "/api/trade-desk" in schema["paths"]
     assert "/api/trade-desk/{symbol}" in schema["paths"]
     assert cors_origins({}) == ["http://localhost:3000"]
     assert cors_origins({"OPTIONBEACON_CORS_ORIGINS": "*, https://example.com"}) == ["https://example.com"]
@@ -92,3 +111,25 @@ def test_api_import_has_no_streamlit_dependency_and_repository_is_read_only():
     assert ReadOnlyTradeRepository.initialize(object()) is None
     source = inspect.getsource(ReadOnlyTradeRepository.connection)
     assert "SET TRANSACTION READ ONLY" in source and "rollback" in source and ".commit" not in source
+
+
+def test_trade_desk_home_aggregates_known_pnl_and_lane_roles():
+    active = {**FakeService._trade("active", "OPEN"), "setup": "ORB",
+        "metadata": {"execution_lane": "BROAD", "unrealized_pnl": 0.35}}
+    ob_closed = {**FakeService._trade("ob-win", "CLOSED"), "realized_result": 0.8}
+    mirror_closed = {**FakeService._trade("mirror-loss", "CLOSED"), "setup": "MIRROR_CONTROL",
+        "realized_result": -0.3}
+
+    class HomeService(api.services.OptionBeaconReadService):
+        def active_trades(self): return [active]
+        def recent_trades(self, limit): return [ob_closed, mirror_closed]
+
+    body = HomeService(now=lambda: NOW).trade_desk_home()
+    assert body["session"] == {"realized_pnl": 0.5, "unrealized_pnl": 0.35,
+        "total_pnl": 0.85, "trades": 2, "wins": 1, "losses": 1,
+        "win_rate": 50.0, "active_trades": 1}
+    lanes = {lane["key"]: lane for lane in body["lanes"]}
+    assert lanes["OB"]["role"] == "AUTHORITATIVE"
+    assert lanes["BROAD"]["active_trades"] == 1
+    assert lanes["CONTROL_RESEARCH"]["role"] == "RESEARCH_CONTROL"
+    assert body["recent_activity"][1]["strategy"] == "MIRROR / CONTROL RESEARCH"
