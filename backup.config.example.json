@@ -1,0 +1,10 @@
+{
+  "PreferredVolumeLabel": "Samsung_T5",
+  "FallbackDriveRoot": "D:\\",
+  "DestinationFolder": "OptionBeacon_Backup",
+  "DatabaseDumpRequired": true,
+  "PgDumpPath": "",
+  "ProtectedSecretsSource": "",
+  "AdditionalExportPaths": [],
+  "MaximumArtifactSizeMB": 2048
+}

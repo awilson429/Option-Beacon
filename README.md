@@ -6,6 +6,18 @@ Streamlit dashboard for ETF and single-stock option signal scanning.
 
 The isolated Next.js Phase 2 frontend lives in `frontend/` and implements the Trade Desk home at `/` plus the SPY / QQQ Options Desk at `/options`. See `frontend/README.md` for exact FastAPI and Next.js development commands. Streamlit remains the existing production UI during migration.
 
+## Normal Backup
+
+1. Plug in the Samsung T5 and confirm Windows recognizes it.
+2. Double-click `BACKUP_OPTIONBEACON.bat`.
+3. Wait for verification to complete.
+4. Confirm the final message is `BACKUP SUCCESSFUL` or review any warnings/partial status.
+5. Safely eject the SSD.
+
+Run `BACKUP_OPTIONBEACON.bat --dry-run` to inspect the destination, Git state,
+database-tool availability, and planned inclusions without creating a snapshot.
+See `RESTORE_OPTIONBEACON.md` for complete disaster recovery.
+
 OB/BROAD real-money readiness is evaluated through independent simulated-capital ledgers only. It does not submit brokerage orders or enable live execution. See `docs/ob-broad-readiness-audit.md` and `docs/capital-readiness.md`.
 
 ## License and use
