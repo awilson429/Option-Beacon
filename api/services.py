@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import json
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -9,6 +10,7 @@ from zoneinfo import ZoneInfo
 import pandas_market_calendars as market_calendars
 
 from trade_repository import RepositoryUnavailable, TradeRepository, parse_utc
+from capital_readiness import LaneCapitalConfig
 
 UTC = timezone.utc
 EASTERN = ZoneInfo("America/New_York")
@@ -64,6 +66,35 @@ class ReadOnlyTradeRepository(TradeRepository):
                 raise
             finally:
                 cursor.close()
+
+    def list_capital_states(self):
+        return self._optional_capital_rows(
+            "SELECT * FROM lane_capital_state ORDER BY lane", ()
+        )
+
+    def list_capital_decisions(self, limit=50):
+        return self._optional_capital_rows(
+            "SELECT * FROM capital_decisions ORDER BY decided_at DESC,decision_id DESC LIMIT %s",
+            (int(limit),),
+        )
+
+    def list_capital_positions(self):
+        return self._optional_capital_rows(
+            "SELECT * FROM capital_positions ORDER BY opened_at DESC", ()
+        )
+
+    def _optional_capital_rows(self, query, params):
+        try:
+            with self.connection() as connection:
+                cursor = connection.cursor()
+                cursor.execute(query, params)
+                rows = [dict(row) for row in cursor.fetchall()]
+                cursor.close()
+                return rows
+        except RepositoryUnavailable as exc:
+            if "UndefinedTable" in str(exc):
+                return []
+            raise
 
 
 def market_is_open(now: datetime | None = None) -> bool:
@@ -221,13 +252,140 @@ class OptionBeaconReadService:
         activity = [_home_trade(row, event="CLOSED" if str(row.get("status") or "").upper() == "CLOSED" else "OPENED")
                     for row in recent_rows[:12]]
         for row in active + activity: row.pop("_lane_key", None)
-        return {"as_of": now, "data_status": "persisted" if active_rows or recent_rows else "unavailable",
+        accounts = self.capital_overview()["lanes"]
+        capital_decisions = self.capital_decisions(6)
+        capital_persisted=any(item.get("data_status")=="persisted" for item in accounts)
+        return {"as_of": now, "data_status": "persisted" if active_rows or recent_rows or capital_persisted else "unavailable",
                 "session": {"realized_pnl": realized, "unrealized_pnl": unrealized,
                             "total_pnl": ((realized or 0) + (unrealized or 0)) if realized is not None or unrealized is not None else None,
                             "trades": len(today_rows), "wins": wins, "losses": losses,
                             "win_rate": wins / (wins + losses) * 100 if wins + losses else None,
                             "active_trades": len(active_rows)},
-                "active": active, "lanes": lanes, "recent_activity": activity}
+                "active": active, "lanes": lanes, "recent_activity": activity,
+                "accounts": accounts, "capital_decisions": capital_decisions}
+
+    def _capital_state_rows(self):
+        repository = self.repository()
+        reader = getattr(repository, "list_capital_states", None)
+        if callable(reader):
+            return reader()
+        try:
+            with repository.connection() as connection:
+                return repository._fetchall(connection, "SELECT * FROM lane_capital_state ORDER BY lane")
+        except Exception:
+            return []
+
+    def _capital_decision_rows(self, limit):
+        repository = self.repository()
+        reader = getattr(repository, "list_capital_decisions", None)
+        if callable(reader):
+            return reader(limit)
+        try:
+            with repository.connection() as connection:
+                return repository._fetchall(connection,
+                    "SELECT * FROM capital_decisions ORDER BY decided_at DESC,decision_id DESC LIMIT ?",(int(limit),))
+        except Exception:
+            return []
+
+    def _capital_position_rows(self):
+        repository=self.repository(); reader=getattr(repository,"list_capital_positions",None)
+        if callable(reader): return reader()
+        try:
+            with repository.connection() as connection:
+                return repository._fetchall(connection,"SELECT * FROM capital_positions ORDER BY opened_at DESC")
+        except Exception: return []
+
+    def _capital_lane_payload(self, lane, row=None, positions=None):
+        config = LaneCapitalConfig.for_lane(lane)
+        if not row:
+            return {"lane":lane,"data_status":"unavailable","starting_capital":config.starting_capital,
+                    "current_equity":None,"cash_available":None,"capital_committed":None,
+                    "net_pnl":None,"return_pct":None,"realized_pnl":None,"unrealized_pnl":None,
+                    "fees":None,"slippage":None,"peak_equity":None,"current_drawdown_pct":None,
+                    "maximum_drawdown_pct":None,"daily_pnl":None,"open_risk":None,
+                    "open_positions":0,"risk_state":"UNAVAILABLE","readiness_status":"NOT_READY",
+                    "metrics":{},"positions":[],"updated_at":None}
+        try: metrics=json.loads(row.get("metrics_json") or "{}")
+        except Exception: metrics={}
+        starting=float(row.get("starting_equity") or config.starting_capital)
+        current=_number(row.get("current_equity")); net=(current-starting) if current is not None else None
+        position_payload=[]
+        for position in positions or []:
+            opened=parse_utc(position.get("opened_at")); closed=parse_utc(position.get("closed_at"))
+            endpoint=closed or self._now()
+            try: targets=json.loads(position.get("targets_json") or "[]")
+            except Exception: targets=[]
+            position_payload.append({"position_id":str(position.get("position_id")),"lane":lane,
+                "opportunity_id":str(position.get("opportunity_id")),"symbol":position.get("symbol"),
+                "direction":position.get("direction"),"strategy":position.get("strategy") or lane,
+                "contract_symbol":position.get("option_symbol"),"strike":_number(position.get("strike")),
+                "expiration":position.get("expiration"),"dte":position.get("dte"),
+                "entry_premium":_number(position.get("realistic_entry")),"current_premium":_number(position.get("current_premium")),
+                "quantity":int(position.get("quantity") or 0),"capital_committed":float(position.get("capital_committed") or 0),
+                "initial_dollar_risk":float(position.get("initial_dollar_risk") or 0),
+                "unrealized_pnl":float(position.get("unrealized_pnl") or 0),"realized_pnl":_number(position.get("realistic_pnl")),
+                "entry_timestamp":opened,"time_in_trade_seconds":max(0,int((endpoint-opened).total_seconds())) if opened else None,
+                "stop":_number(position.get("stop_price")),"targets":targets,"status":position.get("status")})
+        return {"lane":lane,"data_status":"persisted","starting_capital":starting,
+                "current_equity":current,"cash_available":_number(row.get("cash_available")),
+                "capital_committed":_number(row.get("capital_committed")),"net_pnl":net,
+                "return_pct":net/starting*100 if net is not None and starting else None,
+                "realized_pnl":_number(row.get("realized_pnl")),"unrealized_pnl":_number(row.get("unrealized_pnl")),
+                "fees":_number(row.get("fees")),"slippage":_number(row.get("slippage")),
+                "peak_equity":_number(row.get("peak_equity")),"current_drawdown_pct":_number(row.get("current_drawdown_pct")),
+                "maximum_drawdown_pct":_number(row.get("maximum_drawdown_pct")),"daily_pnl":_number(row.get("daily_pnl")),
+                "open_risk":_number(row.get("open_risk")),"open_positions":int(row.get("open_positions") or 0),
+                "risk_state":row.get("risk_state") or "UNAVAILABLE","readiness_status":row.get("readiness_status") or "NOT_READY",
+                "metrics":metrics,"positions":position_payload,"updated_at":parse_utc(row.get("updated_at"))}
+
+    def capital_overview(self):
+        rows={str(row.get("lane") or "").upper():row for row in self._capital_state_rows()}
+        positions=self._capital_position_rows()
+        return {"as_of":self._now(),"mode":"SIMULATION",
+                "lanes":[self._capital_lane_payload(lane,rows.get(lane),
+                    [position for position in positions if str(position.get("lane") or "").upper()==lane]) for lane in ("OB","BROAD")],
+                "mirror_role":"RESEARCH_CONTROL_ONLY"}
+
+    def capital_lane(self, lane):
+        return next(item for item in self.capital_overview()["lanes"] if item["lane"]==lane)
+
+    def capital_compare(self):
+        overview=self.capital_overview(); lanes=overview["lanes"]
+        enough=all((item.get("metrics") or {}).get("trades",0)>=100 for item in lanes)
+        winner="INSUFFICIENT_EVIDENCE"
+        if enough and all(item["readiness_status"] in {"PAPER_VALIDATED","LIVE_CANDIDATE"} for item in lanes):
+            ranked=sorted(lanes,key=lambda item:((item.get("metrics") or {}).get("capital_efficiency_pct") or float("-inf")),reverse=True)
+            winner=ranked[0]["lane"]
+        return {"as_of":overview["as_of"],"lanes":lanes,"winner":winner,
+                "evidence":"SUFFICIENT" if enough else "INSUFFICIENT",
+                "normalization":"independent starting capital; realistic simulated P&L primary"}
+
+    def capital_decisions(self, limit=50):
+        result=[]
+        for row in self._capital_decision_rows(limit):
+            result.append({"decision_id":str(row.get("decision_id")),"lane":row.get("lane"),
+                "opportunity_id":str(row.get("opportunity_id")),"symbol":row.get("symbol"),
+                "direction":row.get("direction"),"state":row.get("decision_state"),
+                "reason_code":row.get("reason_code"),"explanation":row.get("explanation"),
+                "proposed_contract":row.get("proposed_contract"),"proposed_quantity":int(row.get("proposed_quantity") or 0),
+                "proposed_capital_required":float(row.get("proposed_capital_required") or 0),
+                "proposed_dollar_risk":float(row.get("proposed_dollar_risk") or 0),
+                "proposed_account_risk_pct":float(row.get("proposed_account_risk_pct") or 0),
+                "decided_at":parse_utc(row.get("decided_at"))})
+        return result
+
+    def risk_status(self):
+        lanes=[]
+        for item in self.capital_overview()["lanes"]:
+            config=LaneCapitalConfig.for_lane(item["lane"])
+            equity=item.get("current_equity") or item["starting_capital"]
+            risk_state=item["risk_state"]
+            lanes.append({"lane":item["lane"],"risk_state":risk_state,"daily_pnl":item.get("daily_pnl"),
+                "daily_loss_limit":item["starting_capital"]*config.max_daily_loss_pct/100,
+                "open_risk":item.get("open_risk"),"maximum_open_risk":equity*config.max_total_open_risk_pct/100,
+                "current_drawdown_pct":item.get("current_drawdown_pct"),
+                "entries_allowed":risk_state not in {"HALTED","UNAVAILABLE"}})
+        return {"as_of":self._now(),"lanes":lanes}
 
     def _scalp_rows(self, symbol, limit=5000):
         repository = self.repository()

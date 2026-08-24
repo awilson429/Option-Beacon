@@ -43,6 +43,30 @@ class FakeService:
         return {"status": "ok" if self.available else "degraded", "market_status": "closed",
             "database": "connected" if self.available else "unavailable", "data_freshness": "unavailable",
             "worker_status": "unavailable", "worker_last_success": None, "provider_status": "not_queried", "timestamp": NOW}
+    def capital_overview(self):
+        return {"as_of":NOW,"mode":"SIMULATION","mirror_role":"RESEARCH_CONTROL_ONLY",
+            "lanes":[self.capital_lane("OB"),self.capital_lane("BROAD")]}
+    def capital_lane(self, lane):
+        return {"lane":lane,"data_status":"persisted","starting_capital":25000,
+            "current_equity":25100,"cash_available":25000,"capital_committed":100,
+            "net_pnl":100,"return_pct":0.4,"realized_pnl":90,"unrealized_pnl":10,
+            "fees":2,"slippage":3,"peak_equity":25200,"current_drawdown_pct":0.4,
+            "maximum_drawdown_pct":1.2,"daily_pnl":25,"open_risk":50,"open_positions":1,
+            "risk_state":"NORMAL","readiness_status":"EARLY_RESEARCH","metrics":{"trades":5},"updated_at":NOW}
+    def capital_compare(self):
+        overview=self.capital_overview()
+        return {"as_of":NOW,"lanes":overview["lanes"],"winner":"INSUFFICIENT_EVIDENCE",
+            "evidence":"INSUFFICIENT","normalization":"independent starting capital; realistic simulated P&L primary"}
+    def capital_decisions(self, limit=50):
+        return [{"decision_id":"d1","lane":"OB","opportunity_id":"opp","symbol":"QQQ",
+            "direction":"CALL","state":"TAKE","reason_code":"ALL_RISK_CONTROLS_PASSED",
+            "explanation":"All controls passed.","proposed_contract":"QQQ-C","proposed_quantity":2,
+            "proposed_capital_required":200,"proposed_dollar_risk":50,
+            "proposed_account_risk_pct":0.2,"decided_at":NOW}]
+    def risk_status(self):
+        return {"as_of":NOW,"lanes":[{"lane":"OB","risk_state":"NORMAL","daily_pnl":25,
+            "daily_loss_limit":500,"open_risk":50,"maximum_open_risk":375,
+            "current_drawdown_pct":0.4,"entries_allowed":True}]}
     @staticmethod
     def _trade(identifier, status):
         return {"id": identifier, "opportunity_id": "opp", "symbol": "QQQ", "direction": "CALL", "setup": "ORB",
@@ -97,6 +121,18 @@ def test_market_and_system_status_contracts():
     assert status["provider_status"] == "not_queried" and "timestamp" in status
 
 
+def test_capital_readiness_api_contracts_are_read_only_and_mirror_is_not_a_lane():
+    api=client()
+    overview=api.get("/api/capital").json()
+    assert [lane["lane"] for lane in overview["lanes"]] == ["OB","BROAD"]
+    assert overview["mirror_role"] == "RESEARCH_CONTROL_ONLY"
+    assert api.get("/api/capital/OB").json()["starting_capital"] == 25000
+    assert api.get("/api/capital/compare").json()["winner"] == "INSUFFICIENT_EVIDENCE"
+    assert api.get("/api/capital/decisions/recent").json()[0]["state"] == "TAKE"
+    assert api.get("/api/risk/status").json()["lanes"][0]["entries_allowed"] is True
+    assert api.get("/api/capital/MIRROR").status_code == 404
+
+
 def test_openapi_and_safe_cors_configuration():
     schema = client().get("/openapi.json").json()
     assert "/api/trade-desk" in schema["paths"]
@@ -123,6 +159,9 @@ def test_trade_desk_home_aggregates_known_pnl_and_lane_roles():
     class HomeService(api.services.OptionBeaconReadService):
         def active_trades(self): return [active]
         def recent_trades(self, limit): return [ob_closed, mirror_closed]
+        def _capital_state_rows(self): return []
+        def _capital_decision_rows(self, limit): return []
+        def _capital_position_rows(self): return []
 
     body = HomeService(now=lambda: NOW).trade_desk_home()
     assert body["session"] == {"realized_pnl": 0.5, "unrealized_pnl": 0.35,

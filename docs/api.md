@@ -22,6 +22,11 @@ The default is only `http://localhost:3000`; wildcard origins are rejected. Phas
 The React-ready, read-only contracts are:
 
 - `GET /api/trade-desk` — persisted session summary, active-trade projection, conservative OB/BROAD/control lane rollups, and recent activity for the React home.
+- `GET /api/capital` — independent OB/BROAD simulated account state; MIRROR is explicitly excluded.
+- `GET /api/capital/{lane}` — one OB or BROAD account, including canonical position metadata.
+- `GET /api/capital/compare` — normalized realistic-execution comparison with evidence gating.
+- `GET /api/capital/decisions/recent` — accepted and rejected allocation decisions with reason codes.
+- `GET /api/risk/status` — daily-loss, open-risk, and drawdown entry-lock status.
 - `GET /api/trades/active` — persisted active trades used as a separately refreshable home section.
 - `GET /api/trades/recent` — persisted recent trades used as a separately refreshable home section.
 - `GET /api/options-desk` — independent persisted existing-strategy projections for SPY and QQQ.
@@ -31,3 +36,5 @@ The React-ready, read-only contracts are:
 - `GET /api/scalp/compare` — normalized SPY/QQQ shadow comparison.
 
 Request handlers do not call market-data providers, evaluate signals, or persist data. Missing scalp tables or observations are represented as unavailable state.
+
+Capital endpoints are also read-only. The Railway worker owns additive capital-ledger writes. See `docs/capital-readiness.md` for risk defaults, execution assumptions, and conservative readiness thresholds.
