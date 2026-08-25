@@ -88,3 +88,52 @@ export interface CapitalDecision {
   proposed_quantity:number; proposed_capital_required:number; proposed_dollar_risk:number;
   proposed_account_risk_pct:number; decided_at:string;
 }
+
+export interface ScannerSectionStatus {
+  section:string; data_status:string; message:string|null;
+}
+
+export interface ScannerHealth {
+  state:string; message:string; market_data_state:string; worker_status:string;
+  provider_status:string; data_freshness:string; last_started_at:string|null;
+  last_completed_at:string|null; last_success_at:string|null; last_error_at:string|null;
+  last_error_message:string|null; scan_duration_seconds:number|null;
+  symbols_processed:number|null; symbols_attempted:number|null; symbol_count:number|null;
+  results:number|null; failures:number|null; expected_interval_seconds:number|null;
+  next_expected_at:string|null;
+}
+
+export interface ScannerInstrument {
+  symbol:SymbolCode; data_status:string; underlying_price:number|null;
+  direction:string|null; setup:string|null; score:number|null; confidence:number|null;
+  signal_state:string; observed_at:string|null; signal_age_seconds:number|null;
+  freshness:string; actionable:boolean; context:Record<string,unknown>;
+}
+
+export interface ScannerLaneDecision {
+  lane:"OB"|"BROAD"; data_status:string; state:string|null; reason_code:string|null;
+  explanation:string|null; proposed_contract:string|null; proposed_quantity:number|null;
+  proposed_capital_required:number|null; proposed_dollar_risk:number|null;
+  proposed_account_risk_pct:number|null; decided_at:string|null;
+}
+
+export interface ScannerOpportunity {
+  opportunity_id:string; symbol:SymbolCode; direction:string|null; strategy:string|null;
+  observed_at:string; score:number|null; confidence:number|null; contract:string|null;
+  entry:number|null; stop:number|null; targets:number[]; status:string; actionable:boolean;
+  data_status:string; freshness:string; context:Record<string,unknown>;
+  lane_decisions:ScannerLaneDecision[];
+}
+
+export interface ScannerActivity {
+  activity_id:string; event_type:string; occurred_at:string; symbol:string|null;
+  direction:string|null; opportunity_id:string|null; lane:string|null; status:string;
+  reason_code:string|null; description:string;
+}
+
+export interface ScannerResponse {
+  as_of:string; market_status:string; data_status:string;
+  research_control_role:"RESEARCH_CONTROL_ONLY"; health:ScannerHealth;
+  instruments:ScannerInstrument[]; opportunities:ScannerOpportunity[];
+  recent_activity:ScannerActivity[]; sections:ScannerSectionStatus[];
+}
