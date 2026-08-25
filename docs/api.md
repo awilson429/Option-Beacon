@@ -38,3 +38,19 @@ The React-ready, read-only contracts are:
 Request handlers do not call market-data providers, evaluate signals, or persist data. Missing scalp tables or observations are represented as unavailable state.
 
 Capital endpoints are also read-only. The Railway worker owns additive capital-ledger writes. See `docs/capital-readiness.md` for risk defaults, execution assumptions, and conservative readiness thresholds.
+
+## Decision provenance
+
+The provenance API composes bounded canonical SPY/QQQ observations with the
+existing opportunity, capital-decision, lane-position, management-snapshot,
+and outcome records. It never calls a provider or evaluates strategy:
+
+- `GET /api/provenance/recent?symbol=SPY&limit=100`
+- `GET /api/provenance/opportunities/{opportunity_id}`
+- `GET /api/provenance/trades/{trade_id}?lane=OB`
+
+Trade provenance requires an explicit `OB` or `BROAD` lane. Legacy records
+without an exact originating observation return an explicit unavailable state;
+the API does not backfill by symbol or timestamp proximity. `GET /api/scanner`
+also exposes the last canonical SPY/QQQ observation and provenance health as
+additive fields.

@@ -445,23 +445,62 @@ def scanner_result_to_trade_outcome(
     trade_plan: Optional[dict] = None,
 ) -> Optional[TradeOutcome]:
     """Convert one eligible completed scanner result into an open outcome."""
+    record, _ = scanner_result_decision(result, trade_plan=trade_plan)
+    return record
+
+
+def scanner_result_decision(
+    result: dict,
+    trade_plan: Optional[dict] = None,
+) -> tuple[Optional[TradeOutcome], dict]:
+    """Return the unchanged candidate result plus its exact conversion disposition.
+
+    This is an observational wrapper around the pre-existing qualification
+    branches.  Callers must not use the disposition to change strategy or
+    execution behavior.
+    """
     result = result or {}
+    signal = str(result.get("signal") or "").upper()
+    if signal == "MARKET CLOSED / WAIT":
+        return None, {
+            "qualification_state": "SESSION_BLOCKED",
+            "reason_code": "MARKET_CLOSED_WAIT",
+            "explanation": "The existing scanner result blocked evaluation outside its trade session.",
+        }
     plan = trade_plan if trade_plan is not None else result.get("trade_plan")
     if not plan:
-        return None
+        return None, {
+            "qualification_state": "NO_SETUP",
+            "reason_code": "NO_TRADE_PLAN",
+            "explanation": "The existing scanner result did not produce a directional trade plan.",
+        }
 
     direction = plan.get("direction") or result.get("bias")
     if direction not in {"Bullish", "Bearish"}:
-        return None
+        return None, {
+            "qualification_state": "NO_SETUP",
+            "reason_code": "NO_DIRECTIONAL_SETUP",
+            "explanation": "The existing scanner result had no Bullish or Bearish direction.",
+        }
 
     timing = str(
         result.get("timing_label") or result.get("entry_timing") or ""
     ).upper()
     stage = str(result.get("setup_stage") or "").upper()
     if timing in {"INVALID", "EXTENDED", "SETUP INVALIDATED", "DO NOT CHASE"}:
-        return None
+        return None, {
+            "qualification_state": "REJECTED",
+            "reason_code": "TIMING_" + (timing.replace(" ", "_") or "INVALID"),
+            "explanation": str(result.get("entry_timing_reason") or result.get("what_next_reason")
+                               or f"The existing entry timing state was {timing}."),
+        }
     if stage in {"INVALID", "FAILED", "EXTENDED"}:
-        return None
+        return None, {
+            "qualification_state": "REJECTED",
+            "reason_code": "SETUP_STAGE_" + stage,
+            "explanation": str(result.get("setup_stage_reason")
+                               or f"The existing setup stage was {stage}."),
+        }
 
     entry = _valid_price(plan.get("trigger_price"))
     if entry is None:
@@ -471,7 +510,11 @@ def scanner_result_to_trade_outcome(
     if entry is None:
         entry = _valid_price(result.get("entry"))
     if entry is None:
-        return None
+        return None, {
+            "qualification_state": "REJECTED",
+            "reason_code": "NO_ENTRY_REFERENCE",
+            "explanation": "The existing trade plan contained no usable entry reference.",
+        }
 
     timestamp = _signal_timestamp(result)
     bucket = timestamp.replace(
@@ -505,7 +548,11 @@ def scanner_result_to_trade_outcome(
         target_3=_valid_price(plan.get("target_3")),
     )
     record.entry_time = None
-    return record
+    return record, {
+        "qualification_state": "QUALIFIED",
+        "reason_code": "ELIGIBLE_TRADE_OUTCOME",
+        "explanation": "The existing scanner conversion produced a canonical opportunity candidate.",
+    }
 
 
 def append_trade_outcome_once(

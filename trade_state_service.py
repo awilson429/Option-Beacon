@@ -173,6 +173,8 @@ def process_scanner_result(
     scanner_id=None,
     run_number=None,
     outcome_records=None,
+    provenance_observation_id=None,
+    provenance_scan_cycle_id=None,
 ) -> int:
     """Advance authoritative outcomes directly from one stable scanner result."""
     symbol = str((result or {}).get("symbol") or "").upper()
@@ -275,6 +277,26 @@ def process_scanner_result(
         if outcome_records is not None:
             outcome_records.append(candidate)
         changed += 1
+    if candidate is not None and provenance_observation_id:
+        try:
+            repository.link_provenance_opportunity(
+                provenance_observation_id, candidate.trade_id
+            )
+        except Exception as exc:
+            LOGGER.exception(json.dumps({
+                "event": "provenance_opportunity_link_failed",
+                "scan_cycle_id": provenance_scan_cycle_id,
+                "observation_id": provenance_observation_id,
+                "opportunity_id": candidate.trade_id,
+                "symbol": symbol,
+            }, sort_keys=True))
+            try:
+                repository.mark_provenance_degraded(
+                    provenance_scan_cycle_id,
+                    f"opportunity link failed: {type(exc).__name__}",
+                )
+            except Exception:
+                LOGGER.exception("Could not mark provenance cycle degraded")
     return changed
 
 

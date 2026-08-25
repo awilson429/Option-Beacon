@@ -649,6 +649,57 @@ class TradeRepository:
                     """,
                 ),
                 (
+                    "provenance_scan_cycles",
+                    f"""
+                    CREATE TABLE IF NOT EXISTS provenance_scan_cycles (
+                        scan_cycle_id {text_id}, scanner_id TEXT NOT NULL,
+                        run_number INTEGER, started_at TEXT NOT NULL,
+                        completed_at TEXT, session_state TEXT NOT NULL,
+                        worker_source TEXT NOT NULL, source_version TEXT,
+                        provider_state TEXT, symbols_evaluated_json TEXT NOT NULL,
+                        cycle_status TEXT NOT NULL, data_freshness TEXT,
+                        failure_reason TEXT, provenance_status TEXT NOT NULL,
+                        provenance_error TEXT, created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        UNIQUE(scanner_id,run_number,started_at)
+                    )
+                    """,
+                ),
+                (
+                    "provenance_observations",
+                    f"""
+                    CREATE TABLE IF NOT EXISTS provenance_observations (
+                        observation_id {text_id}, scan_cycle_id TEXT NOT NULL,
+                        symbol TEXT NOT NULL, observed_at TEXT NOT NULL,
+                        data_timestamp TEXT, underlying_price REAL,
+                        session_state TEXT NOT NULL, direction TEXT,
+                        data_quality TEXT NOT NULL, stale INTEGER NOT NULL,
+                        signal TEXT, setup_state TEXT,
+                        qualification_state TEXT NOT NULL,
+                        reason_code TEXT NOT NULL, explanation TEXT NOT NULL,
+                        total_score REAL, confidence REAL, bullish_score REAL,
+                        bearish_score REAL, component_scores_json TEXT NOT NULL,
+                        indicators_json TEXT NOT NULL, reasons_json TEXT NOT NULL,
+                        opportunity_id TEXT, source_version TEXT,
+                        created_at TEXT NOT NULL,
+                        UNIQUE(scan_cycle_id,symbol,observed_at),
+                        FOREIGN KEY(scan_cycle_id) REFERENCES provenance_scan_cycles(scan_cycle_id)
+                    )
+                    """,
+                ),
+                (
+                    "provenance_decision_trade_links",
+                    f"""
+                    CREATE TABLE IF NOT EXISTS provenance_decision_trade_links (
+                        decision_id {text_id}, observation_id TEXT,
+                        opportunity_id TEXT NOT NULL, lane TEXT NOT NULL,
+                        decision_state TEXT NOT NULL, decided_at TEXT NOT NULL,
+                        trade_id TEXT, position_id TEXT, link_status TEXT NOT NULL,
+                        linked_at TEXT NOT NULL, source TEXT NOT NULL
+                    )
+                    """,
+                ),
+                (
                     "intelligence_setup_snapshots",
                     f"""
                     CREATE TABLE IF NOT EXISTS intelligence_setup_snapshots (
@@ -695,6 +746,16 @@ class TradeRepository:
                 "ON trade_management_snapshots(trade_id,lane,captured_at)",
                 "CREATE INDEX IF NOT EXISTS idx_management_opportunity_lane_at "
                 "ON trade_management_snapshots(opportunity_id,lane,captured_at)",
+                "CREATE INDEX IF NOT EXISTS idx_provenance_cycles_started "
+                "ON provenance_scan_cycles(started_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_provenance_observation_symbol_at "
+                "ON provenance_observations(symbol,observed_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_provenance_observation_opportunity "
+                "ON provenance_observations(opportunity_id)",
+                "CREATE INDEX IF NOT EXISTS idx_provenance_decision_opportunity_lane "
+                "ON provenance_decision_trade_links(opportunity_id,lane,decided_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_provenance_decision_trade_lane "
+                "ON provenance_decision_trade_links(trade_id,lane)",
             ):
                 self._execute(connection, index).close()
         self._diagnostic("repository_schema_initialization_completed")
@@ -1715,6 +1776,287 @@ class TradeRepository:
         LOGGER.info(json.dumps({"event":"position_context_marked","lane":mark["lane"],
                                 "trade_id":mark["trade_id"],"setup_health":mark["setup_health"]},sort_keys=True))
         return mark
+
+    def start_provenance_cycle(self, *, scan_cycle_id, scanner_id, run_number,
+                               started_at, session_state, worker_source,
+                               source_version=None):
+        now = utc_iso()
+        with self.connection() as connection:
+            self._execute(connection, """INSERT INTO provenance_scan_cycles
+                (scan_cycle_id,scanner_id,run_number,started_at,completed_at,
+                 session_state,worker_source,source_version,provider_state,
+                 symbols_evaluated_json,cycle_status,data_freshness,failure_reason,
+                 provenance_status,provenance_error,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(scan_cycle_id) DO NOTHING""", (
+                    str(scan_cycle_id), str(scanner_id),
+                    int(run_number) if run_number is not None else None,
+                    utc_iso(started_at), None, str(session_state), str(worker_source),
+                    source_version, None, "[]", "SCANNING", "unknown", None,
+                    "HEALTHY", None, now, now,
+                )).close()
+        return self.get_provenance_cycle(scan_cycle_id)
+
+    def finish_provenance_cycle(self, scan_cycle_id, *, completed_at, cycle_status,
+                                provider_state=None, symbols_evaluated=None,
+                                data_freshness=None, failure_reason=None):
+        with self.connection() as connection:
+            self._execute(connection, """UPDATE provenance_scan_cycles SET
+                completed_at=?,cycle_status=?,provider_state=?,symbols_evaluated_json=?,
+                data_freshness=?,failure_reason=?,updated_at=? WHERE scan_cycle_id=?""", (
+                    utc_iso(completed_at), str(cycle_status), provider_state,
+                    json.dumps(sorted({str(value).upper() for value in symbols_evaluated or []}),
+                               sort_keys=True),
+                    data_freshness, str(failure_reason)[:500] if failure_reason else None,
+                    utc_iso(), str(scan_cycle_id),
+                )).close()
+        return self.get_provenance_cycle(scan_cycle_id)
+
+    def mark_provenance_degraded(self, scan_cycle_id, error):
+        with self.connection() as connection:
+            self._execute(connection, """UPDATE provenance_scan_cycles SET
+                provenance_status='DEGRADED',provenance_error=?,updated_at=?
+                WHERE scan_cycle_id=?""", (
+                    str(error or "Provenance persistence failed.")[:500],
+                    utc_iso(), str(scan_cycle_id),
+                )).close()
+        return self.get_provenance_cycle(scan_cycle_id)
+
+    def get_provenance_cycle(self, scan_cycle_id):
+        try:
+            with self.connection() as connection:
+                row = self._fetchone(connection,
+                    "SELECT * FROM provenance_scan_cycles WHERE scan_cycle_id=?",
+                    (str(scan_cycle_id),))
+        except Exception as exc:
+            if self._provenance_table_unavailable(exc):
+                return None
+            raise
+        return self._decode_provenance_cycle(row)
+
+    def latest_provenance_cycle(self):
+        try:
+            with self.connection() as connection:
+                row = self._fetchone(connection, """SELECT * FROM provenance_scan_cycles
+                    ORDER BY started_at DESC,scan_cycle_id DESC LIMIT 1""")
+        except Exception as exc:
+            if self._provenance_table_unavailable(exc):
+                return None
+            raise
+        return self._decode_provenance_cycle(row)
+
+    def record_provenance_observation(self, observation):
+        payload = dict(observation or {})
+        required = ("observation_id", "scan_cycle_id", "symbol", "observed_at",
+                    "session_state", "data_quality", "qualification_state",
+                    "reason_code", "explanation")
+        missing = [name for name in required if payload.get(name) in (None, "")]
+        if missing:
+            raise ValueError("Provenance observation requires: " + ", ".join(missing))
+        payload["symbol"] = str(payload["symbol"]).upper()
+        if payload["symbol"] not in {"SPY", "QQQ"}:
+            raise ValueError("Canonical decision provenance is bounded to SPY and QQQ.")
+        columns = (
+            "observation_id", "scan_cycle_id", "symbol", "observed_at",
+            "data_timestamp", "underlying_price", "session_state", "direction",
+            "data_quality", "stale", "signal", "setup_state",
+            "qualification_state", "reason_code", "explanation", "total_score",
+            "confidence", "bullish_score", "bearish_score", "component_scores_json",
+            "indicators_json", "reasons_json", "opportunity_id", "source_version",
+            "created_at",
+        )
+        values = {
+            **payload,
+            "observed_at": utc_iso(payload["observed_at"]),
+            "data_timestamp": utc_iso(payload["data_timestamp"])
+                if payload.get("data_timestamp") else None,
+            "stale": 1 if payload.get("stale") else 0,
+            "component_scores_json": json.dumps(payload.get("component_scores") or {},
+                                                 sort_keys=True, default=str),
+            "indicators_json": json.dumps(payload.get("indicators") or {},
+                                           sort_keys=True, default=str),
+            "reasons_json": json.dumps(payload.get("reasons") or [],
+                                        sort_keys=True, default=str),
+            "created_at": utc_iso(payload.get("created_at")),
+        }
+        with self.connection() as connection:
+            self._execute(connection,
+                f"INSERT INTO provenance_observations ({','.join(columns)}) "
+                f"VALUES ({','.join('?' for _ in columns)}) "
+                "ON CONFLICT(observation_id) DO NOTHING",
+                tuple(values.get(name) for name in columns)).close()
+            row = self._fetchone(connection,
+                "SELECT * FROM provenance_observations WHERE observation_id=?",
+                (str(payload["observation_id"]),))
+        return self._decode_provenance_observation(row)
+
+    def link_provenance_opportunity(self, observation_id, opportunity_id):
+        with self.connection() as connection:
+            cursor = self._execute(connection, """UPDATE provenance_observations
+                SET opportunity_id=? WHERE observation_id=?
+                AND (opportunity_id IS NULL OR opportunity_id=?)""", (
+                    str(opportunity_id), str(observation_id), str(opportunity_id),
+                ))
+            updated = cursor.rowcount > 0
+            cursor.close()
+        if not updated:
+            raise ValueError("Observation opportunity identity cannot be replaced.")
+        return self.get_provenance_observation(observation_id)
+
+    def get_provenance_observation(self, observation_id):
+        try:
+            with self.connection() as connection:
+                row = self._fetchone(connection,
+                    "SELECT * FROM provenance_observations WHERE observation_id=?",
+                    (str(observation_id),))
+        except Exception as exc:
+            if self._provenance_table_unavailable(exc):
+                return None
+            raise
+        return self._decode_provenance_observation(row)
+
+    def provenance_observation_for_opportunity(self, opportunity_id):
+        try:
+            with self.connection() as connection:
+                row = self._fetchone(connection, """SELECT * FROM provenance_observations
+                    WHERE opportunity_id=? ORDER BY observed_at DESC,observation_id DESC LIMIT 1""",
+                    (str(opportunity_id),))
+        except Exception as exc:
+            if self._provenance_table_unavailable(exc):
+                return None
+            raise
+        return self._decode_provenance_observation(row)
+
+    def list_recent_provenance_observations(self, *, limit=100, symbol=None):
+        query = "SELECT * FROM provenance_observations"
+        params = []
+        if symbol:
+            query += " WHERE symbol=?"
+            params.append(str(symbol).upper())
+        query += " ORDER BY observed_at DESC,observation_id DESC LIMIT ?"
+        params.append(min(max(int(limit), 1), 1000))
+        try:
+            with self.connection() as connection:
+                rows = self._fetchall(connection, query, tuple(params))
+        except Exception as exc:
+            if self._provenance_table_unavailable(exc):
+                return []
+            raise
+        return [self._decode_provenance_observation(row) for row in rows]
+
+    def latest_provenance_observations(self, symbols=("SPY", "QQQ")):
+        requested = tuple(sorted({str(value).upper() for value in symbols if value}))
+        rows = self.list_recent_provenance_observations(limit=max(20, len(requested) * 10))
+        latest = {}
+        for row in rows:
+            if row["symbol"] in requested and row["symbol"] not in latest:
+                latest[row["symbol"]] = row
+        return latest
+
+    def record_provenance_decision_link(self, *, decision_id, observation_id,
+                                        opportunity_id, lane, decision_state,
+                                        decided_at, link_status, source):
+        lane = str(lane).upper()
+        if lane not in {"OB", "BROAD"}:
+            raise ValueError("Deployable provenance decisions require OB or BROAD lane.")
+        with self.connection() as connection:
+            self._execute(connection, """INSERT INTO provenance_decision_trade_links
+                (decision_id,observation_id,opportunity_id,lane,decision_state,
+                 decided_at,trade_id,position_id,link_status,linked_at,source)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(decision_id) DO NOTHING""", (
+                    str(decision_id), str(observation_id) if observation_id else None,
+                    str(opportunity_id), lane, str(decision_state), utc_iso(decided_at),
+                    None, None, str(link_status), utc_iso(), str(source),
+                )).close()
+        return self.provenance_decision_link(decision_id)
+
+    def link_provenance_decision_trade(self, decision_id, *, opportunity_id, lane,
+                                       trade_id, position_id=None, source):
+        lane = str(lane).upper()
+        with self.connection() as connection:
+            cursor = self._execute(connection, """UPDATE provenance_decision_trade_links SET
+                trade_id=?,position_id=?,link_status='TRADE_CREATED',linked_at=?,source=?
+                WHERE decision_id=? AND opportunity_id=? AND lane=?
+                AND (trade_id IS NULL OR trade_id=?)""", (
+                    str(trade_id), str(position_id or trade_id), utc_iso(), str(source),
+                    str(decision_id), str(opportunity_id), lane, str(trade_id),
+                ))
+            updated = cursor.rowcount > 0
+            cursor.close()
+        if not updated:
+            raise ValueError("Decision trade linkage requires an exact existing decision identity.")
+        return self.provenance_decision_link(decision_id)
+
+    def provenance_decision_link(self, decision_id):
+        try:
+            with self.connection() as connection:
+                return self._fetchone(connection, """SELECT *
+                    FROM provenance_decision_trade_links WHERE decision_id=?""",
+                    (str(decision_id),))
+        except Exception as exc:
+            if self._provenance_table_unavailable(exc):
+                return None
+            raise
+
+    def provenance_decision_links(self, *, opportunity_id=None, trade_id=None, lane=None):
+        query = "SELECT * FROM provenance_decision_trade_links"
+        clauses, params = [], []
+        if opportunity_id:
+            clauses.append("opportunity_id=?"); params.append(str(opportunity_id))
+        if trade_id:
+            clauses.append("trade_id=?"); params.append(str(trade_id))
+        if lane:
+            clauses.append("lane=?"); params.append(str(lane).upper())
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY decided_at ASC,decision_id ASC"
+        try:
+            with self.connection() as connection:
+                return self._fetchall(connection, query, tuple(params))
+        except Exception as exc:
+            if self._provenance_table_unavailable(exc):
+                return []
+            raise
+
+    @staticmethod
+    def _provenance_table_unavailable(exc):
+        current = exc
+        while current is not None:
+            detail = f"{type(current).__name__}: {current}"
+            if ("UndefinedTable" in detail
+                    or "no such table: provenance_" in detail):
+                return True
+            current = current.__cause__
+        return False
+
+    @staticmethod
+    def _decode_provenance_cycle(row):
+        if not row:
+            return None
+        decoded = dict(row)
+        try:
+            decoded["symbols_evaluated"] = json.loads(
+                decoded.get("symbols_evaluated_json") or "[]")
+        except Exception:
+            decoded["symbols_evaluated"] = []
+        return decoded
+
+    @staticmethod
+    def _decode_provenance_observation(row):
+        if not row:
+            return None
+        decoded = dict(row)
+        for source, target, fallback in (
+            ("component_scores_json", "component_scores", {}),
+            ("indicators_json", "indicators", {}),
+            ("reasons_json", "reasons", []),
+        ):
+            try:
+                decoded[target] = json.loads(decoded.get(source) or json.dumps(fallback))
+            except Exception:
+                decoded[target] = fallback
+        decoded["stale"] = bool(decoded.get("stale"))
+        return decoded
 
     def record_trade_management_snapshot(self, snapshot):
         """Persist one exact-identity management observation without refresh noise."""

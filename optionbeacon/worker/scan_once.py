@@ -64,6 +64,11 @@ from scanner_performance import (
     reset_run_timing,
     symbol_timing,
 )
+from decision_provenance import (
+    SUPPORTED_PROVENANCE_SYMBOLS,
+    build_observation,
+    scan_cycle_identity,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -77,6 +82,36 @@ def _safe_funnel_error_message(exc):
     if any(value in lowered for value in ("postgres://", "postgresql://", "token", "password", "secret")):
         return "Authoritative funnel diagnostic stage failed; sensitive detail redacted."
     return message or "Authoritative funnel diagnostic stage failed."
+
+
+def _mark_provenance_failure(repository, scan_cycle_id, *, stage, exc, symbol=None):
+    LOGGER.error(json.dumps({
+        "event": "decision_provenance_persistence_failed",
+        "scan_cycle_id": scan_cycle_id, "stage": stage, "symbol": symbol,
+        "exception_type": type(exc).__name__,
+    }, sort_keys=True))
+    try:
+        repository.mark_provenance_degraded(
+            scan_cycle_id, f"{stage}: {type(exc).__name__}"
+        )
+    except Exception:
+        LOGGER.exception("Could not mark decision provenance degraded")
+
+
+def _finish_provenance_cycle(repository, scan_cycle_id, *, completed_at,
+                             cycle_status, provider_state, symbols_evaluated,
+                             data_freshness, failure_reason=None):
+    try:
+        return repository.finish_provenance_cycle(
+            scan_cycle_id, completed_at=completed_at, cycle_status=cycle_status,
+            provider_state=provider_state, symbols_evaluated=symbols_evaluated,
+            data_freshness=data_freshness, failure_reason=failure_reason,
+        )
+    except Exception as exc:
+        _mark_provenance_failure(
+            repository, scan_cycle_id, stage="cycle_completion", exc=exc
+        )
+        return None
 
 
 def record_authoritative_entry_funnel(
@@ -210,6 +245,21 @@ def run_scan_once(
         scanner_id, run_number=run_number, owner_id=owner,
         started_at=started, code_version=build["commit"],
     )
+    provenance_cycle_id = scan_cycle_identity(
+        scanner_id=scanner_id, run_number=run_number, started_at=started
+    )
+    provenance_symbols = set()
+    try:
+        repository.start_provenance_cycle(
+            scan_cycle_id=provenance_cycle_id, scanner_id=scanner_id,
+            run_number=run_number, started_at=started,
+            session_state="WORKER_ACTIVE", worker_source="optionbeacon.worker.scan_once",
+            source_version=build["commit"],
+        )
+    except Exception as exc:
+        _mark_provenance_failure(
+            repository, provenance_cycle_id, stage="cycle_start", exc=exc
+        )
     results = {}
     failures = 0
     symbols_attempted = 0
@@ -362,6 +412,24 @@ def run_scan_once(
                                 )
                                 record_retry_wait(delay)
                                 sleep(delay)
+                        provenance_observation_id = None
+                        if str(symbol).upper() in SUPPORTED_PROVENANCE_SYMBOLS:
+                            provenance_symbols.add(str(symbol).upper())
+                            try:
+                                observation = build_observation(
+                                    scan_cycle_id=provenance_cycle_id,
+                                    symbol=symbol, observed_at=clock(), result=result,
+                                    failure=failure, source_version=build["commit"],
+                                )
+                                stored_observation = repository.record_provenance_observation(
+                                    observation
+                                )
+                                provenance_observation_id = stored_observation["observation_id"]
+                            except Exception as exc:
+                                _mark_provenance_failure(
+                                    repository, provenance_cycle_id,
+                                    stage="observation_write", exc=exc, symbol=symbol,
+                                )
                         if failure is not None:
                             failures += 1
                             failed_symbols.append(symbol)
@@ -379,6 +447,8 @@ def run_scan_once(
                                     current_timestamp=clock(), eod_exit_time=eod_exit_time,
                                     scanner_id=scanner_id, run_number=run_number,
                                     outcome_records=cycle_outcomes,
+                                    provenance_observation_id=provenance_observation_id,
+                                    provenance_scan_cycle_id=provenance_cycle_id,
                                 )
                         symbol_completed_at = clock()
                         symbol_record = timing.finish(
@@ -532,6 +602,12 @@ def run_scan_once(
                     code_version=build["commit"], market_data_state="ERROR",
                     error_message=f"{type(scan_phase_error).__name__}: scanner phase failed",
                 )
+            _finish_provenance_cycle(
+                repository, provenance_cycle_id, completed_at=completed,
+                cycle_status="ERROR", provider_state="ERROR",
+                symbols_evaluated=provenance_symbols, data_freshness="unavailable",
+                failure_reason=f"{type(scan_phase_error).__name__}: scanner phase failed",
+            )
             return 1
         completed = clock()
         lease.ensure_owned()
@@ -550,6 +626,16 @@ def run_scan_once(
                     else "UNAVAILABLE"
                 ),
             )
+        final_provider_state = (
+            "AVAILABLE" if results and failures == 0 else
+            "PARTIAL" if results else "UNAVAILABLE"
+        )
+        _finish_provenance_cycle(
+            repository, provenance_cycle_id, completed_at=completed,
+            cycle_status="COMPLETED", provider_state=final_provider_state,
+            symbols_evaluated=provenance_symbols,
+            data_freshness="fresh" if results else "unavailable",
+        )
         return 0 if results else 1
     except Exception as exc:
         if stage in {
@@ -578,6 +664,12 @@ def run_scan_once(
                 code_version=build["commit"], market_data_state="ERROR",
                 error_message=f"{type(exc).__name__}: scanner failed",
             )
+        _finish_provenance_cycle(
+            repository, provenance_cycle_id, completed_at=completed,
+            cycle_status="ERROR", provider_state="ERROR",
+            symbols_evaluated=provenance_symbols, data_freshness="unavailable",
+            failure_reason=f"{type(exc).__name__}: scanner failed",
+        )
         return 1
     finally:
         lease.stop()

@@ -159,6 +159,40 @@ class CapitalRepository:
                     payload.get("drawdown_state") or DrawdownState.NORMAL,decided_at,
                     json.dumps(metadata or {},sort_keys=True),
                 )).close()
+        observation = None
+        try:
+            observation_reader = getattr(
+                self.repository, "provenance_observation_for_opportunity", None
+            )
+            observation = observation_reader(payload["opportunity_id"]) \
+                if callable(observation_reader) else None
+            link_writer = getattr(self.repository, "record_provenance_decision_link", None)
+            if callable(link_writer):
+                link_writer(
+                    decision_id=decision_id,
+                    observation_id=(observation or {}).get("observation_id"),
+                    opportunity_id=payload["opportunity_id"], lane=payload["lane"],
+                    decision_state=payload["state"], decided_at=payload["timestamp"],
+                    link_status="DECIDED" if str(payload["state"]).upper() == "TAKE"
+                        else "NO_TRADE",
+                    source="capital_repository.record_decision",
+                )
+        except Exception as exc:
+            LOGGER.exception(json.dumps({
+                "event": "provenance_capital_decision_link_failed",
+                "decision_id": decision_id,
+                "opportunity_id": payload["opportunity_id"],
+                "lane": payload["lane"],
+                "exception_type": type(exc).__name__,
+            }, sort_keys=True))
+            if observation:
+                try:
+                    self.repository.mark_provenance_degraded(
+                        observation["scan_cycle_id"],
+                        f"capital decision link failed: {type(exc).__name__}",
+                    )
+                except Exception:
+                    LOGGER.exception("Could not mark provenance cycle degraded")
         return decision_id
 
     def recent_decisions(self, *, lane=None, limit=50):
@@ -311,6 +345,32 @@ class CapitalRepository:
                      initial_dollar_risk,unrealized_pnl,theoretical_pnl,realistic_pnl,fees,slippage,
                      opened_at,last_mark_at,closed_at,status,metadata_json)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",values).close()
+        try:
+            linker = getattr(self.repository, "link_provenance_decision_trade", None)
+            if callable(linker):
+                linker(
+                    decision["decision_id"], opportunity_id=opportunity, lane=lane,
+                    trade_id=position_id, position_id=position_id,
+                    source="capital_repository._upsert_from_paper",
+                )
+        except Exception as exc:
+            LOGGER.exception(json.dumps({
+                "event": "provenance_decision_trade_link_failed",
+                "decision_id": decision.get("decision_id"),
+                "opportunity_id": opportunity, "lane": lane,
+                "trade_id": position_id, "exception_type": type(exc).__name__,
+            }, sort_keys=True))
+            try:
+                observation = self.repository.provenance_observation_for_opportunity(
+                    opportunity
+                )
+                if observation:
+                    self.repository.mark_provenance_degraded(
+                        observation["scan_cycle_id"],
+                        f"decision trade link failed: {type(exc).__name__}",
+                    )
+            except Exception:
+                LOGGER.exception("Could not mark provenance cycle degraded")
         self._record_management_snapshot(
             position=position,
             position_id=position_id,

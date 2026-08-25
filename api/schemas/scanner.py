@@ -3,6 +3,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from api.schemas.provenance import ProvenanceCycleHealth, ProvenanceObservationResponse
+
 
 class ScannerSectionStatus(BaseModel):
     section: str
@@ -46,6 +48,7 @@ class ScannerInstrument(BaseModel):
     freshness: str
     actionable: bool = False
     context: dict[str, Any] = Field(default_factory=dict)
+    canonical_observation: ProvenanceObservationResponse | None = None
 
 
 class ScannerLaneDecision(BaseModel):
@@ -100,6 +103,7 @@ class ScannerResponse(BaseModel):
     market_status: str
     data_status: str
     research_control_role: str = "RESEARCH_CONTROL_ONLY"
+    provenance_health: ProvenanceCycleHealth | None = None
     health: ScannerHealth
     instruments: list[ScannerInstrument] = Field(default_factory=list)
     opportunities: list[ScannerOpportunity] = Field(default_factory=list)
