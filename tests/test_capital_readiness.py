@@ -11,6 +11,7 @@ from capital_readiness import (
 )
 from capital_repository import CapitalRepository
 from execution_config import ExecutionConfig
+from option_position_tracker import PaperOptionPosition
 from option_trade_engine import PaperOptionTrade
 from paper_execution import run_paper_execution
 from paper_execution_repository import PaperExecutionRepository
@@ -207,5 +208,34 @@ def test_worker_paper_handoff_creates_lane_owned_quantities_without_shared_dolla
     with base.connection() as connection:
         positions=base._fetchall(connection,
             "SELECT lane,quantity,capital_committed FROM capital_positions ORDER BY lane")
+        snapshots=base._fetchall(connection,
+            "SELECT trade_id,lane FROM trade_management_snapshots ORDER BY lane")
     assert [(row["lane"],row["quantity"]) for row in positions] == [("BROAD",1),("OB",3)]
     assert positions[0]["capital_committed"] != positions[1]["capital_committed"]
+    assert [(row["trade_id"],row["lane"]) for row in snapshots] == [
+        ("BROAD:paper-1","BROAD"),("OB:paper-1","OB")]
+
+
+def test_snapshot_write_failure_is_logged_and_does_not_change_capital_position(tmp_path,monkeypatch,caplog):
+    base=TradeRepository(tmp_path/"snapshot-failure.db",database_url="")
+    capital=CapitalRepository(base,configs=lane_configs({}))
+    position=PaperOptionPosition(
+        trade_id="paper-1",status="OPEN",entry_time=NOW-timedelta(minutes=2),last_update=NOW,
+        ticker="QQQ",direction="Bullish",option_symbol="QQQ260824C00713000",
+        expiration="2026-08-24",strike=713,option_type="call",entry_bid=1.4,entry_ask=1.44,
+        entry_mid=1.42,current_bid=1.5,current_ask=1.54,current_mid=1.52,current_return_percent=7.04,
+        highest_mid=1.52,lowest_mid=1.4,max_favorable_excursion_percent=7.04,
+        max_adverse_excursion_percent=-1.41,last_underlying_price=713.8,last_option_quote_time=NOW,
+    )
+    decision={"lane":"OB","proposed_quantity":2,"realistic_entry":1.43,
+              "theoretical_entry":1.42,"stop_fill":1.27,
+              "proposed_capital_required":286,"proposed_dollar_risk":32}
+    monkeypatch.setattr(base,"record_trade_management_snapshot",
+        lambda payload: (_ for _ in ()).throw(RuntimeError("snapshot unavailable")))
+    with caplog.at_level("ERROR"):
+        capital._upsert_from_paper(position,"opp-1",decision,now=NOW)
+    with base.connection() as connection:
+        stored=base._fetchone(connection,
+            "SELECT position_id,status FROM capital_positions WHERE position_id=?",("OB:paper-1",))
+    assert stored == {"position_id":"OB:paper-1","status":"OPEN"}
+    assert "trade_management_snapshot_write_failed" in caplog.text

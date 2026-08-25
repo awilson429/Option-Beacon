@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from trade_repository import utc_iso
+from trade_repository import parse_utc, utc_iso
 
 
 EASTERN = ZoneInfo("America/New_York")
 FILL_MODEL = "INTRADAY_CONSERVATIVE_QUARTER_SPREAD_V1"
 CONTRACT_MULTIPLIER = 100
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -446,7 +448,9 @@ class IntradayRepository:
                 update["profit_giveback_pct"], mark * CONTRACT_MULTIPLIER,
                 0.0 if reason else pnl, update["mfe_pct"], utc_iso(now), utc_iso(now), trade_id)).close()
         with self.repository.connection() as connection:
-            return self.repository._fetchone(connection, "SELECT * FROM intraday_paper_trades WHERE trade_id=?", (trade_id,))
+            updated = self.repository._fetchone(connection, "SELECT * FROM intraday_paper_trades WHERE trade_id=?", (trade_id,))
+        self._record_management_snapshot(updated, now=now, config=config)
+        return updated
 
     def update_mirror(self, trade_id, quote, *, close_reason=None, now=None):
         now = now or datetime.now(timezone.utc)
@@ -471,7 +475,69 @@ class IntradayRepository:
                 utc_iso(now), "CLOSED" if close_reason else "OPEN", "CLOSED" if close_reason else "OPEN",
                 mark if close_reason else None, close_reason, utc_iso(now) if close_reason else None,
                 pnl if close_reason else None, return_pct if close_reason else None, utc_iso(now), trade_id)).close()
-        return self.trade(trade_id)
+        updated = self.trade(trade_id)
+        self._record_management_snapshot(updated, now=now, config=self.config_for(updated),
+                                         control_research=True)
+        return updated
+
+    def _record_management_snapshot(self, row, *, now, config, control_research=False):
+        writer = getattr(self.repository, "record_trade_management_snapshot", None)
+        if not row or not callable(writer):
+            return None
+        lane = "CONTROL_RESEARCH" if control_research else "INTRADAY_MANAGED"
+        entry = _number(row.get("entry_fill"))
+        stop_pct = _number(row.get("stop_pct"))
+        current_stop = entry * (1 + stop_pct / 100) if entry is not None and stop_pct is not None else None
+        opened = parse_utc(row.get("opened_at"))
+        observed = parse_utc(now)
+        current_return = (_number(row.get("realized_return_percent"))
+                          if row.get("status") == "CLOSED" else
+                          ((_number(row.get("current_mark")) / entry - 1) * 100
+                           if entry and _number(row.get("current_mark")) is not None else None))
+        try:
+            return writer({
+                "trade_id": row["trade_id"],
+                "opportunity_id": row["opportunity_id"],
+                "lane": lane,
+                "lane_role": "RESEARCH_CONTROL" if control_research else "PAPER_RESEARCH",
+                "symbol": row["symbol"],
+                "contract_symbol": row.get("option_symbol"),
+                "captured_at": now,
+                "source_timestamp": row.get("updated_at") or now,
+                "trade_status": row.get("status"),
+                "quantity": row.get("quantity"),
+                "entry_timestamp": row.get("opened_at"),
+                "entry_premium": entry,
+                "latest_option_mark": row.get("current_mark"),
+                "latest_underlying": None,
+                "mark_timestamp": row.get("last_quote_at"),
+                "time_in_trade_seconds": max(0, int((observed - opened).total_seconds()))
+                    if observed and opened else None,
+                "current_stop": current_stop,
+                "breakeven_state": "ARMED" if row.get("protection_armed") else "INACTIVE",
+                "maximum_hold_minutes": config.max_hold_minutes,
+                "stop_management_state": row.get("management_state"),
+                "management_reason": row.get("exit_reason"),
+                "management_version": "intraday-managed-v1",
+                "management_source": "intraday_execution.update_mirror" if control_research
+                    else "intraday_execution.update_managed",
+                "unrealized_pnl": row.get("unrealized_pnl"),
+                "unrealized_return_pct": current_return,
+                "data_freshness": "fresh",
+                "stale": False,
+                "missing_data": [
+                    "exit_score", "exit_label", "trade_coach_state", "thesis_state",
+                    "momentum_state", "structure_state", "target_progress", "latest_underlying",
+                ],
+            })
+        except Exception:
+            LOGGER.exception(json.dumps({
+                "event": "trade_management_snapshot_write_failed",
+                "trade_id": row.get("trade_id"),
+                "opportunity_id": row.get("opportunity_id"),
+                "lane": lane,
+            }, sort_keys=True))
+            return None
 
     def close_mirror(self, opportunity_id, quote, *, reason="UNDERLYING_SIGNAL_CLOSED", now=None):
         now = now or datetime.now(timezone.utc)
@@ -485,6 +551,10 @@ class IntradayRepository:
                 self.repository._execute(connection, """UPDATE intraday_paper_trades SET status='CLOSED',management_state='CLOSED',
                     current_mark=?,exit_fill=?,exit_reason=?,closed_at=?,realized_pnl=?,realized_return_percent=?,updated_at=?
                     WHERE trade_id=?""", (mark, mark, reason, utc_iso(now), pnl, return_pct, utc_iso(now), row["trade_id"])).close()
+        for row in rows:
+            updated = self.trade(row["trade_id"])
+            self._record_management_snapshot(updated, now=now, config=self.config_for(updated),
+                                             control_research=True)
         return len(rows)
 
     def runtime_state(self):

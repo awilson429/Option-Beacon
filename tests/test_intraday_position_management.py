@@ -65,6 +65,13 @@ def test_mirror_closes_on_underlying_reversal_managed_remains_isolated(tmp_path,
     managed = next(row for row in rows if row["variant"] == "INTRADAY_MANAGED")
     assert mirror["status"] == "CLOSED" and mirror["exit_reason"] == "UNDERLYING_SIGNAL_CLOSED"
     assert managed["status"] == "OPEN"
+    managed_snapshot = repository.latest_trade_management_snapshot(
+        managed["trade_id"], lane="INTRADAY_MANAGED")
+    mirror_snapshot = repository.latest_trade_management_snapshot(
+        mirror["trade_id"], lane="CONTROL_RESEARCH")
+    assert managed_snapshot["management_source"] == "intraday_execution.update_managed"
+    assert mirror_snapshot["lane_role"] == "RESEARCH_CONTROL"
+    assert mirror_snapshot["management_source"] == "intraday_execution.update_mirror"
 
 
 def test_managed_hard_stop_closes_without_closing_mirror(tmp_path, monkeypatch):

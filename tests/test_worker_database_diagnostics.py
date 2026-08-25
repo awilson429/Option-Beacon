@@ -335,6 +335,7 @@ def test_repository_reports_schema_operation_boundaries(tmp_path):
         "opportunity_context",
         "context_shadow_decisions",
         "position_context_marks",
+        "trade_management_snapshots",
         "intelligence_setup_snapshots",
         "intelligence_outcome_labels",
         "intelligence_shadow_events",

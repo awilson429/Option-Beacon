@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from capital_readiness import (
@@ -18,6 +19,9 @@ from capital_readiness import (
     execution_outcome,
 )
 from trade_repository import parse_utc, utc_iso
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class CapitalRepository:
@@ -307,6 +311,75 @@ class CapitalRepository:
                      initial_dollar_risk,unrealized_pnl,theoretical_pnl,realistic_pnl,fees,slippage,
                      opened_at,last_mark_at,closed_at,status,metadata_json)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",values).close()
+        self._record_management_snapshot(
+            position=position,
+            position_id=position_id,
+            opportunity_id=opportunity,
+            lane=lane,
+            quantity=quantity,
+            entry=entry,
+            stop=decision.get("stop_fill"),
+            unrealized_pnl=unrealized,
+            initial_risk=decision["proposed_dollar_risk"],
+            closed=closed,
+            now=now,
+        )
+
+    def _record_management_snapshot(self, *, position, position_id, opportunity_id,
+                                    lane, quantity, entry, stop, unrealized_pnl,
+                                    initial_risk, closed, now):
+        writer = getattr(self.repository, "record_trade_management_snapshot", None)
+        if not callable(writer):
+            return None
+        updated_at = parse_utc(position.last_update)
+        observed_at = parse_utc(now)
+        stale = bool(updated_at and observed_at and observed_at - updated_at > timedelta(minutes=5))
+        missing_data = [
+            "exit_score", "exit_label", "trade_coach_state", "thesis_state",
+            "momentum_state", "structure_state", "target_progress",
+            "stop_management_state", "management_reason",
+        ]
+        try:
+            return writer({
+                "trade_id": position_id,
+                "opportunity_id": opportunity_id,
+                "lane": lane,
+                "lane_role": "AUTHORITATIVE" if lane == "OB" else "PAPER",
+                "symbol": position.ticker,
+                "contract_symbol": position.option_symbol,
+                "captured_at": now,
+                "source_timestamp": position.last_update,
+                "trade_status": "CLOSED" if closed else "OPEN",
+                "quantity": quantity,
+                "entry_timestamp": position.entry_time,
+                "entry_premium": entry,
+                "latest_option_mark": position.current_mid,
+                "latest_underlying": position.last_underlying_price,
+                "mark_timestamp": position.last_option_quote_time or position.last_update,
+                "time_in_trade_seconds": max(0, int((observed_at - parse_utc(
+                    position.entry_time
+                )).total_seconds())) if observed_at and position.entry_time else None,
+                "current_stop": stop,
+                "target_1": None,
+                "target_2": None,
+                "target_3": None,
+                "unrealized_pnl": unrealized_pnl,
+                "unrealized_return_pct": position.current_return_percent,
+                "current_managed_risk": 0 if closed else initial_risk,
+                "data_freshness": "stale" if stale else "fresh",
+                "stale": stale,
+                "missing_data": missing_data,
+                "management_version": "capital-position-v1",
+                "management_source": "capital_repository.sync_paper_positions",
+            })
+        except Exception:
+            LOGGER.exception(json.dumps({
+                "event": "trade_management_snapshot_write_failed",
+                "trade_id": position_id,
+                "opportunity_id": opportunity_id,
+                "lane": lane,
+            }, sort_keys=True))
+            return None
 
     def refresh_lane_state(self, lane, *, now=None):
         now = now or datetime.now(timezone.utc); config = self.configs[lane]

@@ -235,28 +235,50 @@ class OptionBeaconReadService:
                 if str(row.get("status") or "").upper() == "OPEN"
                 and str(row.get("lane") or "").upper() in {"OB", "BROAD"}]
 
-    def _active_management(self, sources):
+    def _active_management(self, snapshot=None):
+        snapshot = snapshot or {}
         payload = {
-            "breakeven_state": _first(sources, "breakeven_state"),
-            "maximum_hold_minutes": _first(sources, "maximum_hold_minutes", "max_hold_minutes"),
-            "exit_score": _first(sources, "exit_score"),
-            "exit_state": _first(sources, "exit_state", "exit_label", "coach_action"),
-            "trade_coach_status": _first(sources, "trade_coach_status", "coach_status"),
-            "thesis_status": _first(sources, "thesis_status", "setup_health"),
-            "momentum_state": _first(sources, "momentum_state"),
-            "structure_state": _first(sources, "structure_state", "vwap_ema_structure"),
-            "target_progress": _first(sources, "target_progress"),
-            "stop_management_state": _first(sources, "stop_management_state"),
-            "last_management_update": parse_utc(_first(
-                sources, "last_management_update", "management_updated_at", "recommendation_timestamp"
-            )),
+            "breakeven_state": snapshot.get("breakeven_state"),
+            "maximum_hold_minutes": snapshot.get("maximum_hold_minutes"),
+            "exit_score": snapshot.get("exit_score"),
+            "exit_label": snapshot.get("exit_label"),
+            "exit_state": snapshot.get("exit_label"),
+            "trade_coach_state": snapshot.get("trade_coach_state"),
+            "trade_coach_status": snapshot.get("trade_coach_state"),
+            "thesis_state": snapshot.get("thesis_state"),
+            "thesis_status": snapshot.get("thesis_state"),
+            "momentum_state": snapshot.get("momentum_state"),
+            "structure_state": snapshot.get("structure_state"),
+            "target_progress": snapshot.get("target_progress"),
+            "stop_management_state": snapshot.get("stop_management_state"),
+            "management_reason": snapshot.get("management_reason"),
+            "management_updated_at": parse_utc(snapshot.get("captured_at")),
+            "last_management_update": parse_utc(snapshot.get("captured_at")),
         }
         payload["exit_score"] = _integer(payload["exit_score"])
         payload["maximum_hold_minutes"] = _integer(payload["maximum_hold_minutes"])
         payload["management_data_status"] = (
-            "persisted" if any(value is not None for value in payload.values()) else "unavailable"
+            "stale" if snapshot.get("stale") else "persisted" if snapshot else "unavailable"
         )
         return payload
+
+    def _apply_management_snapshots(self, rows):
+        reader = getattr(self.repository(), "latest_trade_management_snapshots", None)
+        snapshots = reader([(row.get("id"), row.get("lane")) for row in rows]) \
+            if callable(reader) else {}
+        for row in rows:
+            snapshot = snapshots.get((str(row.get("id")), str(row.get("lane") or "").upper()))
+            row.update(self._active_management(snapshot))
+            if not snapshot:
+                continue
+            for target, source in (
+                ("stop", "current_stop"), ("target_1", "target_1"),
+                ("target_2", "target_2"), ("target_3", "target_3"),
+                ("current_dollar_risk", "current_managed_risk"),
+            ):
+                if snapshot.get(source) is not None:
+                    row[target] = _number(snapshot[source])
+        return rows
 
     def _active_capital_trade(self, position, authoritative, opportunity, decision):
         lane = str(position.get("lane") or "").upper()
@@ -321,7 +343,7 @@ class OptionBeaconReadService:
             "mark_timestamp": mark_timestamp, "stop": _number(position.get("stop_price"))
                 if position.get("stop_price") is not None else _number((authoritative or {}).get("stop_price")),
             "target_1": target_values[0], "target_2": target_values[1], "target_3": target_values[2],
-            **self._active_management(sources),
+            **self._active_management(),
         }
 
     def _active_authoritative_trade(self, trade, opportunity, lane):
@@ -348,7 +370,7 @@ class OptionBeaconReadService:
             "time_in_trade_seconds": elapsed, "data_freshness": "unavailable",
             "mark_timestamp": None, "stop": _number(trade.get("stop_price")),
             "target_1": _number(trade.get("target_1")), "target_2": _number(trade.get("target_2")),
-            "target_3": _number(trade.get("target_3")), **self._active_management([metadata])}
+            "target_3": _number(trade.get("target_3")), **self._active_management()}
 
     def active_trades(self):
         authoritative = self.repository().list_open_trades()
@@ -379,7 +401,13 @@ class OptionBeaconReadService:
             if key not in represented:
                 result.append(self._active_authoritative_trade(
                     trade, opportunities.get(trade.get("opportunity_id")), lane))
-        return result
+        return self._apply_management_snapshots(result)
+
+    def trade_management_history(self, trade_id, *, lane=None, limit=5000):
+        reader = getattr(self.repository(), "list_trade_management_snapshots", None)
+        if not callable(reader):
+            return []
+        return reader(trade_id, lane=lane, limit=limit)
 
     def recent_trades(self, limit):
         return self._enrich_trades(self.repository().list_recent_trades(limit=limit))
