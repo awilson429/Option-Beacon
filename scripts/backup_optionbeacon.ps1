@@ -258,7 +258,7 @@ try {
 }
 
 $pgDump = Get-ConfiguredExecutable -ConfiguredPath $configuration.PgDumpPath -CommandName "pg_dump"
-$databaseUrl = Get-DatabaseUrlSafely
+$databaseUrl = if ($configuration.DatabaseDumpRequired) { Get-DatabaseUrlSafely } else { $null }
 $secretInventory = @(Get-OptionBeaconSecretInventory -RepositoryPath $repository)
 $candidateArtifacts = Get-CandidateArtifacts -Configuration $configuration -GitUntracked $untrackedFiles -GitTracked $trackedFiles
 $includedArtifacts = New-Object System.Collections.Generic.List[object]
@@ -618,3 +618,4 @@ try {
     Write-BackupMessage "An incomplete staging directory was retained for diagnosis: $staging" Yellow
     exit 1
 }
+
