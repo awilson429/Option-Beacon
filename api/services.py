@@ -84,6 +84,30 @@ class ReadOnlyTradeRepository(TradeRepository):
             "SELECT * FROM capital_positions ORDER BY opened_at DESC", ()
         )
 
+    def list_active_trade_positions(self):
+        """Read the lane projection with exact paper marks when that table exists."""
+        try:
+            rows = self._optional_capital_rows(
+                """SELECT cp.*,pp.option_type AS paper_option_type,
+                    pp.entry_underlying_price AS paper_underlying_entry,
+                    pp.current_option_price AS paper_option_mark,
+                    pp.unrealized_return_pct AS paper_unrealized_return_pct,
+                    pp.last_updated_at AS paper_last_updated_at,
+                    pp.metadata_json AS paper_metadata_json
+                    FROM capital_positions cp
+                    LEFT JOIN paper_execution_positions pp
+                      ON pp.position_id=cp.source_trade_id
+                    WHERE cp.status='OPEN' AND cp.lane IN ('OB','BROAD')
+                    ORDER BY cp.opened_at DESC,cp.position_id""", ()
+            )
+            if rows:
+                return rows
+        except RepositoryUnavailable as exc:
+            if not any(name in str(exc) for name in ("UndefinedTable", "UndefinedColumn")):
+                raise
+        return [row for row in self.list_capital_positions()
+                if row.get("status") == "OPEN" and row.get("lane") in {"OB", "BROAD"}]
+
     def _optional_capital_rows(self, query, params):
         try:
             with self.connection() as connection:
@@ -114,6 +138,32 @@ def _number(value):
         return float(value) if value is not None else None
     except (TypeError, ValueError):
         return None
+
+
+def _integer(value):
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _json_object(value):
+    if isinstance(value, dict):
+        return value
+    try:
+        decoded = json.loads(value or "{}")
+        return decoded if isinstance(decoded, dict) else {}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+
+
+def _first(source_rows, *keys):
+    for source in source_rows:
+        for key in keys:
+            value = source.get(key)
+            if value is not None and value != "":
+                return value
+    return None
 
 
 def _trade_lane(trade):
@@ -176,8 +226,160 @@ class OptionBeaconReadService:
             "direction": (opportunities.get(trade.get("opportunity_id")) or {}).get("direction"),
             "setup": (opportunities.get(trade.get("opportunity_id")) or {}).get("playbook")} for trade in trades]
 
+    def _active_capital_rows(self):
+        repository = self.repository()
+        reader = getattr(repository, "list_active_trade_positions", None)
+        if callable(reader):
+            return reader()
+        return [row for row in self._capital_position_rows()
+                if str(row.get("status") or "").upper() == "OPEN"
+                and str(row.get("lane") or "").upper() in {"OB", "BROAD"}]
+
+    def _active_management(self, sources):
+        payload = {
+            "breakeven_state": _first(sources, "breakeven_state"),
+            "maximum_hold_minutes": _first(sources, "maximum_hold_minutes", "max_hold_minutes"),
+            "exit_score": _first(sources, "exit_score"),
+            "exit_state": _first(sources, "exit_state", "exit_label", "coach_action"),
+            "trade_coach_status": _first(sources, "trade_coach_status", "coach_status"),
+            "thesis_status": _first(sources, "thesis_status", "setup_health"),
+            "momentum_state": _first(sources, "momentum_state"),
+            "structure_state": _first(sources, "structure_state", "vwap_ema_structure"),
+            "target_progress": _first(sources, "target_progress"),
+            "stop_management_state": _first(sources, "stop_management_state"),
+            "last_management_update": parse_utc(_first(
+                sources, "last_management_update", "management_updated_at", "recommendation_timestamp"
+            )),
+        }
+        payload["exit_score"] = _integer(payload["exit_score"])
+        payload["maximum_hold_minutes"] = _integer(payload["maximum_hold_minutes"])
+        payload["management_data_status"] = (
+            "persisted" if any(value is not None for value in payload.values()) else "unavailable"
+        )
+        return payload
+
+    def _active_capital_trade(self, position, authoritative, opportunity, decision):
+        lane = str(position.get("lane") or "").upper()
+        capital_metadata = _json_object(position.get("metadata_json"))
+        paper_metadata = _json_object(position.get("paper_metadata_json"))
+        paper_position = _json_object(paper_metadata.get("position"))
+        trade_metadata = (authoritative or {}).get("metadata") or {}
+        opportunity_metadata = (opportunity or {}).get("metadata") or {}
+        sources = [capital_metadata, paper_position, trade_metadata, opportunity_metadata]
+        opened = parse_utc(position.get("opened_at")) or parse_utc((authoritative or {}).get("opened_at"))
+        mark_timestamp = parse_utc(position.get("last_mark_at") or position.get("paper_last_updated_at"))
+        freshness, _ = self._scanner_freshness(mark_timestamp, self._now())
+        targets = position.get("targets")
+        if not isinstance(targets, list):
+            try: targets = json.loads(position.get("targets_json") or "[]")
+            except (TypeError, ValueError, json.JSONDecodeError): targets = []
+        targets = [_number(value) for value in targets if _number(value) is not None]
+        target_values = targets[:3] + [None] * (3 - len(targets[:3]))
+        if not targets:
+            target_values = [_number((authoritative or {}).get(f"target_{index}"))
+                             for index in (1, 2, 3)]
+        latest_option = _number(position.get("current_premium"))
+        if latest_option is None: latest_option = _number(position.get("paper_option_mark"))
+        underlying_entry = _number(position.get("paper_underlying_entry"))
+        if underlying_entry is None: underlying_entry = _number((authoritative or {}).get("entry_price"))
+        latest_underlying = _number(_first(sources, "last_underlying_price", "latest_underlying"))
+        if latest_underlying is None: latest_underlying = _number((authoritative or {}).get("last_price"))
+        option_type = _first(sources, "option_type") or position.get("paper_option_type")
+        direction = (authoritative or {}).get("direction") or (opportunity or {}).get("direction") or position.get("direction")
+        if option_type is None and str(direction or "").upper() in {"CALL", "PUT"}:
+            option_type = str(direction).upper()
+        risk_pct = _number((decision or {}).get("proposed_account_risk_pct"))
+        metadata = {**trade_metadata, "capital_position_id": position.get("position_id"),
+                    "source_trade_id": position.get("source_trade_id")}
+        elapsed = max(0, int((self._now() - opened).total_seconds())) if opened else None
+        return {
+            "id": str(position.get("position_id")),
+            "opportunity_id": str(position.get("opportunity_id")),
+            "symbol": position.get("symbol") or (opportunity or {}).get("symbol"),
+            "direction": direction, "setup": (opportunity or {}).get("playbook"),
+            "status": "OPEN", "opened_at": opened, "closed_at": None,
+            "entry_price": underlying_entry, "last_price": latest_underlying,
+            "exit_price": None, "realized_result": None, "exit_reason": None,
+            "metadata": metadata, "lane": lane,
+            "lane_role": "AUTHORITATIVE" if lane == "OB" else "PAPER",
+            "strategy": position.get("strategy") or lane, "data_status": "persisted",
+            "contract_symbol": position.get("option_symbol"), "strike": _number(position.get("strike")),
+            "option_type": str(option_type).upper() if option_type else None,
+            "expiration": position.get("expiration"), "dte": _integer(
+                position.get("dte") if position.get("dte") is not None else _first(sources, "dte")
+            ),
+            "quantity": _integer(position.get("quantity")),
+            "entry_timestamp": opened, "underlying_entry": underlying_entry,
+            "option_entry_premium": _number(position.get("realistic_entry")),
+            "capital_committed": _number(position.get("capital_committed")),
+            "initial_dollar_risk": _number(position.get("initial_dollar_risk")),
+            "account_risk_pct": risk_pct, "current_dollar_risk": None,
+            "latest_underlying": latest_underlying, "latest_option_mark": latest_option,
+            "unrealized_pnl": _number(position.get("unrealized_pnl")),
+            "unrealized_return_pct": _number(position.get("paper_unrealized_return_pct")),
+            "time_in_trade_seconds": elapsed, "data_freshness": freshness,
+            "mark_timestamp": mark_timestamp, "stop": _number(position.get("stop_price"))
+                if position.get("stop_price") is not None else _number((authoritative or {}).get("stop_price")),
+            "target_1": target_values[0], "target_2": target_values[1], "target_3": target_values[2],
+            **self._active_management(sources),
+        }
+
+    def _active_authoritative_trade(self, trade, opportunity, lane):
+        metadata = trade.get("metadata") or {}
+        opened = parse_utc(trade.get("opened_at"))
+        elapsed = max(0, int((self._now() - opened).total_seconds())) if opened else None
+        return {**trade, "symbol": (opportunity or {}).get("symbol"),
+            "direction": (opportunity or {}).get("direction"), "setup": (opportunity or {}).get("playbook"),
+            "lane": lane, "lane_role": "AUTHORITATIVE" if lane == "OB" else "PAPER",
+            "strategy": metadata.get("source_strategy") or (opportunity or {}).get("playbook"),
+            "data_status": "persisted", "contract_symbol": metadata.get("option_symbol") or metadata.get("contract"),
+            "strike": _number(metadata.get("strike")), "option_type": metadata.get("option_type"),
+            "expiration": metadata.get("expiration"), "dte": metadata.get("dte"),
+            "quantity": metadata.get("quantity"), "entry_timestamp": opened,
+            "underlying_entry": _number(trade.get("entry_price")),
+            "option_entry_premium": _number(metadata.get("option_entry_premium")),
+            "capital_committed": _number(metadata.get("capital_committed")),
+            "initial_dollar_risk": _number(metadata.get("initial_dollar_risk")),
+            "account_risk_pct": _number(metadata.get("account_risk_pct")), "current_dollar_risk": None,
+            "latest_underlying": _number(trade.get("last_price")),
+            "latest_option_mark": _number(metadata.get("latest_option_mark")),
+            "unrealized_pnl": _number(metadata.get("unrealized_pnl")),
+            "unrealized_return_pct": _number(metadata.get("unrealized_return_pct")),
+            "time_in_trade_seconds": elapsed, "data_freshness": "unavailable",
+            "mark_timestamp": None, "stop": _number(trade.get("stop_price")),
+            "target_1": _number(trade.get("target_1")), "target_2": _number(trade.get("target_2")),
+            "target_3": _number(trade.get("target_3")), **self._active_management([metadata])}
+
     def active_trades(self):
-        return self._enrich_trades(self.repository().list_open_trades())
+        authoritative = self.repository().list_open_trades()
+        opportunities = {row.get("id"): row for row in self.repository().list_opportunities(limit=500)}
+        authoritative_by_opportunity = {row.get("opportunity_id"): row for row in authoritative}
+        decisions = {}
+        for row in self._capital_decision_rows(10_000):
+            lane = str(row.get("lane") or "").upper()
+            state = str(row.get("decision_state") or row.get("state") or "").upper()
+            key = (lane, row.get("opportunity_id"))
+            if lane in {"OB", "BROAD"} and state == "TAKE" and key not in decisions:
+                decisions[key] = row
+        result = []
+        represented = set()
+        for position in self._active_capital_rows():
+            lane = str(position.get("lane") or "").upper()
+            opportunity_id = position.get("opportunity_id")
+            if lane not in {"OB", "BROAD"}: continue
+            represented.add((lane, opportunity_id))
+            result.append(self._active_capital_trade(position,
+                authoritative_by_opportunity.get(opportunity_id), opportunities.get(opportunity_id),
+                decisions.get((lane, opportunity_id))))
+        for trade in authoritative:
+            lane_key = _trade_lane({**trade, "setup": (opportunities.get(trade.get("opportunity_id")) or {}).get("playbook")})[0]
+            if lane_key == "CONTROL_RESEARCH": continue
+            lane = "BROAD" if lane_key == "BROAD" else "OB"
+            key = (lane, trade.get("opportunity_id"))
+            if key not in represented:
+                result.append(self._active_authoritative_trade(
+                    trade, opportunities.get(trade.get("opportunity_id")), lane))
+        return result
 
     def recent_trades(self, limit):
         return self._enrich_trades(self.repository().list_recent_trades(limit=limit))

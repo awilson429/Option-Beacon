@@ -1,4 +1,4 @@
-import type { ComparisonResponse, PerformanceResponse, ScalpState, ScannerResponse, StrategyState, SymbolCode, SystemStatus, TradeDeskHome, TradeRow } from "./types";
+import type { ActiveTrade, ComparisonResponse, PerformanceResponse, ScalpState, ScannerResponse, StrategyState, SymbolCode, SystemStatus, TradeDeskHome, TradeRow } from "./types";
 
 const configuredBase = process.env.NEXT_PUBLIC_OPTIONBEACON_API_URL?.replace(/\/$/, "");
 export const API_BASE_URL = configuredBase || "http://localhost:8000";
@@ -32,7 +32,7 @@ export const api = {
   comparison: () => fetchJson<ComparisonResponse>(endpoints.comparison),
   system: () => fetchJson<SystemStatus>(endpoints.system),
   tradeDeskHome: () => fetchJson<TradeDeskHome>(endpoints.tradeDeskHome),
-  activeTrades: () => fetchJson<TradeRow[]>(endpoints.activeTrades),
+  activeTrades: () => fetchJson<ActiveTrade[]>(endpoints.activeTrades),
   recentTrades: () => fetchJson<TradeRow[]>(endpoints.recentTrades),
   scanner: () => fetchJson<ScannerResponse>(endpoints.scanner),
 };

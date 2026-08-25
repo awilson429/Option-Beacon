@@ -89,6 +89,22 @@ export interface CapitalDecision {
   proposed_account_risk_pct:number; decided_at:string;
 }
 
+export interface ActiveTrade extends TradeRow {
+  lane:"OB"|"BROAD"; lane_role:"AUTHORITATIVE"|"PAPER"; strategy:string|null;
+  data_status:string; contract_symbol:string|null; strike:number|null;
+  option_type:string|null; expiration:string|null; dte:number|null; quantity:number|null;
+  entry_timestamp:string|null; underlying_entry:number|null; option_entry_premium:number|null;
+  capital_committed:number|null; initial_dollar_risk:number|null; account_risk_pct:number|null;
+  current_dollar_risk:number|null; latest_underlying:number|null; latest_option_mark:number|null;
+  unrealized_pnl:number|null; unrealized_return_pct:number|null; time_in_trade_seconds:number|null;
+  data_freshness:string; mark_timestamp:string|null; stop:number|null; target_1:number|null;
+  target_2:number|null; target_3:number|null; breakeven_state:string|null;
+  maximum_hold_minutes:number|null; exit_score:number|null; exit_state:string|null;
+  trade_coach_status:string|null; thesis_status:string|null; momentum_state:string|null;
+  structure_state:string|null; target_progress:string|null; stop_management_state:string|null;
+  last_management_update:string|null; management_data_status:string;
+}
+
 export interface ScannerSectionStatus {
   section:string; data_status:string; message:string|null;
 }
