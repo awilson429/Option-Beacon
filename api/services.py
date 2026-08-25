@@ -84,6 +84,16 @@ class ReadOnlyTradeRepository(TradeRepository):
             "SELECT * FROM capital_positions ORDER BY opened_at DESC", ()
         )
 
+    def list_paper_execution_trades(self):
+        return self._optional_capital_rows(
+            "SELECT * FROM paper_execution_trades ORDER BY opened_at DESC,trade_id", ()
+        )
+
+    def list_paper_execution_positions(self):
+        return self._optional_capital_rows(
+            "SELECT * FROM paper_execution_positions ORDER BY opened_at DESC,trade_id", ()
+        )
+
     def list_active_trade_positions(self):
         """Read the lane projection with exact paper marks when that table exists."""
         try:
@@ -408,6 +418,179 @@ class OptionBeaconReadService:
         if not callable(reader):
             return []
         return reader(trade_id, lane=lane, limit=limit)
+
+    def _journal_source_rows(self, name):
+        repository = self.repository()
+        reader = getattr(repository, name, None)
+        if callable(reader):
+            return reader()
+        return []
+
+    def _journal_trade(self, position, *, opportunity=None, authoritative=None,
+                       execution=None, paper_position=None, management=None):
+        opportunity = opportunity or {}
+        authoritative = authoritative or {}
+        execution = execution or {}
+        paper_position = paper_position or {}
+        management = management or {}
+        capital_metadata = _json_object(position.get("metadata_json"))
+        execution_metadata = _json_object(execution.get("contract_metadata_json"))
+        opportunity_metadata = opportunity.get("metadata") or _json_object(
+            opportunity.get("metadata_json"))
+        sources = [capital_metadata, execution_metadata, opportunity_metadata]
+        lane = str(position.get("lane") or "").upper()
+        trade_id = str(position.get("position_id") or "")
+        opened_at = parse_utc(position.get("opened_at"))
+        closed_at = parse_utc(position.get("closed_at") or execution.get("closed_at"))
+        duration_seconds = None
+        if opened_at and closed_at:
+            duration_seconds = max(0, int((closed_at - opened_at).total_seconds()))
+        elif _integer(execution.get("duration_minutes")) is not None:
+            duration_seconds = max(0, _integer(execution.get("duration_minutes")) * 60)
+        targets = position.get("targets")
+        if not isinstance(targets, list):
+            try:
+                targets = json.loads(position.get("targets_json") or "[]")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                targets = []
+        targets = [_number(value) for value in targets if _number(value) is not None]
+        if not targets:
+            targets = [_number(authoritative.get(f"target_{index}")) for index in (1, 2, 3)]
+        targets = targets[:3] + [None] * (3 - len(targets[:3]))
+        realized_pnl = _number(position.get("realistic_pnl"))
+        realistic_entry = _number(position.get("realistic_entry"))
+        quantity = _integer(position.get("quantity") if position.get("quantity") is not None
+                            else execution.get("quantity"))
+        initial_notional = realistic_entry * quantity * 100 if realistic_entry and quantity else None
+        realized_return = realized_pnl / initial_notional * 100 \
+            if realized_pnl is not None and initial_notional else None
+        initial_risk = _number(position.get("initial_dollar_risk"))
+        r_multiple = realized_pnl / initial_risk if realized_pnl is not None and initial_risk and initial_risk > 0 else None
+        result = ("WIN" if realized_pnl is not None and realized_pnl > 0 else
+                  "LOSS" if realized_pnl is not None and realized_pnl < 0 else
+                  "BREAKEVEN" if realized_pnl == 0 else "UNAVAILABLE")
+        latest = management.get("latest") or {}
+        option_type = execution.get("option_type") or paper_position.get("option_type") \
+            or _first(sources, "option_type")
+        missing = []
+        candidates = {
+            "contract_symbol": position.get("option_symbol") or execution.get("option_symbol"),
+            "option_type": option_type,
+            "underlying_entry": paper_position.get("entry_underlying_price") or authoritative.get("entry_price"),
+            "underlying_exit": authoritative.get("exit_price"),
+            "option_exit_premium": position.get("realistic_exit") or execution.get("exit_option_price"),
+            "realized_pnl": realized_pnl,
+            "realized_return_pct": realized_return,
+            "exit_reason": _first([capital_metadata, execution], "exit_reason"),
+        }
+        missing.extend(key for key, value in candidates.items() if value is None or value == "")
+        if not management.get("count"):
+            missing.append("canonical_management_history")
+        return {
+            "trade_id": trade_id, "opportunity_id": str(position.get("opportunity_id") or ""),
+            "lane": lane, "lane_role": "AUTHORITATIVE" if lane == "OB" else "PAPER",
+            "symbol": position.get("symbol") or opportunity.get("symbol"),
+            "direction": position.get("direction") or opportunity.get("direction"),
+            "status": str(position.get("status") or "UNKNOWN").upper(),
+            "strategy": position.get("strategy") or opportunity.get("playbook"),
+            "contract_symbol": candidates["contract_symbol"], "strike": _number(
+                position.get("strike") if position.get("strike") is not None else execution.get("strike")),
+            "option_type": str(option_type).upper() if option_type else None,
+            "expiration": position.get("expiration") or execution.get("expiration"),
+            "dte": _integer(position.get("dte")), "quantity": quantity,
+            "entry_timestamp": opened_at, "underlying_entry": _number(candidates["underlying_entry"]),
+            "option_entry_premium": realistic_entry,
+            "capital_committed": initial_notional if initial_notional is not None
+                else _number(position.get("capital_committed")),
+            "initial_dollar_risk": initial_risk, "exit_timestamp": closed_at,
+            "underlying_exit": _number(candidates["underlying_exit"]),
+            "option_exit_premium": _number(candidates["option_exit_premium"]),
+            "exit_reason": candidates["exit_reason"], "hold_duration_seconds": duration_seconds,
+            "realized_pnl": realized_pnl, "realized_return_pct": realized_return,
+            "r_multiple": r_multiple, "mfe_dollars": _number(execution.get("mfe_dollars")),
+            "mae_dollars": _number(execution.get("mae_dollars")),
+            "mfe_pct": _number(execution.get("mfe_pct")), "mae_pct": _number(execution.get("mae_pct")),
+            "result": result, "initial_stop": _number(position.get("stop_price")
+                if position.get("stop_price") is not None else authoritative.get("stop_price")),
+            "target_1": targets[0], "target_2": targets[1], "target_3": targets[2],
+            "management_history_available": bool(management.get("count")),
+            "management_snapshot_count": int(management.get("count") or 0),
+            "final_exit_score": _integer(latest.get("exit_score")),
+            "final_management_label": latest.get("exit_label"),
+            "final_management_at": parse_utc(latest.get("captured_at")),
+            "data_quality": "CANONICAL", "missing_data": sorted(set(missing)),
+            "source_version": opportunity.get("source_version") or "capital-position-v1",
+        }
+
+    @staticmethod
+    def _journal_metrics(rows):
+        closed = [row for row in rows if row.get("status") == "CLOSED"]
+        known = [row for row in closed if row.get("realized_pnl") is not None]
+        wins = [row for row in known if row["realized_pnl"] > 0]
+        losses = [row for row in known if row["realized_pnl"] < 0]
+        breakeven = [row for row in known if row["realized_pnl"] == 0]
+        returns = [row["realized_return_pct"] for row in closed
+                   if row.get("realized_return_pct") is not None]
+        holds = [row["hold_duration_seconds"] for row in closed
+                 if row.get("hold_duration_seconds") is not None]
+        net = sum(row["realized_pnl"] for row in known) if known else None
+        return {
+            "total_trades": len(closed), "wins": len(wins), "losses": len(losses),
+            "breakeven": len(breakeven),
+            "win_rate": len(wins) / len(known) * 100 if known else None,
+            "realized_pnl": net,
+            "average_winner": sum(row["realized_pnl"] for row in wins) / len(wins) if wins else None,
+            "average_loser": sum(row["realized_pnl"] for row in losses) / len(losses) if losses else None,
+            "profit_factor": (sum(row["realized_pnl"] for row in wins) /
+                              abs(sum(row["realized_pnl"] for row in losses))) if losses else None,
+            "average_return_pct": sum(returns) / len(returns) if returns else None,
+            "average_hold_seconds": sum(holds) / len(holds) if holds else None,
+        }
+
+    def trade_history(self, *, lane=None, symbol=None, status=None, result=None,
+                      date_from=None, date_to=None, limit=100, offset=0):
+        positions = self._capital_position_rows()
+        opportunities = {str(row.get("id")): row for row in
+                         self.repository().list_opportunities(limit=10_000)}
+        authoritative = {str(row.get("opportunity_id")): row for row in
+                         self.repository().list_recent_trades(limit=10_000)}
+        execution = {str(row.get("trade_id")): row for row in
+                     self._journal_source_rows("list_paper_execution_trades")}
+        paper_positions = {str(row.get("trade_id")): row for row in
+                           self._journal_source_rows("list_paper_execution_positions")}
+        allowed = [row for row in positions if str(row.get("lane") or "").upper() in {"OB", "BROAD"}]
+        identities = [(row.get("position_id"), row.get("lane")) for row in allowed]
+        summary_reader = getattr(self.repository(), "trade_management_snapshot_summaries", None)
+        management = summary_reader(identities) if callable(summary_reader) else {}
+        rows = []
+        for position in allowed:
+            try:
+                opportunity_id = str(position.get("opportunity_id") or "")
+                source_trade_id = str(position.get("source_trade_id") or "")
+                key = (str(position.get("position_id")), str(position.get("lane") or "").upper())
+                row = self._journal_trade(position, opportunity=opportunities.get(opportunity_id),
+                    authoritative=authoritative.get(opportunity_id), execution=execution.get(source_trade_id),
+                    paper_position=paper_positions.get(source_trade_id), management=management.get(key))
+            except Exception:
+                continue
+            event_at = row.get("exit_timestamp") or row.get("entry_timestamp")
+            if lane and row["lane"] != str(lane).upper(): continue
+            if symbol and str(row.get("symbol") or "").upper() != str(symbol).upper(): continue
+            if status and row["status"] != str(status).upper(): continue
+            if result and row["result"] != str(result).upper(): continue
+            if date_from and (not event_at or event_at.date() < date_from): continue
+            if date_to and (not event_at or event_at.date() > date_to): continue
+            rows.append(row)
+        rows.sort(key=lambda row: (row.get("exit_timestamp") or row.get("entry_timestamp") or
+                                   datetime.min.replace(tzinfo=UTC), row["trade_id"]), reverse=True)
+        overall_rows = [row for row in rows if row["lane"] in {"OB", "BROAD"}]
+        lane_metrics = [{"lane": lane_key, **self._journal_metrics(
+            [row for row in overall_rows if row["lane"] == lane_key])} for lane_key in ("OB", "BROAD")]
+        total = len(rows)
+        return {"as_of": self._now(), "data_status": "persisted" if rows else "unavailable",
+                "total_count": total, "limit": int(limit), "offset": int(offset),
+                "summary": self._journal_metrics(overall_rows), "lanes": lane_metrics,
+                "control_research": None, "trades": rows[int(offset):int(offset) + int(limit)]}
 
     def recent_trades(self, limit):
         return self._enrich_trades(self.repository().list_recent_trades(limit=limit))

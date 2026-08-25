@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { fetchJson, endpoints } from "@/lib/api";
-import type { ActiveTrade, ComparisonResponse, PerformanceResponse, ScalpState, ScannerResponse, StrategyState, SymbolCode, SystemStatus, TradeDeskHome, TradeRow } from "@/lib/types";
+import type { ActiveTrade, ComparisonResponse, JournalResponse, PerformanceResponse, ScalpState, ScannerResponse, StrategyState, SymbolCode, SystemStatus, TradeDeskHome, TradeManagementSnapshot, TradeRow } from "@/lib/types";
 
 const config = { revalidateOnFocus: true, shouldRetryOnError: false, keepPreviousData: true };
 
@@ -35,4 +35,13 @@ export function useRecentTrades() {
 
 export function useScannerData() {
   return useSWR<ScannerResponse>(endpoints.scanner, fetchJson, { ...config, refreshInterval: 15_000 });
+}
+
+export function useJournalData(query:string) {
+  return useSWR<JournalResponse>(endpoints.journal(query), fetchJson, { ...config, refreshInterval: 45_000 });
+}
+
+export function useManagementHistory(tradeId?:string, lane?:string) {
+  const key = tradeId && lane ? endpoints.managementHistory(tradeId,lane) : null;
+  return useSWR<TradeManagementSnapshot[]>(key, fetchJson, { ...config, revalidateOnFocus:false });
 }

@@ -1,4 +1,4 @@
-import type { ActiveTrade, ComparisonResponse, PerformanceResponse, ScalpState, ScannerResponse, StrategyState, SymbolCode, SystemStatus, TradeDeskHome, TradeRow } from "./types";
+import type { ActiveTrade, ComparisonResponse, JournalResponse, PerformanceResponse, ScalpState, ScannerResponse, StrategyState, SymbolCode, SystemStatus, TradeDeskHome, TradeManagementSnapshot, TradeRow } from "./types";
 
 const configuredBase = process.env.NEXT_PUBLIC_OPTIONBEACON_API_URL?.replace(/\/$/, "");
 export const API_BASE_URL = configuredBase || "http://localhost:8000";
@@ -23,6 +23,8 @@ export const endpoints = {
   activeTrades: "/api/trades/active",
   recentTrades: "/api/trades/recent?limit=12",
   scanner: "/api/scanner",
+  journal: (query:string) => `/api/trades/history?${query}`,
+  managementHistory: (tradeId:string,lane:string) => `/api/trades/${encodeURIComponent(tradeId)}/management?lane=${encodeURIComponent(lane)}`,
 } as const;
 
 export const api = {
@@ -35,4 +37,6 @@ export const api = {
   activeTrades: () => fetchJson<ActiveTrade[]>(endpoints.activeTrades),
   recentTrades: () => fetchJson<TradeRow[]>(endpoints.recentTrades),
   scanner: () => fetchJson<ScannerResponse>(endpoints.scanner),
+  journal: (query:string) => fetchJson<JournalResponse>(endpoints.journal(query)),
+  managementHistory: (tradeId:string,lane:string) => fetchJson<TradeManagementSnapshot[]>(endpoints.managementHistory(tradeId,lane)),
 };

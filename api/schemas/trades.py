@@ -111,3 +111,80 @@ class TradeManagementSnapshotResponse(BaseModel):
     stale: bool = False
     missing_data: list[str] = Field(default_factory=list)
     state_fingerprint: str
+
+
+class JournalMetrics(BaseModel):
+    total_trades: int = 0
+    wins: int = 0
+    losses: int = 0
+    breakeven: int = 0
+    win_rate: float | None = None
+    realized_pnl: float | None = None
+    average_winner: float | None = None
+    average_loser: float | None = None
+    profit_factor: float | None = None
+    average_return_pct: float | None = None
+    average_hold_seconds: float | None = None
+
+
+class JournalLaneMetrics(JournalMetrics):
+    lane: str
+
+
+class HistoricalTradeResponse(BaseModel):
+    trade_id: str
+    opportunity_id: str
+    lane: str
+    lane_role: str
+    symbol: str | None = None
+    direction: str | None = None
+    status: str
+    strategy: str | None = None
+    contract_symbol: str | None = None
+    strike: float | None = None
+    option_type: str | None = None
+    expiration: str | None = None
+    dte: int | None = None
+    quantity: int | None = None
+    entry_timestamp: datetime | None = None
+    underlying_entry: float | None = None
+    option_entry_premium: float | None = None
+    capital_committed: float | None = None
+    initial_dollar_risk: float | None = None
+    exit_timestamp: datetime | None = None
+    underlying_exit: float | None = None
+    option_exit_premium: float | None = None
+    exit_reason: str | None = None
+    hold_duration_seconds: int | None = None
+    realized_pnl: float | None = None
+    realized_return_pct: float | None = None
+    r_multiple: float | None = None
+    mfe_dollars: float | None = None
+    mae_dollars: float | None = None
+    mfe_pct: float | None = None
+    mae_pct: float | None = None
+    result: str
+    initial_stop: float | None = None
+    target_1: float | None = None
+    target_2: float | None = None
+    target_3: float | None = None
+    management_history_available: bool = False
+    management_snapshot_count: int = 0
+    final_exit_score: int | None = None
+    final_management_label: str | None = None
+    final_management_at: datetime | None = None
+    data_quality: str
+    missing_data: list[str] = Field(default_factory=list)
+    source_version: str | None = None
+
+
+class TradeHistoryResponse(BaseModel):
+    as_of: datetime
+    data_status: str
+    total_count: int
+    limit: int
+    offset: int
+    summary: JournalMetrics
+    lanes: list[JournalLaneMetrics] = Field(default_factory=list)
+    control_research: JournalMetrics | None = None
+    trades: list[HistoricalTradeResponse] = Field(default_factory=list)
