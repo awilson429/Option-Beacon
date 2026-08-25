@@ -102,6 +102,14 @@ def test_exact_batch_lookup_isolates_same_symbol_multiple_trades_lanes_and_contr
     assert latest[("BROAD:paper-1", "BROAD")]["exit_label"] == "WATCH"
     assert latest[("OB:paper-2", "OB")]["exit_label"] == "REDUCE"
     assert ("CONTROL:paper-1", "OB") not in latest
+    summaries = repository.trade_management_snapshot_summaries([
+        ("OB:paper-1", "OB"), ("BROAD:paper-1", "BROAD"),
+        ("CONTROL:paper-1", "OB"),
+    ])
+    assert summaries[("OB:paper-1", "OB")]["count"] == 1
+    assert summaries[("OB:paper-1", "OB")]["latest"]["exit_label"] == "HOLD"
+    assert summaries[("BROAD:paper-1", "BROAD")]["latest"]["exit_label"] == "WATCH"
+    assert ("CONTROL:paper-1", "OB") not in summaries
 
 
 @pytest.mark.parametrize("missing", ["trade_id", "opportunity_id", "lane", "symbol", "management_source"])
@@ -121,4 +129,5 @@ def test_read_methods_are_safe_before_additive_schema_is_initialized(tmp_path):
     repository = LegacyRepository(tmp_path / "legacy.db", database_url="")
     assert repository.latest_trade_management_snapshot("OB:legacy", lane="OB") is None
     assert repository.latest_trade_management_snapshots([("OB:legacy", "OB")]) == {}
+    assert repository.trade_management_snapshot_summaries([("OB:legacy", "OB")]) == {}
     assert repository.list_trade_management_snapshots("OB:legacy", lane="OB") == []

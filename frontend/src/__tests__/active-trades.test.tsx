@@ -43,7 +43,7 @@ describe("Active Trades page",()=>{
     expect(activeLink).toHaveAttribute("href","/active-trades");
     expect(activeLink).toHaveAttribute("aria-current","page");
     expect(screen.getByRole("link",{name:"Scanner"})).toHaveAttribute("href","/scanner");
-    expect(screen.queryByRole("link",{name:"Journal"})).not.toBeInTheDocument();
+    expect(screen.getByRole("link",{name:"Journal"})).toHaveAttribute("href","/journal");
     const summary=screen.getByRole("heading",{name:"Open-position summary"}).closest("section")!;
     expect(within(summary).getByText("2")).toBeInTheDocument();
     expect(within(summary).getByText("$1,490.00")).toBeInTheDocument();

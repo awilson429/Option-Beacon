@@ -1815,6 +1815,31 @@ class TradeRepository:
                 latest[key] = self._decode_management_snapshot(row)
         return latest
 
+    def trade_management_snapshot_summaries(self, identities):
+        """Return count and final snapshot for exact trade/lane identities."""
+        exact = sorted({(str(trade_id), str(lane).upper())
+                        for trade_id, lane in identities if trade_id and lane})
+        if not exact:
+            return {}
+        clauses = " OR ".join("(trade_id=? AND lane=?)" for _ in exact)
+        params = tuple(value for identity in exact for value in identity)
+        try:
+            with self.connection() as connection:
+                rows = self._fetchall(connection, f"""SELECT *
+                    FROM trade_management_snapshots WHERE {clauses}
+                    ORDER BY captured_at ASC,created_at ASC,snapshot_id ASC""", params)
+        except Exception as exc:
+            if self._management_snapshot_table_unavailable(exc):
+                return {}
+            raise
+        summaries = {}
+        for row in rows:
+            key = (str(row["trade_id"]), str(row["lane"]).upper())
+            item = summaries.setdefault(key, {"count": 0, "latest": None})
+            item["count"] += 1
+            item["latest"] = self._decode_management_snapshot(row)
+        return summaries
+
     def list_trade_management_snapshots(self, trade_id, *, lane=None, limit=5000):
         query = "SELECT * FROM trade_management_snapshots WHERE trade_id=?"
         params = [str(trade_id)]

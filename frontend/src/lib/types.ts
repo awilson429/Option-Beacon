@@ -106,6 +106,50 @@ export interface ActiveTrade extends TradeRow {
   last_management_update:string|null; management_data_status:string;
 }
 
+export interface JournalMetrics {
+  total_trades:number; wins:number; losses:number; breakeven:number; win_rate:number|null;
+  realized_pnl:number|null; average_winner:number|null; average_loser:number|null;
+  profit_factor:number|null; average_return_pct:number|null; average_hold_seconds:number|null;
+}
+
+export interface JournalTrade {
+  trade_id:string; opportunity_id:string; lane:"OB"|"BROAD"; lane_role:string;
+  symbol:string|null; direction:string|null; status:string; strategy:string|null;
+  contract_symbol:string|null; strike:number|null; option_type:string|null;
+  expiration:string|null; dte:number|null; quantity:number|null;
+  entry_timestamp:string|null; underlying_entry:number|null; option_entry_premium:number|null;
+  capital_committed:number|null; initial_dollar_risk:number|null; exit_timestamp:string|null;
+  underlying_exit:number|null; option_exit_premium:number|null; exit_reason:string|null;
+  hold_duration_seconds:number|null; realized_pnl:number|null; realized_return_pct:number|null;
+  r_multiple:number|null; mfe_dollars:number|null; mae_dollars:number|null;
+  mfe_pct:number|null; mae_pct:number|null; result:string; initial_stop:number|null;
+  target_1:number|null; target_2:number|null; target_3:number|null;
+  management_history_available:boolean; management_snapshot_count:number;
+  final_exit_score:number|null; final_management_label:string|null; final_management_at:string|null;
+  data_quality:string; missing_data:string[]; source_version:string|null;
+}
+
+export interface JournalResponse {
+  as_of:string; data_status:string; total_count:number; limit:number; offset:number;
+  summary:JournalMetrics; lanes:(JournalMetrics & {lane:"OB"|"BROAD"})[];
+  control_research:JournalMetrics|null; trades:JournalTrade[];
+}
+
+export interface TradeManagementSnapshot {
+  snapshot_id:string; trade_id:string; opportunity_id:string; lane:string; lane_role:string;
+  symbol:string; contract_symbol:string|null; captured_at:string; source_timestamp:string|null;
+  trade_status:string|null; quantity:number|null; entry_timestamp:string|null;
+  entry_premium:number|null; latest_option_mark:number|null; latest_underlying:number|null;
+  mark_timestamp:string|null; time_in_trade_seconds:number|null; current_stop:number|null;
+  target_1:number|null; target_2:number|null; target_3:number|null; breakeven_state:string|null;
+  maximum_hold_minutes:number|null; exit_score:number|null; exit_label:string|null;
+  trade_coach_state:string|null; thesis_state:string|null; momentum_state:string|null;
+  structure_state:string|null; target_progress:string|null; stop_management_state:string|null;
+  management_reason:string|null; management_version:string|null; management_source:string;
+  unrealized_pnl:number|null; unrealized_return_pct:number|null; current_managed_risk:number|null;
+  data_freshness:string|null; stale:boolean; missing_data:string[]; state_fingerprint:string;
+}
+
 export interface ScannerSectionStatus {
   section:string; data_status:string; message:string|null;
 }
