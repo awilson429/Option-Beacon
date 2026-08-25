@@ -44,6 +44,28 @@ class RepositoryUnavailable(RuntimeError):
 
 REQUIRED_EVENT_READ_API = ("list_trade_event_summaries", "count_trade_events")
 
+MANAGEMENT_SNAPSHOT_COLUMNS = (
+    "snapshot_id", "trade_id", "opportunity_id", "lane", "lane_role", "symbol",
+    "contract_symbol", "captured_at", "source_timestamp", "trade_status", "quantity",
+    "entry_timestamp", "entry_premium", "latest_option_mark", "latest_underlying",
+    "mark_timestamp", "time_in_trade_seconds", "current_stop", "target_1", "target_2",
+    "target_3", "breakeven_state", "maximum_hold_minutes", "exit_score", "exit_label",
+    "trade_coach_state", "thesis_state", "momentum_state", "structure_state",
+    "target_progress", "stop_management_state", "management_reason",
+    "management_version", "management_source", "unrealized_pnl",
+    "unrealized_return_pct", "current_managed_risk", "data_freshness", "stale",
+    "missing_data_json", "state_fingerprint", "payload_json", "created_at",
+)
+
+MANAGEMENT_MATERIAL_FIELDS = (
+    "trade_id", "opportunity_id", "lane", "lane_role", "symbol", "contract_symbol",
+    "trade_status", "quantity", "entry_timestamp", "entry_premium", "current_stop",
+    "target_1", "target_2", "target_3", "breakeven_state", "maximum_hold_minutes",
+    "exit_score", "exit_label", "trade_coach_state", "thesis_state", "momentum_state",
+    "structure_state", "target_progress", "stop_management_state", "management_reason",
+    "management_version", "management_source", "current_managed_risk",
+)
+
 
 def repository_event_api_status(repository) -> dict:
     """Describe the real runtime repository contract without touching storage."""
@@ -576,6 +598,57 @@ class TradeRepository:
                     """,
                 ),
                 (
+                    "trade_management_snapshots",
+                    f"""
+                    CREATE TABLE IF NOT EXISTS trade_management_snapshots (
+                        snapshot_id {text_id},
+                        trade_id TEXT NOT NULL,
+                        opportunity_id TEXT NOT NULL,
+                        lane TEXT NOT NULL,
+                        lane_role TEXT NOT NULL,
+                        symbol TEXT NOT NULL,
+                        contract_symbol TEXT,
+                        captured_at TEXT NOT NULL,
+                        source_timestamp TEXT,
+                        trade_status TEXT,
+                        quantity INTEGER,
+                        entry_timestamp TEXT,
+                        entry_premium REAL,
+                        latest_option_mark REAL,
+                        latest_underlying REAL,
+                        mark_timestamp TEXT,
+                        time_in_trade_seconds INTEGER,
+                        current_stop REAL,
+                        target_1 REAL,
+                        target_2 REAL,
+                        target_3 REAL,
+                        breakeven_state TEXT,
+                        maximum_hold_minutes INTEGER,
+                        exit_score INTEGER,
+                        exit_label TEXT,
+                        trade_coach_state TEXT,
+                        thesis_state TEXT,
+                        momentum_state TEXT,
+                        structure_state TEXT,
+                        target_progress TEXT,
+                        stop_management_state TEXT,
+                        management_reason TEXT,
+                        management_version TEXT,
+                        management_source TEXT NOT NULL,
+                        unrealized_pnl REAL,
+                        unrealized_return_pct REAL,
+                        current_managed_risk REAL,
+                        data_freshness TEXT,
+                        stale INTEGER NOT NULL,
+                        missing_data_json TEXT NOT NULL,
+                        state_fingerprint TEXT NOT NULL,
+                        payload_json TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        UNIQUE(trade_id,lane,captured_at,state_fingerprint)
+                    )
+                    """,
+                ),
+                (
                     "intelligence_setup_snapshots",
                     f"""
                     CREATE TABLE IF NOT EXISTS intelligence_setup_snapshots (
@@ -617,6 +690,13 @@ class TradeRepository:
                 self._diagnostic("repository_schema_operation_started", operation=operation)
                 self._execute(connection, ddl).close()
                 self._diagnostic("repository_schema_operation_completed", operation=operation)
+            for index in (
+                "CREATE INDEX IF NOT EXISTS idx_management_trade_lane_at "
+                "ON trade_management_snapshots(trade_id,lane,captured_at)",
+                "CREATE INDEX IF NOT EXISTS idx_management_opportunity_lane_at "
+                "ON trade_management_snapshots(opportunity_id,lane,captured_at)",
+            ):
+                self._execute(connection, index).close()
         self._diagnostic("repository_schema_initialization_completed")
 
     def create_opportunity(
@@ -1635,6 +1715,149 @@ class TradeRepository:
         LOGGER.info(json.dumps({"event":"position_context_marked","lane":mark["lane"],
                                 "trade_id":mark["trade_id"],"setup_health":mark["setup_health"]},sort_keys=True))
         return mark
+
+    def record_trade_management_snapshot(self, snapshot):
+        """Persist one exact-identity management observation without refresh noise."""
+        payload = dict(snapshot or {})
+        required = ("trade_id", "opportunity_id", "lane", "symbol", "management_source")
+        missing = [name for name in required if not str(payload.get(name) or "").strip()]
+        if missing:
+            raise ValueError(
+                "Management snapshot requires exact identity and provenance: "
+                + ", ".join(missing)
+            )
+        payload["trade_id"] = str(payload["trade_id"])
+        payload["opportunity_id"] = str(payload["opportunity_id"])
+        payload["lane"] = str(payload["lane"]).upper()
+        payload["lane_role"] = str(payload.get("lane_role") or "PAPER").upper()
+        payload["symbol"] = str(payload["symbol"]).upper()
+        payload["management_source"] = str(payload["management_source"])
+        payload["captured_at"] = utc_iso(payload.get("captured_at"))
+        payload["created_at"] = utc_iso(payload.get("created_at") or payload["captured_at"])
+        for name in ("source_timestamp", "entry_timestamp", "mark_timestamp"):
+            if payload.get(name) is not None:
+                payload[name] = utc_iso(payload[name])
+        payload["stale"] = 1 if payload.get("stale") else 0
+        missing_data = payload.get("missing_data") or []
+        if isinstance(missing_data, str):
+            missing_data = [missing_data]
+        payload["missing_data"] = sorted({str(value) for value in missing_data if value})
+        material = {name: payload.get(name) for name in MANAGEMENT_MATERIAL_FIELDS}
+        fingerprint = hashlib.sha256(json.dumps(
+            material, sort_keys=True, separators=(",", ":"), default=str
+        ).encode("utf-8")).hexdigest()
+        payload["state_fingerprint"] = fingerprint
+        identity = f'{payload["trade_id"]}|{payload["lane"]}|{payload["captured_at"]}|{fingerprint}'
+        payload["snapshot_id"] = str(payload.get("snapshot_id") or hashlib.sha256(
+            identity.encode("utf-8")
+        ).hexdigest())
+        encoded_payload = json.dumps(payload, sort_keys=True, default=str)
+        values_by_column = {
+            **payload,
+            "missing_data_json": json.dumps(payload["missing_data"], sort_keys=True),
+            "payload_json": encoded_payload,
+        }
+        with self.connection() as connection:
+            latest = self._fetchone(connection, """SELECT * FROM trade_management_snapshots
+                WHERE trade_id=? AND lane=?
+                ORDER BY captured_at DESC,created_at DESC,snapshot_id DESC LIMIT 1""", (
+                    payload["trade_id"], payload["lane"],
+                ))
+            if latest and latest.get("state_fingerprint") == fingerprint:
+                return self._decode_management_snapshot(latest)
+            placeholders = ",".join("?" for _ in MANAGEMENT_SNAPSHOT_COLUMNS)
+            self._execute(connection,
+                f"INSERT INTO trade_management_snapshots ({','.join(MANAGEMENT_SNAPSHOT_COLUMNS)}) "
+                f"VALUES ({placeholders}) ON CONFLICT(snapshot_id) DO NOTHING",
+                tuple(values_by_column.get(name) for name in MANAGEMENT_SNAPSHOT_COLUMNS),
+            ).close()
+            stored = self._fetchone(connection,
+                "SELECT * FROM trade_management_snapshots WHERE snapshot_id=?",
+                (payload["snapshot_id"],))
+        return self._decode_management_snapshot(stored)
+
+    def latest_trade_management_snapshot(self, trade_id, *, lane=None):
+        query = "SELECT * FROM trade_management_snapshots WHERE trade_id=?"
+        params = [str(trade_id)]
+        if lane:
+            query += " AND lane=?"
+            params.append(str(lane).upper())
+        query += " ORDER BY captured_at DESC,created_at DESC,snapshot_id DESC LIMIT 1"
+        try:
+            with self.connection() as connection:
+                row = self._fetchone(connection, query, tuple(params))
+        except Exception as exc:
+            if self._management_snapshot_table_unavailable(exc):
+                return None
+            raise
+        return self._decode_management_snapshot(row)
+
+    def latest_trade_management_snapshots(self, identities):
+        exact = sorted({(str(trade_id), str(lane).upper())
+                        for trade_id, lane in identities if trade_id and lane})
+        if not exact:
+            return {}
+        clauses = " OR ".join("(trade_id=? AND lane=?)" for _ in exact)
+        params = tuple(value for identity in exact for value in identity)
+        try:
+            with self.connection() as connection:
+                rows = self._fetchall(connection, f"""SELECT *
+                    FROM trade_management_snapshots WHERE {clauses}
+                    ORDER BY captured_at DESC,created_at DESC,snapshot_id DESC""", params)
+        except Exception as exc:
+            if self._management_snapshot_table_unavailable(exc):
+                return {}
+            raise
+        latest = {}
+        for row in rows:
+            key = (str(row["trade_id"]), str(row["lane"]).upper())
+            if key not in latest:
+                latest[key] = self._decode_management_snapshot(row)
+        return latest
+
+    def list_trade_management_snapshots(self, trade_id, *, lane=None, limit=5000):
+        query = "SELECT * FROM trade_management_snapshots WHERE trade_id=?"
+        params = [str(trade_id)]
+        if lane:
+            query += " AND lane=?"
+            params.append(str(lane).upper())
+        query += " ORDER BY captured_at ASC,created_at ASC,snapshot_id ASC LIMIT ?"
+        params.append(min(max(int(limit), 1), 10_000))
+        try:
+            with self.connection() as connection:
+                rows = self._fetchall(connection, query, tuple(params))
+        except Exception as exc:
+            if self._management_snapshot_table_unavailable(exc):
+                return []
+            raise
+        return [self._decode_management_snapshot(row) for row in rows]
+
+    @staticmethod
+    def _management_snapshot_table_unavailable(exc):
+        current = exc
+        while current is not None:
+            detail = f"{type(current).__name__}: {current}"
+            if ("UndefinedTable" in detail
+                    or "no such table: trade_management_snapshots" in detail):
+                return True
+            current = current.__cause__
+        return False
+
+    @staticmethod
+    def _decode_management_snapshot(row):
+        if not row:
+            return None
+        decoded = dict(row)
+        try:
+            decoded["missing_data"] = json.loads(decoded.get("missing_data_json") or "[]")
+        except Exception:
+            decoded["missing_data"] = []
+        try:
+            decoded["payload"] = json.loads(decoded.get("payload_json") or "{}")
+        except Exception:
+            decoded["payload"] = {}
+        decoded["stale"] = bool(decoded.get("stale"))
+        return decoded
 
     def list_context_shadow_decisions(self, *, scope=None, limit=5000):
         query="""SELECT opportunity_id,decision,decision_json,evaluated_at,experiment_scope

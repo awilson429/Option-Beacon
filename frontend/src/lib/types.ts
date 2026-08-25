@@ -99,9 +99,10 @@ export interface ActiveTrade extends TradeRow {
   unrealized_pnl:number|null; unrealized_return_pct:number|null; time_in_trade_seconds:number|null;
   data_freshness:string; mark_timestamp:string|null; stop:number|null; target_1:number|null;
   target_2:number|null; target_3:number|null; breakeven_state:string|null;
-  maximum_hold_minutes:number|null; exit_score:number|null; exit_state:string|null;
-  trade_coach_status:string|null; thesis_status:string|null; momentum_state:string|null;
+  maximum_hold_minutes:number|null; exit_score:number|null; exit_label?:string|null; exit_state:string|null;
+  trade_coach_state?:string|null; trade_coach_status:string|null; thesis_state?:string|null; thesis_status:string|null; momentum_state:string|null;
   structure_state:string|null; target_progress:string|null; stop_management_state:string|null;
+  management_reason?:string|null; management_updated_at?:string|null;
   last_management_update:string|null; management_data_status:string;
 }
 
