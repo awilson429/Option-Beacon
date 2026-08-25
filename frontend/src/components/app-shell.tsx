@@ -9,7 +9,7 @@ import { timestamp } from "@/lib/format";
 import { useSystemStatus } from "@/hooks/use-options-data";
 
 const groups = [
-  { label:"Trade", items:[["Trade Desk","/",CircleGauge],["SPY / QQQ Options","/options",SlidersHorizontal],["Scanner","/scanner",ScanSearch],["Active Trades",null,Activity],["Journal",null,BookOpen]] },
+  { label:"Trade", items:[["Trade Desk","/",CircleGauge],["SPY / QQQ Options","/options",SlidersHorizontal],["Scanner","/scanner",ScanSearch],["Active Trades","/active-trades",Activity],["Journal",null,BookOpen]] },
   { label:"Analytics", items:[["Performance",null,ChartNoAxesCombined],["Research",null,SlidersHorizontal],["Reports",null,FileChartColumn]] },
   { label:"System", items:[["Alerts",null,Bell],["Data Health",null,HeartPulse],["Settings",null,Settings]] },
 ] as const;
@@ -22,7 +22,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [open,setOpen]=useState(false); const [clock,setClock]=useState<Date|null>(null); const system=useSystemStatus();
   useEffect(()=>{const timer=setInterval(()=>setClock(new Date()),1000); return()=>clearInterval(timer)},[]);
   return <div className="min-h-screen lg:grid lg:grid-cols-[220px_1fr]">
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-[220px] border-r border-slate-800/80 bg-[#080c14] px-4 py-5 lg:block"><Brand/><Navigation/><p className="absolute bottom-5 left-5 text-[9px] uppercase tracking-[.15em] text-slate-700">React migration · Scanner</p></aside>
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-[220px] border-r border-slate-800/80 bg-[#080c14] px-4 py-5 lg:block"><Brand/><Navigation/><p className="absolute bottom-5 left-5 text-[9px] uppercase tracking-[.15em] text-slate-700">React migration · Active Trades</p></aside>
     {open && <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm lg:hidden"><aside className="h-full w-[260px] border-r border-slate-800 bg-[#080c14] p-5"><div className="flex justify-between"><Brand/><button aria-label="Close navigation" onClick={()=>setOpen(false)} className="text-slate-400"><X size={20}/></button></div><Navigation close={()=>setOpen(false)}/></aside></div>}
     <div className="lg:col-start-2">
       <header className="sticky top-0 z-30 flex h-14 items-center border-b border-slate-800/80 bg-[#080c14]/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">

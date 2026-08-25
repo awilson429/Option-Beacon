@@ -3,12 +3,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from api.dependencies import get_service
-from api.schemas.trades import TradeResponse
+from api.schemas.trades import ActiveTradeResponse, TradeResponse
 
 router = APIRouter(tags=["trades"])
 
 
-@router.get("/trades/active", response_model=list[TradeResponse], summary="Active authoritative trades")
+@router.get("/trades/active", response_model=list[ActiveTradeResponse], summary="Active authoritative and paper trades")
 def active_trades(service=Depends(get_service)):
     return service.active_trades()
 

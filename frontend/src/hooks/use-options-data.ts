@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { fetchJson, endpoints } from "@/lib/api";
-import type { ComparisonResponse, PerformanceResponse, ScalpState, ScannerResponse, StrategyState, SymbolCode, SystemStatus, TradeDeskHome, TradeRow } from "@/lib/types";
+import type { ActiveTrade, ComparisonResponse, PerformanceResponse, ScalpState, ScannerResponse, StrategyState, SymbolCode, SystemStatus, TradeDeskHome, TradeRow } from "@/lib/types";
 
 const config = { revalidateOnFocus: true, shouldRetryOnError: false, keepPreviousData: true };
 
@@ -26,7 +26,7 @@ export function useTradeDeskHome() {
 }
 
 export function useActiveTrades() {
-  return useSWR<TradeRow[]>(endpoints.activeTrades, fetchJson, { ...config, refreshInterval: 5_000 });
+  return useSWR<ActiveTrade[]>(endpoints.activeTrades, fetchJson, { ...config, refreshInterval: 5_000 });
 }
 
 export function useRecentTrades() {
