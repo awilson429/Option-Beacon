@@ -4,13 +4,14 @@ from __future__ import annotations
 import os
 import json
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import pandas_market_calendars as market_calendars
 
 from trade_repository import RepositoryUnavailable, TradeRepository, parse_utc
 from capital_readiness import LaneCapitalConfig
+from trade_state_service import scanner_health_state
 
 UTC = timezone.utc
 EASTERN = ZoneInfo("America/New_York")
@@ -423,3 +424,231 @@ class OptionBeaconReadService:
         return {"status": "ok" if database == "connected" else "degraded", "market_status": "open" if market_is_open(now) else "closed",
             "database": database, "data_freshness": freshness, "worker_status": worker, "worker_last_success": success,
             "provider_status": "not_queried", "timestamp": now}
+
+    @staticmethod
+    def _scanner_freshness(observed_at, now):
+        timestamp = parse_utc(observed_at)
+        if timestamp is None:
+            return "unavailable", None
+        age = max(0, int((now - timestamp).total_seconds()))
+        return ("fresh" if age <= 900 else "stale"), age
+
+    @staticmethod
+    def _scanner_lane_decision(lane, decision=None):
+        if not decision:
+            return {"lane": lane, "data_status": "unavailable", "state": None,
+                    "reason_code": None, "explanation": None, "proposed_contract": None,
+                    "proposed_quantity": None, "proposed_capital_required": None,
+                    "proposed_dollar_risk": None, "proposed_account_risk_pct": None,
+                    "decided_at": None}
+        return {"lane": lane, "data_status": "persisted", "state": decision.get("state"),
+                "reason_code": decision.get("reason_code"), "explanation": decision.get("explanation"),
+                "proposed_contract": decision.get("proposed_contract"),
+                "proposed_quantity": decision.get("proposed_quantity"),
+                "proposed_capital_required": decision.get("proposed_capital_required"),
+                "proposed_dollar_risk": decision.get("proposed_dollar_risk"),
+                "proposed_account_risk_pct": decision.get("proposed_account_risk_pct"),
+                "decided_at": decision.get("decided_at")}
+
+    def _scanner_health(self, now):
+        raw = self.repository().get_latest_scan_health()
+        lock = None
+        if raw:
+            lock = self.repository().get_scan_lock(raw.get("scanner_id"))
+        state = scanner_health_state(raw, scan_lock=lock, now=now)
+        try:
+            from optionbeacon.worker.run import configured_scan_seconds
+            interval = configured_scan_seconds()
+        except Exception:
+            interval = None
+        completed = parse_utc((raw or {}).get("last_completed_at"))
+        next_expected = None
+        if interval is not None and completed is not None and state.get("state") != "SCANNING":
+            next_expected = completed + timedelta(seconds=interval)
+        state_name = str(state.get("state") or "WAITING").upper()
+        worker = {"SCANNING": "running", "CURRENT": "healthy",
+                  "STALE": "degraded", "ERROR": "degraded"}.get(state_name, "unavailable")
+        freshness = "fresh" if state_name in {"SCANNING", "CURRENT"} else (
+            "stale" if state_name in {"STALE", "ERROR"} and state.get("last_success_at") else "unavailable"
+        )
+        return {"state": state_name, "message": state.get("message") or "Scanner state is unavailable.",
+                "market_data_state": str(state.get("market_data_state") or "UNKNOWN"),
+                "worker_status": worker, "provider_status": "not_queried",
+                "data_freshness": freshness,
+                "last_started_at": parse_utc((raw or {}).get("last_started_at")),
+                "last_completed_at": completed,
+                "last_success_at": parse_utc((raw or {}).get("last_success_at")),
+                "last_error_at": parse_utc((raw or {}).get("last_error_at")),
+                "last_error_message": (raw or {}).get("last_error_message"),
+                "scan_duration_seconds": _number((raw or {}).get("scan_duration")),
+                "symbols_processed": (raw or {}).get("last_symbols_processed"),
+                "symbols_attempted": state.get("current_symbols_attempted"),
+                "symbol_count": state.get("current_symbol_count"),
+                "results": state.get("current_results"), "failures": state.get("current_failures"),
+                "expected_interval_seconds": interval, "next_expected_at": next_expected}
+
+    def scanner(self):
+        """Aggregate persisted Scanner state without providers, writes, or strategy execution."""
+        now = self._now()
+        sections = []
+        failed_sections = set()
+
+        try:
+            health = self._scanner_health(now)
+            health_status = "persisted" if health["last_started_at"] else "unavailable"
+            sections.append({"section": "scanner_health", "data_status": health_status,
+                             "message": None if health_status == "persisted" else "No completed scanner run is persisted yet."})
+        except Exception:
+            failed_sections.add("scanner_health")
+            health = {"state": "UNAVAILABLE", "message": "Scanner health is unavailable.",
+                      "market_data_state": "UNKNOWN", "worker_status": "unavailable",
+                      "provider_status": "not_queried", "data_freshness": "unavailable",
+                      "last_started_at": None, "last_completed_at": None, "last_success_at": None,
+                      "last_error_at": None, "last_error_message": None,
+                      "scan_duration_seconds": None, "symbols_processed": None,
+                      "symbols_attempted": None, "symbol_count": None, "results": None,
+                      "failures": None, "expected_interval_seconds": None, "next_expected_at": None}
+            sections.append({"section": "scanner_health", "data_status": "error",
+                             "message": "Persisted scanner health could not be read."})
+
+        try:
+            opportunity_rows = [row for row in self.repository().list_opportunities(limit=200)
+                                if str(row.get("symbol") or "").upper() in SUPPORTED_SYMBOLS]
+            sections.append({"section": "opportunities",
+                             "data_status": "persisted" if opportunity_rows else "unavailable",
+                             "message": None if opportunity_rows else "No persisted SPY or QQQ opportunities are available."})
+        except Exception:
+            failed_sections.add("opportunities")
+            opportunity_rows = []
+            sections.append({"section": "opportunities", "data_status": "error",
+                             "message": "Persisted opportunities could not be read."})
+
+        try:
+            decision_rows = [row for row in self.capital_decisions(200)
+                             if str(row.get("lane") or "").upper() in {"OB", "BROAD"}]
+            sections.append({"section": "lane_decisions",
+                             "data_status": "persisted" if decision_rows else "unavailable",
+                             "message": None if decision_rows else "No persisted OB/BROAD decisions are available."})
+        except Exception:
+            failed_sections.add("lane_decisions")
+            decision_rows = []
+            sections.append({"section": "lane_decisions", "data_status": "error",
+                             "message": "Persisted OB/BROAD decisions could not be read."})
+
+        try:
+            event_rows = self.repository().list_trade_event_summaries(limit=100)
+            activity_state = "persisted" if event_rows or opportunity_rows or decision_rows else "unavailable"
+            sections.append({"section": "recent_activity", "data_status": activity_state,
+                             "message": None if activity_state == "persisted" else "No recent scanner activity is persisted."})
+        except Exception:
+            failed_sections.add("recent_activity")
+            event_rows = []
+            sections.append({"section": "recent_activity", "data_status": "partial"
+                             if opportunity_rows or decision_rows else "error",
+                             "message": "Trade events are unavailable; other persisted activity remains visible."})
+
+        decision_map = {}
+        for decision in decision_rows:
+            key = (str(decision.get("opportunity_id")), str(decision.get("lane") or "").upper())
+            decision_map.setdefault(key, decision)
+        event_by_opportunity = {}
+        event_by_symbol = {}
+        for event in event_rows:
+            opportunity_id = str(event.get("opportunity_id") or "")
+            symbol = str(event.get("symbol") or "").upper()
+            if opportunity_id:
+                event_by_opportunity.setdefault(opportunity_id, event)
+            if symbol in SUPPORTED_SYMBOLS:
+                event_by_symbol.setdefault(symbol, event)
+
+        opportunities = []
+        for row in opportunity_rows[:20]:
+            opportunity_id = str(row.get("id"))
+            observed_at = parse_utc(row.get("signal_timestamp"))
+            if observed_at is None:
+                continue
+            freshness, _ = self._scanner_freshness(observed_at, now)
+            state = str(row.get("state") or "UNAVAILABLE").upper()
+            event = event_by_opportunity.get(opportunity_id) or {}
+            lane_decisions = [self._scanner_lane_decision(
+                lane, decision_map.get((opportunity_id, lane))) for lane in ("OB", "BROAD")]
+            contract = next((item.get("proposed_contract") for item in lane_decisions
+                             if item.get("proposed_contract")), None)
+            metadata = row.get("metadata") or {}
+            contract = contract or metadata.get("option_symbol") or metadata.get("contract")
+            targets = [_number(row.get(key)) for key in ("target_1", "target_2", "target_3")]
+            opportunities.append({"opportunity_id": opportunity_id, "symbol": str(row.get("symbol")).upper(),
+                "direction": row.get("direction"), "strategy": row.get("playbook"),
+                "observed_at": observed_at, "score": _number(event.get("rule_score")),
+                "confidence": _number(row.get("confidence")), "contract": contract,
+                "entry": _number(row.get("entry_reference")), "stop": _number(row.get("stop_reference")),
+                "targets": [value for value in targets if value is not None], "status": state,
+                "actionable": state in {"CANDIDATE", "OPEN"}, "data_status": "persisted",
+                "freshness": freshness, "context": row.get("evidence") or {},
+                "lane_decisions": lane_decisions})
+
+        instruments = []
+        for symbol in ("SPY", "QQQ"):
+            rows = [row for row in opportunity_rows if str(row.get("symbol") or "").upper() == symbol]
+            current = next((row for row in rows if str(row.get("state") or "").upper()
+                            in {"CANDIDATE", "OPEN"}), rows[0] if rows else None)
+            if current is None:
+                instruments.append({"symbol": symbol, "data_status": "error" if "opportunities" in failed_sections else "unavailable",
+                    "underlying_price": None, "direction": None, "setup": None, "score": None,
+                    "confidence": None, "signal_state": "UNAVAILABLE", "observed_at": None,
+                    "signal_age_seconds": None, "freshness": "unavailable", "actionable": False,
+                    "context": {}})
+                continue
+            observed_at = parse_utc(current.get("signal_timestamp"))
+            freshness, age = self._scanner_freshness(observed_at, now)
+            state = str(current.get("state") or "UNAVAILABLE").upper()
+            event = event_by_opportunity.get(str(current.get("id"))) or event_by_symbol.get(symbol) or {}
+            instruments.append({"symbol": symbol, "data_status": "persisted",
+                "underlying_price": _number(event.get("underlying_price")),
+                "direction": current.get("direction"), "setup": current.get("playbook"),
+                "score": _number(event.get("rule_score")), "confidence": _number(current.get("confidence")),
+                "signal_state": state, "observed_at": observed_at, "signal_age_seconds": age,
+                "freshness": freshness, "actionable": state in {"CANDIDATE", "OPEN"},
+                "context": current.get("evidence") or {}})
+
+        activity = []
+        for decision in decision_rows:
+            occurred_at = parse_utc(decision.get("decided_at"))
+            if occurred_at is None:
+                continue
+            activity.append({"activity_id": f'decision:{decision.get("decision_id")}',
+                "event_type": "LANE_DECISION", "occurred_at": occurred_at,
+                "symbol": decision.get("symbol"), "direction": decision.get("direction"),
+                "opportunity_id": str(decision.get("opportunity_id")), "lane": decision.get("lane"),
+                "status": decision.get("state") or "UNAVAILABLE", "reason_code": decision.get("reason_code"),
+                "description": decision.get("explanation") or "Persisted capital-lane decision."})
+        for event in event_rows:
+            occurred_at = parse_utc(event.get("event_timestamp"))
+            if occurred_at is None:
+                continue
+            activity.append({"activity_id": f'event:{event.get("id")}',
+                "event_type": event.get("event_type") or "TRADE_EVENT", "occurred_at": occurred_at,
+                "symbol": event.get("symbol"), "direction": event.get("direction"),
+                "opportunity_id": str(event.get("opportunity_id")) if event.get("opportunity_id") else None,
+                "lane": None, "status": event.get("event_type") or "RECORDED",
+                "reason_code": event.get("exit_reason"),
+                "description": event.get("description") or "Persisted authoritative trade event."})
+        for row in opportunity_rows:
+            occurred_at = parse_utc(row.get("signal_timestamp"))
+            if occurred_at is None:
+                continue
+            state = str(row.get("state") or "UNAVAILABLE").upper()
+            activity.append({"activity_id": f'opportunity:{row.get("id")}',
+                "event_type": "OPPORTUNITY", "occurred_at": occurred_at,
+                "symbol": row.get("symbol"), "direction": row.get("direction"),
+                "opportunity_id": str(row.get("id")), "lane": None, "status": state,
+                "reason_code": None,
+                "description": f'{row.get("playbook") or "Scanner"} opportunity persisted as {state.lower()}.'})
+        activity.sort(key=lambda item: item["occurred_at"], reverse=True)
+
+        available = bool(opportunity_rows or decision_rows or health.get("last_started_at"))
+        overall = "partial" if failed_sections else "persisted" if available else "unavailable"
+        return {"as_of": now, "market_status": "open" if market_is_open(now) else "closed",
+                "data_status": overall, "research_control_role": "RESEARCH_CONTROL_ONLY",
+                "health": health, "instruments": instruments, "opportunities": opportunities,
+                "recent_activity": activity[:16], "sections": sections}
