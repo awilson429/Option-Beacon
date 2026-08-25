@@ -28,6 +28,13 @@ def test_scan_worker_records_success_and_releases_lock(tmp_path, monkeypatch):
     assert health["current_results"] == 1
     assert health["current_failures"] == 0
     assert health["current_owner_id"] is None
+    cycle = repo.latest_provenance_cycle()
+    assert cycle["cycle_status"] == "COMPLETED"
+    assert cycle["symbols_evaluated"] == ["SPY"]
+    observations = repo.list_recent_provenance_observations(symbol="SPY")
+    assert len(observations) == 1
+    assert observations[0]["qualification_state"] == "NO_SETUP"
+    assert observations[0]["scan_cycle_id"] == cycle["scan_cycle_id"]
     assert repo.acquire_scan_lock() is not None
 
 

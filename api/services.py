@@ -419,6 +419,112 @@ class OptionBeaconReadService:
             return []
         return reader(trade_id, lane=lane, limit=limit)
 
+    def _provenance_health(self):
+        reader = getattr(self.repository(), "latest_provenance_cycle", None)
+        cycle = reader() if callable(reader) else None
+        if not cycle:
+            return {"data_status": "unavailable", "provenance_status": "UNAVAILABLE",
+                    "scan_cycle_id": None, "cycle_status": None, "started_at": None,
+                    "completed_at": None, "error": None}
+        return {
+            "data_status": "persisted",
+            "provenance_status": cycle.get("provenance_status") or "UNKNOWN",
+            "scan_cycle_id": cycle.get("scan_cycle_id"),
+            "cycle_status": cycle.get("cycle_status"),
+            "started_at": parse_utc(cycle.get("started_at")),
+            "completed_at": parse_utc(cycle.get("completed_at")),
+            "error": cycle.get("provenance_error"),
+        }
+
+    def recent_provenance(self, *, symbol=None, limit=100):
+        reader = getattr(self.repository(), "list_recent_provenance_observations", None)
+        rows = reader(limit=limit, symbol=symbol) if callable(reader) else []
+        return {"as_of": self._now(),
+                "data_status": "persisted" if rows else "unavailable",
+                "health": self._provenance_health(), "observations": rows}
+
+    @staticmethod
+    def _provenance_outcome(position):
+        if not position or str(position.get("status") or "").upper() != "CLOSED":
+            return None
+        metadata = _json_object(position.get("metadata_json"))
+        return {
+            "status": "CLOSED", "closed_at": parse_utc(position.get("closed_at")),
+            "realistic_exit": _number(position.get("realistic_exit")),
+            "realistic_pnl": _number(position.get("realistic_pnl")),
+            "theoretical_pnl": _number(position.get("theoretical_pnl")),
+            "fees": _number(position.get("fees")), "slippage": _number(position.get("slippage")),
+            "exit_reason": metadata.get("exit_reason"),
+        }
+
+    def opportunity_provenance(self, opportunity_id):
+        repository = self.repository()
+        observation_reader = getattr(repository, "provenance_observation_for_opportunity", None)
+        observation = observation_reader(opportunity_id) if callable(observation_reader) else None
+        try:
+            opportunity = repository.get_opportunity(opportunity_id=str(opportunity_id))
+        except Exception:
+            opportunity = None
+        decisions = [row for row in self._capital_decision_rows(10_000)
+                     if str(row.get("opportunity_id")) == str(opportunity_id)
+                     and str(row.get("lane") or "").upper() in {"OB", "BROAD"}]
+        link_reader = getattr(repository, "provenance_decision_links", None)
+        links = link_reader(opportunity_id=opportunity_id) if callable(link_reader) else []
+        positions = [row for row in self._capital_position_rows()
+                     if str(row.get("opportunity_id")) == str(opportunity_id)
+                     and str(row.get("lane") or "").upper() in {"OB", "BROAD"}]
+        lane_payloads = []
+        for lane in ("OB", "BROAD"):
+            lane_decisions = [row for row in decisions if str(row.get("lane")).upper() == lane]
+            lane_links = [row for row in links if str(row.get("lane")).upper() == lane]
+            linked_ids = {str(row.get("trade_id")) for row in lane_links if row.get("trade_id")}
+            trade = next((row for row in positions
+                          if str(row.get("lane")).upper() == lane
+                          and str(row.get("position_id")) in linked_ids), None)
+            management = self.trade_management_history(trade.get("position_id"), lane=lane) \
+                if trade else []
+            lane_payloads.append({
+                "lane": lane, "decisions": lane_decisions,
+                "decision_trade_links": lane_links, "trade": trade,
+                "management": management, "outcome": self._provenance_outcome(trade),
+            })
+        status = "persisted" if observation else "legacy_unavailable" if opportunity else "unavailable"
+        return {"as_of": self._now(), "data_status": status,
+                "opportunity_id": str(opportunity_id), "observation": observation,
+                "opportunity": opportunity, "lanes": lane_payloads}
+
+    def trade_provenance(self, trade_id, *, lane):
+        lane = str(lane).upper()
+        position = next((row for row in self._capital_position_rows()
+                         if str(row.get("position_id")) == str(trade_id)
+                         and str(row.get("lane") or "").upper() == lane), None)
+        if not position:
+            return {"as_of": self._now(), "data_status": "unavailable",
+                    "trade_id": str(trade_id), "lane": lane, "observation": None,
+                    "qualification": None, "opportunity": None,
+                    "capital_decision": None, "decision_trade_link": None,
+                    "trade": None, "management": [], "outcome": None}
+        opportunity_id = str(position.get("opportunity_id"))
+        chain = self.opportunity_provenance(opportunity_id)
+        repository = self.repository()
+        link_reader = getattr(repository, "provenance_decision_links", None)
+        links = link_reader(trade_id=trade_id, lane=lane) if callable(link_reader) else []
+        link = links[-1] if links else None
+        decision = next((row for row in self._capital_decision_rows(10_000)
+                         if link and str(row.get("decision_id")) == str(link.get("decision_id"))), None)
+        observation = chain.get("observation")
+        qualification = ({key: observation.get(key) for key in
+            ("qualification_state", "reason_code", "explanation")}
+            if observation else None)
+        management = self.trade_management_history(trade_id, lane=lane)
+        return {"as_of": self._now(),
+                "data_status": "persisted" if observation and link else "partial",
+                "trade_id": str(trade_id), "lane": lane, "observation": observation,
+                "qualification": qualification, "opportunity": chain.get("opportunity"),
+                "capital_decision": decision, "decision_trade_link": link,
+                "trade": position, "management": management,
+                "outcome": self._provenance_outcome(position)}
+
     def _journal_source_rows(self, name):
         repository = self.repository()
         reader = getattr(repository, name, None)
@@ -907,6 +1013,31 @@ class OptionBeaconReadService:
         failed_sections = set()
 
         try:
+            provenance_reader = getattr(
+                self.repository(), "latest_provenance_observations", None
+            )
+            provenance_observations = provenance_reader(("SPY", "QQQ")) \
+                if callable(provenance_reader) else {}
+            provenance_health = self._provenance_health()
+            provenance_status = "persisted" if provenance_observations else "unavailable"
+            if provenance_health.get("provenance_status") == "DEGRADED":
+                provenance_status = "partial"
+            sections.append({
+                "section": "decision_provenance", "data_status": provenance_status,
+                "message": provenance_health.get("error") if provenance_status == "partial"
+                    else None if provenance_status == "persisted"
+                    else "No canonical SPY/QQQ decision observations are deployed yet.",
+            })
+        except Exception:
+            failed_sections.add("decision_provenance")
+            provenance_observations = {}
+            provenance_health = {"data_status": "error", "provenance_status": "DEGRADED",
+                "scan_cycle_id": None, "cycle_status": None, "started_at": None,
+                "completed_at": None, "error": "Decision provenance could not be read."}
+            sections.append({"section": "decision_provenance", "data_status": "error",
+                             "message": "Canonical decision observations could not be read."})
+
+        try:
             health = self._scanner_health(now)
             health_status = "persisted" if health["last_started_at"] else "unavailable"
             sections.append({"section": "scanner_health", "data_status": health_status,
@@ -1010,7 +1141,7 @@ class OptionBeaconReadService:
                     "underlying_price": None, "direction": None, "setup": None, "score": None,
                     "confidence": None, "signal_state": "UNAVAILABLE", "observed_at": None,
                     "signal_age_seconds": None, "freshness": "unavailable", "actionable": False,
-                    "context": {}})
+                    "context": {}, "canonical_observation": provenance_observations.get(symbol)})
                 continue
             observed_at = parse_utc(current.get("signal_timestamp"))
             freshness, age = self._scanner_freshness(observed_at, now)
@@ -1022,7 +1153,8 @@ class OptionBeaconReadService:
                 "score": _number(event.get("rule_score")), "confidence": _number(current.get("confidence")),
                 "signal_state": state, "observed_at": observed_at, "signal_age_seconds": age,
                 "freshness": freshness, "actionable": state in {"CANDIDATE", "OPEN"},
-                "context": current.get("evidence") or {}})
+                "context": current.get("evidence") or {},
+                "canonical_observation": provenance_observations.get(symbol)})
 
         activity = []
         for decision in decision_rows:
@@ -1063,5 +1195,6 @@ class OptionBeaconReadService:
         overall = "partial" if failed_sections else "persisted" if available else "unavailable"
         return {"as_of": now, "market_status": "open" if market_is_open(now) else "closed",
                 "data_status": overall, "research_control_role": "RESEARCH_CONTROL_ONLY",
+                "provenance_health": provenance_health,
                 "health": health, "instruments": instruments, "opportunities": opportunities,
                 "recent_activity": activity[:16], "sections": sections}
