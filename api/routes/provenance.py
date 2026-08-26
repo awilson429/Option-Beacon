@@ -1,4 +1,5 @@
-from typing import Annotated
+from datetime import date
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
 
@@ -10,6 +11,16 @@ from api.schemas.provenance import (
 )
 
 router = APIRouter(tags=["provenance"])
+
+
+@router.get("/provenance/validation", response_model=dict[str, Any],
+            summary="Read-only provenance validation evidence")
+def provenance_validation(
+    session_date: Annotated[date | None, Query(alias="date")] = None,
+    days: Annotated[int, Query(ge=1, le=31)] = 1,
+    service=Depends(get_service),
+):
+    return service.provenance_validation(session_date=session_date, days=days)
 
 
 @router.get("/provenance/recent", response_model=RecentProvenanceResponse,

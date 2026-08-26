@@ -443,6 +443,11 @@ class OptionBeaconReadService:
                 "data_status": "persisted" if rows else "unavailable",
                 "health": self._provenance_health(), "observations": rows}
 
+    def provenance_validation(self, *, session_date=None, days=1):
+        """Build read-only provenance evidence without evaluating providers."""
+        from analysis.provenance_validation import build_report
+        return build_report(self.repository(), session_date=session_date, days=days)
+
     @staticmethod
     def _provenance_outcome(position):
         if not position or str(position.get("status") or "").upper() != "CLOSED":
