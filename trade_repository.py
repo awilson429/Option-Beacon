@@ -1795,7 +1795,14 @@ class TradeRepository:
                     source_version, None, "[]", "SCANNING", "unknown", None,
                     "HEALTHY", None, now, now,
                 )).close()
-        return self.get_provenance_cycle(scan_cycle_id)
+        stored = self.get_provenance_cycle(scan_cycle_id)
+        expected = (str(scanner_id), int(run_number) if run_number is not None else None,
+                    utc_iso(started_at))
+        actual = ((stored or {}).get("scanner_id"), (stored or {}).get("run_number"),
+                  utc_iso((stored or {}).get("started_at")))
+        if actual != expected:
+            raise ValueError("Provenance scan-cycle identity collides with different immutable fields.")
+        return stored
 
     def finish_provenance_cycle(self, scan_cycle_id, *, completed_at, cycle_status,
                                 provider_state=None, symbols_evaluated=None,
@@ -1888,7 +1895,14 @@ class TradeRepository:
             row = self._fetchone(connection,
                 "SELECT * FROM provenance_observations WHERE observation_id=?",
                 (str(payload["observation_id"]),))
-        return self._decode_provenance_observation(row)
+        stored = self._decode_provenance_observation(row)
+        expected = (str(payload["scan_cycle_id"]), payload["symbol"],
+                    utc_iso(payload["observed_at"]))
+        actual = ((stored or {}).get("scan_cycle_id"), (stored or {}).get("symbol"),
+                  utc_iso((stored or {}).get("observed_at")))
+        if actual != expected:
+            raise ValueError("Provenance observation identity collides with different immutable fields.")
+        return stored
 
     def link_provenance_opportunity(self, observation_id, opportunity_id):
         with self.connection() as connection:
@@ -1968,7 +1982,14 @@ class TradeRepository:
                     str(opportunity_id), lane, str(decision_state), utc_iso(decided_at),
                     None, None, str(link_status), utc_iso(), str(source),
                 )).close()
-        return self.provenance_decision_link(decision_id)
+        stored = self.provenance_decision_link(decision_id)
+        expected = (str(observation_id) if observation_id else None,
+                    str(opportunity_id), lane)
+        actual = ((stored or {}).get("observation_id"),
+                  (stored or {}).get("opportunity_id"), (stored or {}).get("lane"))
+        if actual != expected:
+            raise ValueError("Provenance decision identity collides with different immutable fields.")
+        return stored
 
     def link_provenance_decision_trade(self, decision_id, *, opportunity_id, lane,
                                        trade_id, position_id=None, source):

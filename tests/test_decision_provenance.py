@@ -105,6 +105,35 @@ def test_identity_is_unique_by_cycle_symbol_and_observation(tmp_path):
     assert repo.latest_provenance_observations()["SPY"]["scan_cycle_id"] == second_cycle
 
 
+def test_provenance_idempotency_rejects_conflicting_immutable_identity(tmp_path):
+    repo = repository(tmp_path)
+    cycle = start_cycle(repo)
+    with pytest.raises(ValueError, match="scan-cycle identity collides"):
+        repo.start_provenance_cycle(
+            scan_cycle_id=cycle, scanner_id="different-worker", run_number=7,
+            started_at=NOW, session_state="WORKER_ACTIVE", worker_source="test",
+        )
+    stored = persist_observation(repo, cycle, qualified_result("SPY"))
+    conflicting = build_observation(
+        scan_cycle_id=cycle, symbol="QQQ", observed_at=NOW,
+        result=qualified_result("QQQ"), source_version="test-version",
+    )
+    conflicting["observation_id"] = stored["observation_id"]
+    with pytest.raises(ValueError, match="observation identity collides"):
+        repo.record_provenance_observation(conflicting)
+    repo.record_provenance_decision_link(
+        decision_id="decision-1", observation_id=stored["observation_id"],
+        opportunity_id="opportunity-1", lane="OB", decision_state="PASS",
+        decided_at=NOW, link_status="NO_TRADE", source="test",
+    )
+    with pytest.raises(ValueError, match="decision identity collides"):
+        repo.record_provenance_decision_link(
+            decision_id="decision-1", observation_id=stored["observation_id"],
+            opportunity_id="opportunity-2", lane="OB", decision_state="PASS",
+            decided_at=NOW, link_status="NO_TRADE", source="test",
+        )
+
+
 def test_observation_preserves_inputs_nulls_freshness_and_dispositions(tmp_path):
     repo = repository(tmp_path)
     cycle = start_cycle(repo)

@@ -13,6 +13,16 @@ from api.schemas.provenance import (
 router = APIRouter(tags=["provenance"])
 
 
+@router.get("/provenance/readiness", response_model=dict[str, Any],
+            summary="Read-only live provenance collection readiness")
+def provenance_readiness(
+    as_of: Annotated[date | None, Query()] = None,
+    lookback_days: Annotated[int, Query(ge=1, le=1000)] = 365,
+    service=Depends(get_service),
+):
+    return service.provenance_readiness(as_of=as_of, lookback_days=lookback_days)
+
+
 @router.get("/provenance/validation", response_model=dict[str, Any],
             summary="Read-only provenance validation evidence")
 def provenance_validation(

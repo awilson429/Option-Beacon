@@ -10,9 +10,10 @@
 python -m analysis.provenance_validation --date 2026-08-25
 python -m analysis.provenance_validation --date 2026-08-25 --days 5 --symbol SPY --lane OB
 python -m analysis.provenance_validation --date 2026-08-25 --json-output evidence.json --csv-output evidence-csv
+python -m analysis.provenance_validation --readiness --lookback-days 365
 ```
 
-JSON contains the full structured report. CSV writes session summary, qualification/rejection summary, and integrity issues. Provider payloads and secrets are excluded. `GET /api/provenance/validation?date=YYYY-MM-DD&days=1` exposes the same bounded read-only evidence. It triggers no provider calls or writes.
+JSON contains the full structured report. CSV writes session summary, qualification/rejection summary, and integrity issues. Provider payloads and secrets are excluded. `GET /api/provenance/validation?date=YYYY-MM-DD&days=1` exposes the same bounded read-only evidence. `GET /api/provenance/readiness` summarizes live collection and 20/40/60-session progress. Neither triggers provider calls or writes.
 
 ## Health score
 

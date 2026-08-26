@@ -448,6 +448,11 @@ class OptionBeaconReadService:
         from analysis.provenance_validation import build_report
         return build_report(self.repository(), session_date=session_date, days=days)
 
+    def provenance_readiness(self, *, as_of=None, lookback_days=365):
+        """Summarize read-only live collection readiness for React and diagnostics."""
+        from analysis.provenance_validation import build_readiness
+        return build_readiness(self.repository(), as_of=as_of, lookback_days=lookback_days)
+
     @staticmethod
     def _provenance_outcome(position):
         if not position or str(position.get("status") or "").upper() != "CLOSED":
