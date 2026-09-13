@@ -9,7 +9,7 @@ import { timestamp } from "@/lib/format";
 import { useSystemStatus } from "@/hooks/use-options-data";
 
 const groups = [
-  { label:"Trade", items:[["Trade Desk","/",CircleGauge],["SPY / QQQ Options","/options",SlidersHorizontal],["Scanner","/scanner",ScanSearch],["Active Trades","/active-trades",Activity],["Journal","/journal",BookOpen]] },
+  { label:"Trade", items:[["Market Command","/",CircleGauge],["SPY / QQQ Options","/options",SlidersHorizontal],["Scanner","/scanner",ScanSearch],["Active Trades","/active-trades",Activity],["Journal","/journal",BookOpen]] },
   { label:"Analytics", items:[["Performance",null,ChartNoAxesCombined],["Research",null,SlidersHorizontal],["Reports",null,FileChartColumn]] },
   { label:"System", items:[["Live Snapshot","/diagnostics/live-snapshot",HeartPulse],["Alerts",null,Bell],["Data Health",null,HeartPulse],["Settings",null,Settings]] },
 ] as const;

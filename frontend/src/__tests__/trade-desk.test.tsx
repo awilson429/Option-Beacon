@@ -13,9 +13,9 @@ function renderHome(responses:(Response|Promise<Response>)[]=[Response.json(snap
 }
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.useRealTimers()});
 describe("primary trading terminal",()=>{
- it("renders healthy state, SPY TAKE, QQQ rejection, indicators, decision and active/recent trades",async()=>{renderHome();expect(await screen.findByRole("heading",{name:"Market Command"})).toBeInTheDocument();expect(within(screen.getByTestId("setup-SPY")).getByText("TAKE")).toBeInTheDocument();expect(within(screen.getByTestId("setup-QQQ")).getByText("REJECTED")).toBeInTheDocument();expect(screen.getByText("EMA 9")).toBeInTheDocument();expect(screen.getAllByText("ALL RISK CONTROLS PASSED").length).toBeGreaterThan(0);expect(screen.getByText("trade-1")).toBeInTheDocument();expect(screen.getByText("$30.00")).toBeInTheDocument();expect(screen.getByText("Compact authoritative history")).toBeInTheDocument();expect(screen.getByText("System & provenance")).toBeInTheDocument()});
+ it("renders healthy state, SPY TAKE, QQQ rejection, indicators, decision and active/recent trades",async()=>{renderHome();expect(await screen.findByRole("heading",{name:"Market Command"})).toBeInTheDocument();expect(screen.getByRole("link",{name:"Market Command"})).toHaveAttribute("href","/");expect(within(screen.getByTestId("setup-SPY")).getByText("TAKE")).toBeInTheDocument();expect(within(screen.getByTestId("setup-QQQ")).getByText("REJECTED")).toBeInTheDocument();expect(screen.getByText("EMA 9")).toBeInTheDocument();expect(screen.getAllByText("ALL RISK CONTROLS PASSED").length).toBeGreaterThan(0);expect(screen.getByText("trade-1")).toBeInTheDocument();expect(screen.getByText("$30.00")).toBeInTheDocument();expect(screen.getByRole("heading",{name:"Recent trades"})).toBeInTheDocument();expect(screen.getByRole("heading",{name:"System & provenance"})).toBeInTheDocument();expect(screen.getByRole("link",{name:"Diagnostics"})).toHaveAttribute("href","/diagnostics/live-snapshot")});
  it("shows null numbers as unavailable and never as zero",async()=>{renderHome();const qqq=await screen.findByTestId("setup-QQQ");expect(within(qqq).getAllByText("Unavailable").length).toBeGreaterThan(0);expect(within(qqq).queryByText("$0.00")).not.toBeInTheDocument()});
- it("renders stale and degraded authoritative health",async()=>{renderHome([Response.json({...snapshot,market:{...snapshot.market,freshness:"stale"},scanner:{...snapshot.scanner,status:"STALE"},system:{...snapshot.system,state:{...system,worker_status:"degraded"},stale_or_missing:["scanner_stale_or_unavailable"]}})]);expect(await screen.findByRole("alert")).toHaveTextContent("scanner_stale_or_unavailable");const status=screen.getByLabelText("Terminal status");expect(status).toHaveTextContent(/stale/i);expect(status).toHaveTextContent(/degraded/i);expect(status).toHaveTextContent("Connected")});
+ it("renders stale and degraded authoritative health",async()=>{renderHome([Response.json({...snapshot,market:{...snapshot.market,freshness:"stale"},scanner:{...snapshot.scanner,status:"STALE"},system:{...snapshot.system,state:{...system,worker_status:"degraded"},stale_or_missing:["scanner_stale_or_unavailable"]}})]);const alert=await screen.findByRole("alert");expect(alert).toHaveTextContent("scanner_stale_or_unavailable");expect(alert).toHaveTextContent(/stale/i);expect(screen.queryByText(/connection degraded/i)).not.toBeInTheDocument();const status=screen.getByLabelText("Terminal status");expect(status).toHaveTextContent(/stale/i);expect(status).toHaveTextContent(/degraded/i);expect(status).toHaveTextContent("Connected")});
  it("renders disconnected state when no valid snapshot exists",async()=>{renderHome([new Response(null,{status:503})]);expect(await screen.findByRole("alert")).toHaveTextContent("backend disconnected");expect(screen.queryByText("$650.25")).not.toBeInTheDocument()});
  it("renders truthful empty positions and decision states",async()=>{renderHome([Response.json({...snapshot,active_trades:[],decisions:[]})]);expect(await screen.findByText("No active positions")).toBeInTheDocument();expect(screen.getByText("No recent decisions")).toBeInTheDocument()});
  it("uses the configured interval and applies polling updates without a reload",async()=>{
@@ -24,13 +24,13 @@ describe("primary trading terminal",()=>{
     Response.json(snapshot),
     Response.json({...snapshot,snapshot_id:"changed-snapshot",symbols:{...snapshot.symbols,SPY:{...snapshot.symbols.SPY,scanner:{...snapshot.symbols.SPY.scanner,score:91}}}}),
   ]);
-  expect(await screen.findByText(snapshot.snapshot_id,{exact:false})).toBeInTheDocument();
+  expect((await screen.findAllByText(snapshot.snapshot_id,{exact:false})).length).toBeGreaterThan(0);
   await act(async()=>{await vi.advanceTimersByTimeAsync(SNAPSHOT_POLL_INTERVAL_MS+100)});
-  expect(await screen.findByText("changed-snapshot",{exact:false})).toBeInTheDocument();
+  expect(screen.getAllByText("changed-snapshot",{exact:false}).length).toBeGreaterThan(0);
  });
  it("keeps the last valid snapshot visible during a transient polling failure",async()=>{
   renderHome([Response.json(snapshot),new Response(null,{status:503})]);
-  expect(await screen.findByText(snapshot.snapshot_id,{exact:false})).toBeInTheDocument();
+  expect((await screen.findAllByText(snapshot.snapshot_id,{exact:false})).length).toBeGreaterThan(0);
   screen.getByRole("button",{name:"Refresh"}).click();
   await waitFor(()=>expect(screen.getByRole("alert")).toHaveTextContent("Showing the last valid"));
   expect(screen.getByText("$650.25")).toBeInTheDocument();

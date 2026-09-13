@@ -37,6 +37,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--brand-soft); ou
 
 @layer components {
   .surface { @apply rounded-xl border; background: rgba(12,17,29,.94); border-color: var(--line); box-shadow: 0 18px 60px rgba(0,0,0,.22); }
+  .surface-tight { @apply rounded-lg border; background: rgba(12,17,29,.96); border-color: var(--line); }
   .eyebrow { @apply text-[10px] font-semibold uppercase tracking-[.18em]; color: var(--muted); }
   .metric-label { @apply text-[10px] font-medium uppercase tracking-[.13em]; color: var(--muted); }
   .metric-value { @apply mt-1 block text-sm font-semibold tabular-nums; color: var(--text); }
