@@ -90,9 +90,10 @@ def test_snapshot_endpoint_schema_symbols_read_only_and_bounded():
     assert response.status_code == 200
     body = response.json()
     assert time.perf_counter() - started < 1
-    assert set(body) == {"schema_version", "generated_at", "data_status", "market", "symbols",
+    assert set(body) == {"schema_version", "snapshot_id", "generated_at", "data_status", "market", "symbols",
                          "scanner", "decisions", "active_trades", "recent_trades", "system", "provenance"}
     assert body["schema_version"] == "1" and set(body["symbols"]) == {"SPY", "QQQ"}
+    assert len(body["snapshot_id"]) == 20
     assert service.calls == ["scanner", "active_trades", ("recent_trades", 20), "system_status"]
 
 
@@ -112,6 +113,33 @@ def test_empty_and_stale_snapshot_are_explicit():
     assert "scanner_stale_or_unavailable" in body["system"]["stale_or_missing"]
     stale = TestClient(create_app(service=ProjectionService(stale=True))).get("/api/live/snapshot").json()
     assert stale["market"]["freshness"] == "stale"
+
+
+def test_snapshot_identity_is_deterministic_for_unchanged_persisted_state():
+    current = {"now": NOW}
+    service = ProjectionService()
+    service._now = lambda: current["now"]
+    first = service.live_snapshot()
+    current["now"] = datetime(2026, 9, 13, 14, 45, tzinfo=timezone.utc)
+    second = service.live_snapshot()
+    assert first["snapshot_id"] == second["snapshot_id"]
+    assert len(first["snapshot_id"]) == 20
+    assert first["generated_at"] != second["generated_at"]
+    assert first["snapshot_id"] != str(first["generated_at"])
+
+
+def test_snapshot_identity_changes_when_persisted_cycle_changes():
+    service = ProjectionService()
+    original_scanner = service.scanner
+    first = service.live_snapshot()["snapshot_id"]
+
+    def scanner():
+        payload = original_scanner()
+        payload["provenance_health"] = {**payload["provenance_health"], "scan_cycle_id": "cycle-2"}
+        return payload
+
+    service.scanner = scanner
+    assert service.live_snapshot()["snapshot_id"] != first
 
 
 def test_normalizer_supports_decimal_enum_and_library_scalar_protocols():

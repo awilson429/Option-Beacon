@@ -1,6 +1,14 @@
 # OptionBeacon React frontend
 
-Phase 2 contains the application shell, the high-level Trade Desk home at `/`, and the SPY / QQQ Options Desk at `/options`. It runs alongside Streamlit and consumes FastAPI only.
+The primary OptionBeacon application is the snapshot-driven Market Command terminal at `/`. Existing focused workspaces and the internal snapshot diagnostics at `/diagnostics/live-snapshot` remain available. The React application runs alongside Streamlit and consumes FastAPI only.
+
+## Primary terminal state
+
+The root dashboard polls only `GET /api/live/snapshot` for trading state. The default interval is 15 seconds and can be configured with `NEXT_PUBLIC_OPTIONBEACON_SNAPSHOT_POLL_MS` (minimum 1000 ms). SWR prevents full-page reloads, retains the prior valid snapshot during revalidation, and reports a transient connection failure separately from the authoritative freshness and health carried by that snapshot.
+
+Missing numeric values render as `Unavailable`, never zero. Stale, missing, unavailable, rejected, blocked, and disconnected states have separate visual treatments. Indicator values are displayed only from the persisted canonical observation; the browser performs no strategy calculations.
+
+Future SSE delivery should invalidate or replace this same versioned snapshot cache. REST remains the bootstrap, reconnect, and resynchronization source, keyed by deterministic `snapshot_id` and authoritative cycle metadata.
 
 ## Local development
 

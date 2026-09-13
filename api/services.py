@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import json
+import hashlib
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -1278,8 +1279,21 @@ class OptionBeaconReadService:
         if provenance_health.get("data_status") != "persisted":
             missing.append("provenance_unavailable")
         any_symbol = any(value["data_status"] == "persisted" for value in symbols.values())
+        identity = {
+            "cycle_id": provenance_health.get("scan_cycle_id"),
+            "cycle_completed_at": str(provenance_health.get("completed_at") or ""),
+            "observations": [(symbol, (value.get("observation") or {}).get("observation_id"))
+                             for symbol, value in symbols.items()],
+            "decisions": [(item.get("decision_id"), str(item.get("timestamp") or ""))
+                          for item in decisions[:20]],
+            "active": [(item.get("id"), str(item.get("last_management_update")
+                        or item.get("mark_timestamp") or "")) for item in active_trades],
+            "recent": [(item.get("id"), item.get("status"), str(item.get("closed_at") or ""))
+                       for item in recent_trades],
+        }
+        snapshot_id = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:20]
         return {
-            "schema_version": "1", "generated_at": now,
+            "schema_version": "1", "snapshot_id": snapshot_id, "generated_at": now,
             "data_status": "persisted" if not missing else "partial" if any_symbol else "unavailable",
             "market": {"session_date": now.astimezone(EASTERN).date(),
                 "session_state": scanner.get("market_status", "unavailable"),

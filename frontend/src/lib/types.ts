@@ -216,7 +216,7 @@ export interface LiveSymbolSnapshot {
 }
 
 export interface LiveSnapshot {
-  schema_version:"1"; generated_at:string; data_status:string;
+  schema_version:"1"; snapshot_id:string; generated_at:string; data_status:string;
   market:{session_date:string;session_state:string;last_authoritative_data_at:string|null;freshness:string};
   symbols:Record<SymbolCode,LiveSymbolSnapshot>;
   scanner:{cycle_id:string|null;cycle_timestamp:string|null;cycle_completion_state:string|null;

@@ -21,7 +21,7 @@ The request does not initiate a scan, call a market-data provider, evaluate indi
 
 ## Contract
 
-The top-level `schema_version` is `"1"`. It versions the HTTP snapshot contract only and has no relationship to strategy, scoring, or execution versions.
+The top-level `schema_version` is `"1"`. It versions the HTTP snapshot contract only and has no relationship to strategy, scoring, or execution versions. `snapshot_id` is a deterministic digest of persisted cycle, observation, decision, active-position, and recent-trade identities/timestamps; repeated reads of unchanged authoritative state retain the same ID even though `generated_at` advances.
 
 The response contains:
 

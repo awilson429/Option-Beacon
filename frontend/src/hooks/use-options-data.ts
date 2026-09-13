@@ -5,6 +5,9 @@ import { fetchJson, endpoints } from "@/lib/api";
 import type { ActiveTrade, ComparisonResponse, JournalResponse, LiveSnapshot, PerformanceResponse, ScalpState, ScannerResponse, StrategyState, SymbolCode, SystemStatus, TradeDeskHome, TradeManagementSnapshot, TradeRow } from "@/lib/types";
 
 const config = { revalidateOnFocus: true, shouldRetryOnError: false, keepPreviousData: true };
+const configuredSnapshotPoll = Number(process.env.NEXT_PUBLIC_OPTIONBEACON_SNAPSHOT_POLL_MS);
+export const SNAPSHOT_POLL_INTERVAL_MS = Number.isFinite(configuredSnapshotPoll) && configuredSnapshotPoll >= 1_000
+  ? configuredSnapshotPoll : 15_000;
 
 export function useInstrumentData(symbol: SymbolCode) {
   const strategy = useSWR<StrategyState>(endpoints.strategy(symbol), fetchJson, { ...config, refreshInterval: 10_000 });
@@ -38,7 +41,9 @@ export function useScannerData() {
 }
 
 export function useLiveSnapshot() {
-  return useSWR<LiveSnapshot>(endpoints.liveSnapshot, fetchJson, { ...config, refreshInterval: 15_000 });
+  return useSWR<LiveSnapshot>(endpoints.liveSnapshot, fetchJson, {
+    ...config, refreshInterval: SNAPSHOT_POLL_INTERVAL_MS, refreshWhenHidden: false,
+  });
 }
 
 export function useJournalData(query:string) {

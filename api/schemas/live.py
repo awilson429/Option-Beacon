@@ -58,6 +58,7 @@ class LiveSystemSnapshot(BaseModel):
 
 class LiveSnapshotResponse(BaseModel):
     schema_version: str = "1"
+    snapshot_id: str
     generated_at: datetime
     data_status: str
     market: LiveMarketSnapshot
