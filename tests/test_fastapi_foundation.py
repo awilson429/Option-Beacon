@@ -79,9 +79,19 @@ def client(service=None): return TestClient(create_app(service=service or FakeSe
 
 
 def test_health_and_database_unavailable_behavior():
-    assert client().get("/api/health").json()["database"] == "connected"
+    response = client().get("/api/health")
+    body = response.json()
+    assert response.status_code == 200
+    assert body["status"] == "ok"
+    assert body["api"] == "online"
+    assert body["database"] == "connected"
+    assert body["service"] == "optionbeacon-api"
+    assert body["version"] == "1"
+    assert datetime.fromisoformat(body["timestamp"]).tzinfo is not None
     response = client(FakeService(False)).get("/api/health")
-    assert response.status_code == 200 and response.json()["status"] == "degraded"
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
+    assert response.json()["api"] == "online"
 
 
 def test_trade_desk_schema_preserves_unavailable_values():

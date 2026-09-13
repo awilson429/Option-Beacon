@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class HealthResponse(BaseModel):
     status: str
+    api: str = "online"
     service: str = "optionbeacon-api"
     database: str
     timestamp: datetime
