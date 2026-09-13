@@ -54,6 +54,7 @@ class ScannerInstrument(BaseModel):
 class ScannerLaneDecision(BaseModel):
     lane: str
     data_status: str
+    decision_id: str | None = None
     state: str | None = None
     reason_code: str | None = None
     explanation: str | None = None

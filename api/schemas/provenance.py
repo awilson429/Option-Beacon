@@ -36,8 +36,8 @@ class ProvenanceObservationResponse(BaseModel):
     confidence: float | None = None
     bullish_score: float | None = None
     bearish_score: float | None = None
-    component_scores: dict[str, float] = Field(default_factory=dict)
-    indicators: dict[str, float] = Field(default_factory=dict)
+    component_scores: dict[str, float | None] = Field(default_factory=dict)
+    indicators: dict[str, float | None] = Field(default_factory=dict)
     reasons: list[str] = Field(default_factory=list)
     opportunity_id: str | None = None
     source_version: str | None = None

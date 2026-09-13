@@ -966,11 +966,13 @@ class OptionBeaconReadService:
     def _scanner_lane_decision(lane, decision=None):
         if not decision:
             return {"lane": lane, "data_status": "unavailable", "state": None,
+                    "decision_id": None,
                     "reason_code": None, "explanation": None, "proposed_contract": None,
                     "proposed_quantity": None, "proposed_capital_required": None,
                     "proposed_dollar_risk": None, "proposed_account_risk_pct": None,
                     "decided_at": None}
-        return {"lane": lane, "data_status": "persisted", "state": decision.get("state"),
+        return {"lane": lane, "data_status": "persisted",
+                "decision_id": decision.get("decision_id"), "state": decision.get("state"),
                 "reason_code": decision.get("reason_code"), "explanation": decision.get("explanation"),
                 "proposed_contract": decision.get("proposed_contract"),
                 "proposed_quantity": decision.get("proposed_quantity"),
@@ -1208,3 +1210,96 @@ class OptionBeaconReadService:
                 "provenance_health": provenance_health,
                 "health": health, "instruments": instruments, "opportunities": opportunities,
                 "recent_activity": activity[:16], "sections": sections}
+
+    def live_snapshot(self):
+        """Compose bounded persisted projections without strategy or provider execution."""
+        now = self._now()
+        scanner = self.scanner()
+        try:
+            active_trades = self.active_trades()
+        except Exception:
+            active_trades = []
+        try:
+            recent_trades = self.recent_trades(20)
+        except Exception:
+            recent_trades = []
+        system = self.system_status()
+        instruments = {item["symbol"]: item for item in scanner.get("instruments", [])}
+        opportunities = scanner.get("opportunities") or []
+        symbols = {}
+        decisions = []
+        observation_count = 0
+        for symbol in ("SPY", "QQQ"):
+            instrument = instruments.get(symbol) or {
+                "symbol": symbol, "data_status": "unavailable", "underlying_price": None,
+                "direction": None, "setup": None, "score": None, "confidence": None,
+                "signal_state": "UNAVAILABLE", "observed_at": None,
+                "signal_age_seconds": None, "freshness": "unavailable",
+                "actionable": False, "context": {}, "canonical_observation": None,
+            }
+            observation = instrument.get("canonical_observation")
+            if observation:
+                observation_count += 1
+            opportunity = next((item for item in opportunities
+                                if item.get("symbol") == symbol), None)
+            lane_decisions = (opportunity or {}).get("lane_decisions") or []
+            data_status = "persisted" if observation or instrument.get("data_status") == "persisted" \
+                else instrument.get("data_status", "unavailable")
+            symbols[symbol] = {"symbol": symbol, "data_status": data_status,
+                "observation": observation, "scanner": instrument,
+                "latest_decisions": lane_decisions}
+            for decision in lane_decisions:
+                decisions.append({
+                    "decision_id": decision.get("decision_id"),
+                    "opportunity_id": opportunity.get("opportunity_id"), "symbol": symbol,
+                    "lane": decision.get("lane"), "timestamp": decision.get("decided_at"),
+                    "action": decision.get("state"), "score": opportunity.get("score"),
+                    "setup": opportunity.get("strategy"), "direction": opportunity.get("direction"),
+                    "reason_code": decision.get("reason_code"),
+                    "explanation": decision.get("explanation"),
+                    "observation_id": (observation or {}).get("observation_id"),
+                    "scan_cycle_id": (observation or {}).get("scan_cycle_id"),
+                })
+        decisions.sort(key=lambda item: parse_utc(item.get("timestamp"))
+                       or datetime.min.replace(tzinfo=UTC), reverse=True)
+        health = scanner["health"]
+        provenance_health = scanner.get("provenance_health") or {
+            "data_status": "unavailable", "provenance_status": "UNAVAILABLE",
+            "scan_cycle_id": None, "cycle_status": None, "started_at": None,
+            "completed_at": None, "error": None,
+        }
+        timestamps = [parse_utc(item.get("observed_at"))
+                      for item in scanner.get("instruments", [])]
+        last_data = max((value for value in timestamps if value), default=None)
+        missing = [symbol for symbol, value in symbols.items()
+                   if value["data_status"] != "persisted"]
+        if health.get("data_freshness") != "fresh":
+            missing.append("scanner_stale_or_unavailable")
+        if provenance_health.get("data_status") != "persisted":
+            missing.append("provenance_unavailable")
+        any_symbol = any(value["data_status"] == "persisted" for value in symbols.values())
+        return {
+            "schema_version": "1", "generated_at": now,
+            "data_status": "persisted" if not missing else "partial" if any_symbol else "unavailable",
+            "market": {"session_date": now.astimezone(EASTERN).date(),
+                "session_state": scanner.get("market_status", "unavailable"),
+                "last_authoritative_data_at": last_data,
+                "freshness": health.get("data_freshness", "unavailable")},
+            "symbols": symbols,
+            "scanner": {"cycle_id": provenance_health.get("scan_cycle_id"),
+                "cycle_timestamp": provenance_health.get("started_at"),
+                "cycle_completion_state": provenance_health.get("cycle_status"),
+                "latest_processed_symbols": [item["symbol"] for item in scanner.get("instruments", [])
+                    if item.get("data_status") == "persisted"],
+                "status": health.get("state", "UNAVAILABLE"),
+                "last_successful_completed_cycle": health.get("last_success_at"),
+                "health": health},
+            "decisions": decisions[:20], "active_trades": active_trades,
+            "recent_trades": recent_trades,
+            "system": {"state": system,
+                "coverage": {symbol: value["data_status"] for symbol, value in symbols.items()},
+                "provenance": provenance_health, "stale_or_missing": missing},
+            "provenance": {"data_status": provenance_health.get("data_status", "unavailable"),
+                "observation_count": observation_count,
+                "schema": "canonical_decision_observations"},
+        }

@@ -17,6 +17,10 @@ OPTIONBEACON_CORS_ORIGINS=http://localhost:3000,https://app.example.com
 ```
 
 The default is only `http://localhost:3000`; wildcard origins are rejected. Phase 2 has no mutation, execution, authentication, or provider endpoints.
+
+The canonical React bootstrap contract is `GET /api/live/snapshot`. See
+[`docs/live-snapshot-api.md`](live-snapshot-api.md) for its versioned sections,
+source-of-truth mapping, strict null semantics, and read-only guarantee.
 # SPY/QQQ Options Desk and scalp research
 
 The React-ready, read-only contracts are:

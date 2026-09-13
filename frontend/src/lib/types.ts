@@ -172,7 +172,7 @@ export interface ScannerInstrument {
 }
 
 export interface ScannerLaneDecision {
-  lane:"OB"|"BROAD"; data_status:string; state:string|null; reason_code:string|null;
+  lane:"OB"|"BROAD"; data_status:string; decision_id?:string|null; state:string|null; reason_code:string|null;
   explanation:string|null; proposed_contract:string|null; proposed_quantity:number|null;
   proposed_capital_required:number|null; proposed_dollar_risk:number|null;
   proposed_account_risk_pct:number|null; decided_at:string|null;
@@ -197,4 +197,31 @@ export interface ScannerResponse {
   research_control_role:"RESEARCH_CONTROL_ONLY"; health:ScannerHealth;
   instruments:ScannerInstrument[]; opportunities:ScannerOpportunity[];
   recent_activity:ScannerActivity[]; sections:ScannerSectionStatus[];
+}
+
+export interface LiveDecision {
+  decision_id:string|null; opportunity_id:string; symbol:SymbolCode; lane:string;
+  timestamp:string|null; action:string|null; score:number|null; setup:string|null;
+  direction:string|null; reason_code:string|null; explanation:string|null;
+  observation_id:string|null; scan_cycle_id:string|null;
+}
+
+export interface LiveSymbolSnapshot {
+  symbol:SymbolCode; data_status:string;
+  observation:({observation_id:string;scan_cycle_id:string;observed_at:string;
+    underlying_price:number|null;direction:string|null;qualification_state:string;
+    reason_code:string;total_score:number|null;indicators:Record<string,number|null>} & Record<string,unknown>)|null;
+  scanner:ScannerInstrument & {canonical_observation?:Record<string,unknown>|null};
+  latest_decisions:ScannerLaneDecision[];
+}
+
+export interface LiveSnapshot {
+  schema_version:"1"; generated_at:string; data_status:string;
+  market:{session_date:string;session_state:string;last_authoritative_data_at:string|null;freshness:string};
+  symbols:Record<SymbolCode,LiveSymbolSnapshot>;
+  scanner:{cycle_id:string|null;cycle_timestamp:string|null;cycle_completion_state:string|null;
+    latest_processed_symbols:string[];status:string;last_successful_completed_cycle:string|null;health:ScannerHealth};
+  decisions:LiveDecision[]; active_trades:ActiveTrade[]; recent_trades:TradeRow[];
+  system:{state:SystemStatus;coverage:Record<SymbolCode,string>;provenance:Record<string,unknown>;stale_or_missing:string[]};
+  provenance:{data_status:string;observation_count:number;schema:string};
 }

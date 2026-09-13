@@ -6,7 +6,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import (capital, health, market, options_desk, provenance, scanner,
+from api.routes import (capital, health, live, market, options_desk, provenance, scanner,
                         system, trade_desk, trades)
 
 
@@ -23,7 +23,7 @@ def create_app(*, service=None) -> FastAPI:
         application.state.service = service
     application.add_middleware(CORSMiddleware, allow_origins=cors_origins(), allow_credentials=True,
         allow_methods=["GET"], allow_headers=["Accept", "Content-Type"])
-    for router in (health.router, market.router, trade_desk.router, options_desk.router,
+    for router in (health.router, live.router, market.router, trade_desk.router, options_desk.router,
                    trades.router, provenance.router, scanner.router, system.router,
                    capital.router):
         application.include_router(router, prefix="/api")

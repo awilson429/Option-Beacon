@@ -11,7 +11,7 @@ import { useSystemStatus } from "@/hooks/use-options-data";
 const groups = [
   { label:"Trade", items:[["Trade Desk","/",CircleGauge],["SPY / QQQ Options","/options",SlidersHorizontal],["Scanner","/scanner",ScanSearch],["Active Trades","/active-trades",Activity],["Journal","/journal",BookOpen]] },
   { label:"Analytics", items:[["Performance",null,ChartNoAxesCombined],["Research",null,SlidersHorizontal],["Reports",null,FileChartColumn]] },
-  { label:"System", items:[["Alerts",null,Bell],["Data Health",null,HeartPulse],["Settings",null,Settings]] },
+  { label:"System", items:[["Live Snapshot","/diagnostics/live-snapshot",HeartPulse],["Alerts",null,Bell],["Data Health",null,HeartPulse],["Settings",null,Settings]] },
 ] as const;
 
 function Brand() { return <div className="flex items-center gap-3"><div className="grid size-8 place-items-center rounded-lg border border-violet-400/30 bg-violet-400/10 text-sm font-black text-violet-200">OB</div><div><p className="text-sm font-bold tracking-tight text-white">OptionBeacon</p><p className="text-[9px] font-semibold uppercase tracking-[.18em] text-slate-600">Decision intelligence</p></div></div>; }
