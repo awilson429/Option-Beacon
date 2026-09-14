@@ -48,6 +48,10 @@ The browser uses same-origin paths only:
 
 `frontend/src/app/api/[...path]/route.ts` is a Node.js GET reverse proxy. It reads **runtime** `OPTIONBEACON_API_ORIGIN` and streams the FastAPI response body. This is not a `next.config` rewrite: rewrites can buffer SSE.
 
+The proxy does **not** use Node's global `fetch`/undici for FastAPI. Undici often ignores `--dns-result-order`, may try IPv4 first, and can time out (`UND_ERR_CONNECT_TIMEOUT`) against legacy IPv6-only `*.railway.internal`. Upstream calls use Node `http.request` with `family: 0` and `dns.lookup({ all: true })` ordered IPv6-first (IPv4-first only for localhost). Connect failures log hostname, port, resolved families/addresses, and error name/code/cause. They do not log secrets, `DATABASE_URL`, or request headers. There is no public diagnostic endpoint.
+
+Do not set `NODE_OPTIONS=--dns-result-order=ipv6first` as the primary fix; the custom lookup is the supported path. Do not hardcode a Railway private IP.
+
 Production Next.js does **not** set `NEXT_PUBLIC_OPTIONBEACON_API_URL`. The client bundle resolves an empty API base (`""`), so `EventSource` and `fetch` call `/api/...` on the Next origin.
 
 If production `OPTIONBEACON_API_ORIGIN` is missing, `/api/*` returns **503** and does not fall back to localhost. `next build` does not require the variable.

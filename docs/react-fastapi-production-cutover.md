@@ -48,6 +48,8 @@ python -m api.serve
 
 That entrypoint binds **both** `0.0.0.0` and `::` on `$PORT` in one Uvicorn process so Railway IPv4 healthchecks and legacy IPv6-only private DNS both succeed. Do not add `--workers N`. Do not attach a public domain.
 
+The Next.js server proxy must also be dual-stack aware: it uses Node `http.request` with `family: 0` and IPv6-first DNS lookup so `api.railway.internal` AAAA records are used. Global `fetch`/undici is not used for that hop.
+
 Local development still uses `--host 0.0.0.0` / `--reload` as documented in `frontend/README.md`.
 
 Health check path: `GET /api/health`. It reports API liveness and database reachability. It does **not** depend on market hours or scanner freshness.

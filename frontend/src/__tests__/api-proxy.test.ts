@@ -102,6 +102,32 @@ describe("server-side FastAPI upstream", () => {
     expect(chunks.join("")).toContain("snapshot.changed");
   });
 
+  it("logs hostname, port, and error fields when the upstream connect fails", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fetchImpl = vi.fn(async () => {
+      throw Object.assign(new Error("fetch failed"), {
+        name: "TypeError",
+        cause: {name: "ConnectTimeoutError", code: "UND_ERR_CONNECT_TIMEOUT", message: "Connect Timeout Error"},
+      });
+    });
+    const response = await proxyOptionBeaconApi(
+      new Request("http://localhost:3000/api/health"),
+      ["health"],
+      {OPTIONBEACON_API_ORIGIN: "http://api.railway.internal:8080", NODE_ENV: "production"},
+      fetchImpl,
+    );
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({detail: "FastAPI upstream is unreachable"});
+    const line = spy.mock.calls.map((call) => call.map(String).join(" ")).join("\n");
+    expect(line).toContain("api.proxy.upstream_unreachable");
+    expect(line).toContain("hostname=api.railway.internal");
+    expect(line).toContain("port=8080");
+    expect(line).toContain("errorName=TypeError");
+    expect(line).toContain("causeCode=UND_ERR_CONNECT_TIMEOUT");
+    expect(line).not.toContain("DATABASE_URL");
+    spy.mockRestore();
+  });
+
   it("fails closed when production origin is missing and does not call localhost", async () => {
     const fetchImpl = vi.fn();
     const response = await proxyOptionBeaconApi(

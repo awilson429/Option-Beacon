@@ -3,7 +3,10 @@
  * Do not import this module from Client Components; OPTIONBEACON_API_ORIGIN
  * must never appear in the browser bundle.
  */
+import {logUpstreamUnreachable, nodeHttpFetch} from "@/lib/upstream-connect";
+
 export type EnvLike = Record<string, string | undefined>;
+export type UpstreamFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 export type UpstreamResolution =
   | {ok: true; origin: string}
@@ -72,7 +75,7 @@ export async function proxyOptionBeaconApi(
   request: Request,
   path: string[],
   env: EnvLike = process.env,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: UpstreamFetch = nodeHttpFetch,
 ) {
   if (!pathIsSafe(path)) {
     return Response.json({detail: "Invalid API path"}, {status: 400, headers: {"Cache-Control": "no-store"}});
@@ -92,8 +95,8 @@ export async function proxyOptionBeaconApi(
       redirect: "manual",
       signal: request.signal,
     });
-  } catch {
-    console.error("api.proxy.upstream_unreachable");
+  } catch (error) {
+    await logUpstreamUnreachable(target, error);
     return Response.json({detail: "FastAPI upstream is unreachable"}, {status: 502, headers: {"Cache-Control": "no-store"}});
   }
   return new Response(upstream.body, {
