@@ -3,6 +3,7 @@ import {SWRConfig} from "swr";
 import {afterEach,describe,expect,it,vi} from "vitest";
 import Home from "@/app/page";
 import {SNAPSHOT_POLL_INTERVAL_MS} from "@/hooks/use-options-data";
+import {isAuthoritativeStale} from "@/components/trade-desk";
 import {snapshot,system} from "./live-snapshot-fixture";
 
 vi.mock("next/navigation",()=>({usePathname:()=>"/"}));
@@ -14,6 +15,17 @@ function renderHome(responses:(Response|Promise<Response>)[]=[Response.json(snap
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.useRealTimers()});
 
 const staleSnapshot={...snapshot,market:{...snapshot.market,freshness:"stale"},scanner:{...snapshot.scanner,status:"STALE"},system:{...snapshot.system,state:{...system,worker_status:"degraded"},stale_or_missing:["scanner_stale_or_unavailable"]}};
+const inProgressStaleSnapshot={
+  ...snapshot,
+  market:{...snapshot.market,freshness:"stale"},
+  scanner:{
+    ...snapshot.scanner,
+    status:"SCANNING",
+    cycle_completion_state:"SCANNING",
+    last_successful_completed_cycle:"2026-09-14T17:15:00Z",
+  },
+  system:{...snapshot.system,state:{...system,worker_status:"degraded",data_freshness:"stale"},stale_or_missing:["scanner_stale_or_unavailable"]},
+};
 
 describe("primary trading terminal",()=>{
  it("renders a healthy current snapshot with live TAKE treatment",async()=>{
@@ -52,6 +64,15 @@ describe("primary trading terminal",()=>{
   const qqq=await screen.findByTestId("setup-QQQ");
   expect(within(qqq).getAllByText("Unavailable").length).toBeGreaterThan(0);
   expect(within(qqq).queryByText("$0.00")).not.toBeInTheDocument();
+ });
+
+ it("does not show Current for an in-progress cycle whose last completed scan is stale",async()=>{
+  expect(isAuthoritativeStale(inProgressStaleSnapshot)).toBe(true);
+  renderHome([Response.json(inProgressStaleSnapshot)]);
+  const status=await screen.findByLabelText("Terminal status");
+  expect(status).toHaveTextContent("Stale");
+  expect(status).not.toHaveTextContent("Current");
+  expect(within(screen.getByTestId("setup-SPY")).getByText("STALE DATA")).toBeInTheDocument();
  });
 
  it("demotes a stale TAKE without changing it into WAIT or REJECTED and SSE does not override that",async()=>{

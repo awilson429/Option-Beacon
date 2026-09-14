@@ -50,7 +50,7 @@ from mirror_v2_shadow import (
     run_mirror_v2_shadow,
 )
 from filtered_execution import FilteredExecutionRepository, filtered_enabled, run_filtered_execution
-from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable
+from trade_repository import DEFAULT_SCANNER_ID, RepositoryUnavailable, utc_iso
 from trade_state_service import (
     list_trade_outcomes,
     process_scanner_result,
@@ -96,6 +96,59 @@ def _mark_provenance_failure(repository, scan_cycle_id, *, stage, exc, symbol=No
         )
     except Exception:
         LOGGER.exception("Could not mark decision provenance degraded")
+
+
+def _cycle_event(event, *, level=logging.INFO, **fields):
+    payload = {"event": event}
+    for key, value in fields.items():
+        if value is None:
+            continue
+        payload[key] = value.isoformat() if isinstance(value, datetime) else value
+    LOGGER.log(level, json.dumps(payload, sort_keys=True))
+
+
+def _finalize_scan_cycle(
+    repository, *, scanner_id, run_number, owner_id, cycle_id, completed_at,
+    symbols_attempted, symbol_count, results, failures, started_at, code_version,
+    market_data_state, error_message=None,
+):
+    _cycle_event(
+        "scanner_cycle_finalizing",
+        scanner_id=scanner_id, run_number=run_number, cycle_id=cycle_id,
+        symbol_count=symbol_count, completed_symbol_count=symbols_attempted,
+        results=results, failures=failures, market_data_state=market_data_state,
+        completed_at=completed_at,
+    )
+    persisted = repository.finish_scan_run(
+        scanner_id, run_number=run_number, owner_id=owner_id,
+        completed_at=completed_at, symbols_attempted=symbols_attempted,
+        symbol_count=symbol_count, results=results, failures=failures,
+        scan_duration=(completed_at - started_at).total_seconds(),
+        code_version=code_version, market_data_state=market_data_state,
+        error_message=error_message,
+    )
+    _cycle_event(
+        "scanner_cycle_persisted",
+        scanner_id=scanner_id, run_number=run_number, cycle_id=cycle_id,
+        health_row_updated=bool(persisted), success=error_message is None,
+        completed_at=completed_at,
+        last_success_at=utc_iso(completed_at) if persisted and error_message is None else None,
+    )
+    if persisted and error_message is None:
+        _cycle_event(
+            "scanner_cycle_completed",
+            scanner_id=scanner_id, run_number=run_number, cycle_id=cycle_id,
+            symbol_count=symbol_count, completed_symbol_count=symbols_attempted,
+            completed_at=completed_at,
+        )
+    elif not persisted:
+        _cycle_event(
+            "scanner_cycle_failed", level=logging.ERROR,
+            scanner_id=scanner_id, run_number=run_number, cycle_id=cycle_id,
+            stage="health_completion", error="health_row_not_updated",
+            exception_type="HealthRowNotUpdated",
+        )
+    return persisted
 
 
 def _finish_provenance_cycle(repository, scan_cycle_id, *, completed_at,
@@ -275,6 +328,11 @@ def run_scan_once(
             {"event": "scan_started", "scanner_id": scanner_id},
             sort_keys=True,
         )
+    )
+    _cycle_event(
+        "scanner_cycle_started",
+        scanner_id=scanner_id, run_number=run_number, cycle_id=provenance_cycle_id,
+        started_at=started, owner_id=owner,
     )
     try:
         stage = "market_data_cycle_start"
@@ -593,43 +651,45 @@ def run_scan_once(
             )
         if scan_phase_error is not None:
             completed = clock()
+            phase_error = f"{type(scan_phase_error).__name__}: scanner phase failed"
             with performance.measure("health_completion"):
-                repository.finish_scan_run(
-                    scanner_id, run_number=run_number, owner_id=owner,
-                    completed_at=completed, symbols_attempted=symbols_attempted,
-                    symbol_count=symbol_count, results=len(results), failures=failures,
-                    scan_duration=(completed - started).total_seconds(),
+                _finalize_scan_cycle(
+                    repository, scanner_id=scanner_id, run_number=run_number,
+                    owner_id=owner, cycle_id=provenance_cycle_id, completed_at=completed,
+                    symbols_attempted=symbols_attempted, symbol_count=symbol_count,
+                    results=len(results), failures=failures, started_at=started,
                     code_version=build["commit"], market_data_state="ERROR",
-                    error_message=f"{type(scan_phase_error).__name__}: scanner phase failed",
+                    error_message=phase_error,
                 )
             _finish_provenance_cycle(
                 repository, provenance_cycle_id, completed_at=completed,
                 cycle_status="ERROR", provider_state="ERROR",
                 symbols_evaluated=provenance_symbols, data_freshness="unavailable",
-                failure_reason=f"{type(scan_phase_error).__name__}: scanner phase failed",
+                failure_reason=phase_error,
             )
             return 1
         completed = clock()
         lease.ensure_owned()
-        with performance.measure("health_completion"):
-            repository.finish_scan_run(
-                scanner_id, run_number=run_number, owner_id=owner,
-                completed_at=completed, symbols_attempted=symbols_attempted,
-                symbol_count=symbol_count, results=len(results), failures=failures,
-                scan_duration=(completed - started).total_seconds(),
-                code_version=build["commit"],
-                market_data_state=(
-                    "AVAILABLE"
-                    if results and failures == 0
-                    else "PARTIAL"
-                    if results
-                    else "UNAVAILABLE"
-                ),
-            )
         final_provider_state = (
             "AVAILABLE" if results and failures == 0 else
             "PARTIAL" if results else "UNAVAILABLE"
         )
+        with performance.measure("health_completion"):
+            persisted = _finalize_scan_cycle(
+                repository, scanner_id=scanner_id, run_number=run_number,
+                owner_id=owner, cycle_id=provenance_cycle_id, completed_at=completed,
+                symbols_attempted=symbols_attempted, symbol_count=symbol_count,
+                results=len(results), failures=failures, started_at=started,
+                code_version=build["commit"], market_data_state=final_provider_state,
+            )
+        if not persisted:
+            _finish_provenance_cycle(
+                repository, provenance_cycle_id, completed_at=completed,
+                cycle_status="ERROR", provider_state="ERROR",
+                symbols_evaluated=provenance_symbols, data_freshness="unavailable",
+                failure_reason="health_row_not_updated",
+            )
+            return 1
         _finish_provenance_cycle(
             repository, provenance_cycle_id, completed_at=completed,
             cycle_status="COMPLETED", provider_state=final_provider_state,
@@ -645,22 +705,26 @@ def run_scan_once(
         }:
             LOGGER.exception(json.dumps({
                 "event": "paper_cycle_failed", "scanner_id": scanner_id,
-                "run_number": run_number, "stage": stage,
-                "error": type(exc).__name__,
+                "run_number": run_number, "cycle_id": provenance_cycle_id,
+                "stage": stage, "error": type(exc).__name__,
+                "exception_type": type(exc).__name__,
+                "completed_symbol_count": symbols_attempted, "symbol_count": symbol_count,
             }, sort_keys=True))
         else:
             LOGGER.exception(json.dumps({
                 "event": "scanner_cycle_failed", "scanner_id": scanner_id,
-                "run_number": run_number, "stage": stage,
-                "error": type(exc).__name__,
+                "run_number": run_number, "cycle_id": provenance_cycle_id,
+                "stage": stage, "error": type(exc).__name__,
+                "exception_type": type(exc).__name__,
+                "completed_symbol_count": symbols_attempted, "symbol_count": symbol_count,
             }, sort_keys=True))
         completed = clock()
         with performance.measure("health_completion"):
-            repository.finish_scan_run(
-                scanner_id, run_number=run_number, owner_id=owner,
-                completed_at=completed, symbols_attempted=symbols_attempted,
-                symbol_count=symbol_count, results=len(results), failures=failures,
-                scan_duration=(completed - started).total_seconds(),
+            _finalize_scan_cycle(
+                repository, scanner_id=scanner_id, run_number=run_number,
+                owner_id=owner, cycle_id=provenance_cycle_id, completed_at=completed,
+                symbols_attempted=symbols_attempted, symbol_count=symbol_count,
+                results=len(results), failures=failures, started_at=started,
                 code_version=build["commit"], market_data_state="ERROR",
                 error_message=f"{type(exc).__name__}: scanner failed",
             )

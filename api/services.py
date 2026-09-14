@@ -1000,9 +1000,13 @@ class OptionBeaconReadService:
         state_name = str(state.get("state") or "WAITING").upper()
         worker = {"SCANNING": "running", "CURRENT": "healthy",
                   "STALE": "degraded", "ERROR": "degraded"}.get(state_name, "unavailable")
-        freshness = "fresh" if state_name in {"SCANNING", "CURRENT"} else (
-            "stale" if state_name in {"STALE", "ERROR"} and state.get("last_success_at") else "unavailable"
-        )
+        success_at = parse_utc((raw or {}).get("last_success_at"))
+        success_age = (now - success_at).total_seconds() if success_at else None
+        freshness = "fresh" if (
+            state_name != "ERROR"
+            and success_age is not None
+            and success_age <= 900
+        ) else ("stale" if success_at else "unavailable")
         return {"state": state_name, "message": state.get("message") or "Scanner state is unavailable.",
                 "market_data_state": str(state.get("market_data_state") or "UNKNOWN"),
                 "worker_status": worker, "provider_status": "not_queried",
