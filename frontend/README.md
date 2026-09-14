@@ -27,7 +27,7 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:3000/` for the Trade Desk or `http://localhost:3000/options` for the Options Desk. Configure another API using `NEXT_PUBLIC_OPTIONBEACON_API_URL`.
+Configure another API using `NEXT_PUBLIC_OPTIONBEACON_API_URL`. An empty value uses same-origin `/api` (pair with server-only `OPTIONBEACON_API_ORIGIN` so Next can rewrite to FastAPI). Production topology is documented in `docs/react-fastapi-production-cutover.md`.
 
 For isolated visual development without FastAPI, run `pnpm dev:mock-api` in place of the Python command. The mock server is development-only and never participates in production builds. `GET http://localhost:8000/dev/snapshot-bump` changes the mock snapshot identity; `GET http://localhost:8000/dev/sse?enabled=0` disables SSE so polling fallback can be checked.
 

@@ -125,7 +125,7 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:3000`. The frontend reads the API URL from `NEXT_PUBLIC_OPTIONBEACON_API_URL` and defaults to the local FastAPI service documented in `frontend/.env.example`.
+Open `http://localhost:3000`. The frontend reads the API URL from `NEXT_PUBLIC_OPTIONBEACON_API_URL` and defaults to the local FastAPI service documented in `frontend/.env.example`. Production topology, CORS, health, and cutover checklist live in `docs/react-fastapi-production-cutover.md`.
 
 Run the retained Streamlit reference from the repository root:
 

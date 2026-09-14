@@ -1,10 +1,32 @@
 "use client";
 
-import {useEffect} from "react";
+import {useEffect, useRef} from "react";
 import useSWR from "swr";
 import {useLiveEvents, shouldRefreshSnapshot} from "@/hooks/use-live-events";
 import {fetchJson, endpoints} from "@/lib/api";
 import type {ActiveTrade, ComparisonResponse, JournalResponse, LiveSnapshot, PerformanceResponse, ScalpState, ScannerResponse, StrategyState, SymbolCode, SystemStatus, TradeDeskHome, TradeManagementSnapshot, TradeRow} from "@/lib/types";
+
+export function scheduleCoalescedRefresh(
+  inflight: {current: boolean},
+  queued: {current: boolean},
+  revalidate: () => Promise<unknown> | unknown,
+) {
+  const run = () => {
+    if (inflight.current) {
+      queued.current = true;
+      return;
+    }
+    inflight.current = true;
+    void Promise.resolve(revalidate()).finally(() => {
+      inflight.current = false;
+      if (queued.current) {
+        queued.current = false;
+        run();
+      }
+    });
+  };
+  run();
+}
 
 const config = { revalidateOnFocus: true, shouldRetryOnError: false, keepPreviousData: true };
 const configuredSnapshotPoll = Number(process.env.NEXT_PUBLIC_OPTIONBEACON_SNAPSHOT_POLL_MS);
@@ -56,11 +78,13 @@ export function useLiveSnapshot() {
 
   const snapshotId = snapshot.data?.snapshot_id;
   const revalidate = snapshot.mutate;
+  const inflight = useRef(false);
+  const queued = useRef(false);
   useEffect(() => {
     const event = events.lastEvent;
     if (!event) return;
     if (!shouldRefreshSnapshot(event, snapshotId)) return;
-    void revalidate();
+    scheduleCoalescedRefresh(inflight, queued, revalidate);
   }, [events.lastEvent, snapshotId, revalidate]);
 
   return {...snapshot, liveEventsStatus: events.status};

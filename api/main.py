@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager, suppress
 
@@ -9,9 +10,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.dependencies import default_service
-from api.live_events import LiveEventHub, run_identity_watcher
+from api.live_events import LiveEventHub, run_identity_watcher, watch_seconds
 from api.routes import (capital, health, live, market, options_desk, provenance, scanner,
                         system, trade_desk, trades)
+
+logger = logging.getLogger(__name__)
 
 
 def cors_origins(environ=None) -> list[str]:
@@ -27,10 +30,13 @@ def create_app(*, service=None) -> FastAPI:
         application.state.live_events = hub
         watched = service if service is not None else getattr(application.state, "service", None) or default_service()
         stop = asyncio.Event()
-        task = asyncio.create_task(run_identity_watcher(watched, hub, stop), name="optionbeacon-sse-watch")
+        interval = watch_seconds()
+        logger.info("sse.watch.started interval=%s", interval)
+        task = asyncio.create_task(run_identity_watcher(watched, hub, stop, interval=interval), name="optionbeacon-sse-watch")
         try:
             yield
         finally:
+            logger.info("sse.watch.stopped")
             stop.set()
             task.cancel()
             with suppress(asyncio.CancelledError):
@@ -41,7 +47,7 @@ def create_app(*, service=None) -> FastAPI:
         lifespan=lifespan)
     if service is not None:
         application.state.service = service
-    application.add_middleware(CORSMiddleware, allow_origins=cors_origins(), allow_credentials=True,
+    application.add_middleware(CORSMiddleware, allow_origins=cors_origins(), allow_credentials=False,
         allow_methods=["GET"],
         allow_headers=["Accept", "Content-Type", "Last-Event-ID", "Cache-Control"])
     for router in (health.router, live.router, market.router, trade_desk.router, options_desk.router,

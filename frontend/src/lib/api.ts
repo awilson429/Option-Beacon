@@ -1,7 +1,12 @@
 import type { ActiveTrade, ComparisonResponse, JournalResponse, LiveSnapshot, PerformanceResponse, ScalpState, ScannerResponse, StrategyState, SymbolCode, SystemStatus, TradeDeskHome, TradeManagementSnapshot, TradeRow } from "./types";
 
-const configuredBase = process.env.NEXT_PUBLIC_OPTIONBEACON_API_URL?.replace(/\/$/, "");
-export const API_BASE_URL = configuredBase || "http://localhost:8000";
+export function resolveApiBaseUrl(raw: string | undefined = process.env.NEXT_PUBLIC_OPTIONBEACON_API_URL) {
+  if (raw === "") return "";
+  if (raw == null) return "http://localhost:8000";
+  return raw.replace(/\/$/, "");
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }

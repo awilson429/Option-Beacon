@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -6,15 +8,20 @@ from api.live_events import stream_live_events
 from api.schemas.live import LiveSnapshotResponse
 from api.serialization import normalize_json_value
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["live snapshot"])
 
 
 @router.get("/live/snapshot", response_model=LiveSnapshotResponse,
             summary="Canonical persisted OptionBeacon snapshot")
 def live_snapshot(service=Depends(get_service)):
-    validated = LiveSnapshotResponse.model_validate(
-        normalize_json_value(service.live_snapshot()))
-    return JSONResponse(content=normalize_json_value(validated.model_dump()))
+    try:
+        validated = LiveSnapshotResponse.model_validate(
+            normalize_json_value(service.live_snapshot()))
+        return JSONResponse(content=normalize_json_value(validated.model_dump()))
+    except Exception:
+        logger.exception("live.snapshot.fetch_failed")
+        raise
 
 
 @router.get("/live/events", summary="Authoritative snapshot-change events")

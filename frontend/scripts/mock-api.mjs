@@ -49,7 +49,7 @@ const sseClients=new Set();
 const cors=(response,request)=>{
   const origin=request?.headers?.origin;
   response.setHeader("Access-Control-Allow-Origin",origin==="http://localhost:3001"?origin:"http://localhost:3000");
-  response.setHeader("Access-Control-Allow-Credentials","true");
+  response.setHeader("Access-Control-Allow-Credentials","false");
   response.setHeader("Access-Control-Allow-Methods","GET, OPTIONS");
   response.setHeader("Access-Control-Allow-Headers","Accept, Content-Type, Last-Event-ID, Cache-Control");
 };

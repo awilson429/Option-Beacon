@@ -128,13 +128,15 @@ def test_snapshot_identity_is_deterministic_for_unchanged_persisted_state():
     assert first["snapshot_id"] != str(first["generated_at"])
 
 
-def test_snapshot_cursor_exposes_persisted_identity():
+def test_snapshot_cursor_skips_system_status_and_matches_snapshot_identity():
     service = ProjectionService()
     cursor = service.live_snapshot_cursor()
     snapshot = service.live_snapshot()
     assert cursor["snapshot_id"] == snapshot["snapshot_id"]
     assert cursor["cycle_id"] == snapshot["scanner"]["cycle_id"]
     assert cursor["occurred_at"] == snapshot["generated_at"]
+    assert service.calls.count("system_status") == 1
+    assert service.calls.count("scanner") >= 2
 
 
 def test_snapshot_identity_changes_when_persisted_cycle_changes():

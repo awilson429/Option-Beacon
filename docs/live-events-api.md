@@ -16,6 +16,8 @@ There is no durable outbox or `LISTEN/NOTIFY` bus in this repository. The FastAP
 2. Re-reads `live_snapshot_cursor()` on `OPTIONBEACON_SSE_WATCH_SECONDS` (default 1s).
 3. Publishes `snapshot.changed` only after the persisted `snapshot_id` digest changes.
 
+`live_snapshot_cursor()` hashes the same committed identities as `GET /api/live/snapshot` but skips `system_status`. Multiple API processes each run a watcher; missed/duplicated events are corrected by REST resync. Prefer a single Uvicorn worker.
+
 The first observed identity is stored without publishing; the SSE handshake already emits the current `snapshot_id`. Missed events cannot be replayed after process restart.
 
 ## Endpoint
@@ -85,9 +87,9 @@ Manual Refresh still calls `mutate()` on the snapshot cache. A dropped SSE conne
 
 ## Auth, CORS, and proxy
 
-The current API has no access-token middleware; `fetchJson` sends only `Accept: application/json`. Native `EventSource` therefore uses the same unauthenticated cross-origin GET as the snapshot client, with CORS allow-list origins from `OPTIONBEACON_CORS_ORIGINS` (default `http://localhost:3000`). `Last-Event-ID` is an allowed request header so browser reconnect can preflight.
+The current API has no access-token middleware; `fetchJson` sends only `Accept: application/json`. Native `EventSource` therefore uses the same unauthenticated GET as the snapshot client. CORS is an allow-list from `OPTIONBEACON_CORS_ORIGINS` (default `http://localhost:3000`). Wildcards are rejected. Credentials are disabled because the client does not use cookies. `Last-Event-ID` is an allowed request header so browser reconnect can preflight.
 
-No Next.js rewrite proxy was added. Native `EventSource` cannot set `Authorization`. If `OPTIONBEACON_ACCESS_TOKEN` is introduced later, use a same-origin Next proxy or cookie-compatible transport rather than weakening auth for EventSource.
+Production should prefer a same-origin Next rewrite (`OPTIONBEACON_API_ORIGIN` + empty `NEXT_PUBLIC_OPTIONBEACON_API_URL`) so EventSource does not depend on cross-origin CORS. Native `EventSource` cannot set `Authorization`. If `OPTIONBEACON_ACCESS_TOKEN` is introduced later, keep the same-origin proxy or cookie-compatible transport rather than weakening auth. See `docs/react-fastapi-production-cutover.md`.
 
 ## Configuration
 

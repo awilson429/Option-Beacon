@@ -3,7 +3,8 @@ import {SWRConfig} from "swr";
 import {afterEach,describe,expect,it,vi} from "vitest";
 import Home from "@/app/page";
 import {parseLiveEvent,shouldRefreshSnapshot,useLiveEvents} from "@/hooks/use-live-events";
-import {SNAPSHOT_POLL_INTERVAL_MS,SNAPSHOT_SAFETY_POLL_INTERVAL_MS} from "@/hooks/use-options-data";
+import {SNAPSHOT_POLL_INTERVAL_MS,SNAPSHOT_SAFETY_POLL_INTERVAL_MS,scheduleCoalescedRefresh} from "@/hooks/use-options-data";
+import {resolveApiBaseUrl} from "@/lib/api";
 import {snapshot,system} from "./live-snapshot-fixture";
 
 class FakeEventSource {
@@ -64,6 +65,31 @@ describe("live event helpers",()=>{
     expect(shouldRefreshSnapshot(envelope({snapshot_id:snapshot.snapshot_id}),snapshot.snapshot_id)).toBe(false);
     expect(shouldRefreshSnapshot(envelope({snapshot_id:"other"}),snapshot.snapshot_id)).toBe(true);
     expect(shouldRefreshSnapshot(envelope({event_type:"trade.opened"}),snapshot.snapshot_id)).toBe(false);
+  });
+
+  it("resolves production, same-origin, and development API bases",()=>{
+    expect(resolveApiBaseUrl(undefined)).toBe("http://localhost:8000");
+    expect(resolveApiBaseUrl("")).toBe("");
+    expect(resolveApiBaseUrl("https://api.example.com/")).toBe("https://api.example.com");
+  });
+
+  it("coalesces overlapping snapshot refreshes into one in-flight plus one trailing call",async()=>{
+    const inflight={current:false};
+    const queued={current:false};
+    let started=0;
+    let releaseFirst!:()=>void;
+    const first=new Promise<void>(resolve=>{releaseFirst=resolve});
+    const revalidate=vi.fn(()=>{
+      started+=1;
+      return started===1 ? first : Promise.resolve();
+    });
+    scheduleCoalescedRefresh(inflight,queued,revalidate);
+    scheduleCoalescedRefresh(inflight,queued,revalidate);
+    scheduleCoalescedRefresh(inflight,queued,revalidate);
+    expect(revalidate).toHaveBeenCalledTimes(1);
+    releaseFirst();
+    await first;
+    await waitFor(()=>expect(revalidate).toHaveBeenCalledTimes(2));
   });
 });
 
@@ -127,6 +153,7 @@ describe("Market Command SSE client",()=>{
     await screen.findByRole("heading",{name:"Market Command"});
     act(()=>{FakeEventSource.instances[0].open(); FakeEventSource.instances[0].fail(true)});
     await act(async()=>{await vi.advanceTimersByTimeAsync(2_000)});
+    expect(FakeEventSource.instances[0].readyState).toBe(FakeEventSource.CLOSED);
     expect(FakeEventSource.instances).toHaveLength(2);
     act(()=>{
       FakeEventSource.instances[1].open();

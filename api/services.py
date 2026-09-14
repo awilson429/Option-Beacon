@@ -1212,10 +1212,7 @@ class OptionBeaconReadService:
                 "health": health, "instruments": instruments, "opportunities": opportunities,
                 "recent_activity": activity[:16], "sections": sections}
 
-    def live_snapshot(self):
-        """Compose bounded persisted projections without strategy or provider execution."""
-        now = self._now()
-        scanner = self.scanner()
+    def _bounded_snapshot_trades(self):
         try:
             active_trades = self.active_trades()
         except Exception:
@@ -1224,7 +1221,10 @@ class OptionBeaconReadService:
             recent_trades = self.recent_trades(20)
         except Exception:
             recent_trades = []
-        system = self.system_status()
+        return active_trades, recent_trades
+
+    def _live_snapshot_identity(self, scanner, active_trades, recent_trades):
+        """Digest committed identities only. Keep REST and SSE cursor hashes aligned."""
         instruments = {item["symbol"]: item for item in scanner.get("instruments", [])}
         opportunities = scanner.get("opportunities") or []
         symbols = {}
@@ -1293,36 +1293,58 @@ class OptionBeaconReadService:
         }
         snapshot_id = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:20]
         return {
-            "schema_version": "1", "snapshot_id": snapshot_id, "generated_at": now,
-            "data_status": "persisted" if not missing else "partial" if any_symbol else "unavailable",
+            "snapshot_id": snapshot_id,
+            "symbols": symbols,
+            "decisions": decisions[:20],
+            "observation_count": observation_count,
+            "missing": missing,
+            "any_symbol": any_symbol,
+            "health": health,
+            "provenance_health": provenance_health,
+            "last_data": last_data,
+        }
+
+    def live_snapshot(self):
+        """Compose bounded persisted projections without strategy or provider execution."""
+        now = self._now()
+        scanner = self.scanner()
+        active_trades, recent_trades = self._bounded_snapshot_trades()
+        assembled = self._live_snapshot_identity(scanner, active_trades, recent_trades)
+        system = self.system_status()
+        return {
+            "schema_version": "1", "snapshot_id": assembled["snapshot_id"], "generated_at": now,
+            "data_status": "persisted" if not assembled["missing"] else "partial" if assembled["any_symbol"] else "unavailable",
             "market": {"session_date": now.astimezone(EASTERN).date(),
                 "session_state": scanner.get("market_status", "unavailable"),
-                "last_authoritative_data_at": last_data,
-                "freshness": health.get("data_freshness", "unavailable")},
-            "symbols": symbols,
-            "scanner": {"cycle_id": provenance_health.get("scan_cycle_id"),
-                "cycle_timestamp": provenance_health.get("started_at"),
-                "cycle_completion_state": provenance_health.get("cycle_status"),
+                "last_authoritative_data_at": assembled["last_data"],
+                "freshness": assembled["health"].get("data_freshness", "unavailable")},
+            "symbols": assembled["symbols"],
+            "scanner": {"cycle_id": assembled["provenance_health"].get("scan_cycle_id"),
+                "cycle_timestamp": assembled["provenance_health"].get("started_at"),
+                "cycle_completion_state": assembled["provenance_health"].get("cycle_status"),
                 "latest_processed_symbols": [item["symbol"] for item in scanner.get("instruments", [])
                     if item.get("data_status") == "persisted"],
-                "status": health.get("state", "UNAVAILABLE"),
-                "last_successful_completed_cycle": health.get("last_success_at"),
-                "health": health},
-            "decisions": decisions[:20], "active_trades": active_trades,
+                "status": assembled["health"].get("state", "UNAVAILABLE"),
+                "last_successful_completed_cycle": assembled["health"].get("last_success_at"),
+                "health": assembled["health"]},
+            "decisions": assembled["decisions"], "active_trades": active_trades,
             "recent_trades": recent_trades,
             "system": {"state": system,
-                "coverage": {symbol: value["data_status"] for symbol, value in symbols.items()},
-                "provenance": provenance_health, "stale_or_missing": missing},
-            "provenance": {"data_status": provenance_health.get("data_status", "unavailable"),
-                "observation_count": observation_count,
+                "coverage": {symbol: value["data_status"] for symbol, value in assembled["symbols"].items()},
+                "provenance": assembled["provenance_health"], "stale_or_missing": assembled["missing"]},
+            "provenance": {"data_status": assembled["provenance_health"].get("data_status", "unavailable"),
+                "observation_count": assembled["observation_count"],
                 "schema": "canonical_decision_observations"},
         }
 
     def live_snapshot_cursor(self):
-        """Persisted identity only. Used by SSE to detect committed snapshot changes."""
-        snapshot = self.live_snapshot()
+        """Persisted identity only. Skips system_status; hash matches live_snapshot."""
+        now = self._now()
+        scanner = self.scanner()
+        active_trades, recent_trades = self._bounded_snapshot_trades()
+        assembled = self._live_snapshot_identity(scanner, active_trades, recent_trades)
         return {
-            "snapshot_id": snapshot["snapshot_id"],
-            "cycle_id": snapshot["scanner"]["cycle_id"],
-            "occurred_at": snapshot["generated_at"],
+            "snapshot_id": assembled["snapshot_id"],
+            "cycle_id": assembled["provenance_health"].get("scan_cycle_id"),
+            "occurred_at": now,
         }

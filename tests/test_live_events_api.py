@@ -9,8 +9,8 @@ from starlette.requests import Request
 
 import api.live_events
 from api.live_events import (EVENT_RESYNC_REQUIRED, EVENT_SNAPSHOT_CHANGED, LiveEventHub,
-                             apply_cursor, encode_heartbeat, encode_sse, parse_event_frame,
-                             stream_live_events)
+                             apply_cursor, encode_heartbeat, encode_sse, heartbeat_seconds,
+                             parse_event_frame, stream_live_events, watch_seconds)
 from api.main import create_app
 from api.routes import live as live_routes
 from tests.test_live_snapshot_api import ProjectionService
@@ -168,3 +168,17 @@ def test_openapi_includes_live_events():
     schema = TestClient(create_app(service=ProjectionService())).get("/openapi.json").json()
     assert "/api/live/events" in schema["paths"]
     assert "/api/live/snapshot" in schema["paths"]
+
+
+def test_sse_handshake_skips_system_status():
+    service = ProjectionService()
+    _frames(service, 1)
+    assert "system_status" not in service.calls
+    assert "scanner" in service.calls
+
+
+def test_watch_and_heartbeat_intervals_reject_invalid_values(monkeypatch):
+    monkeypatch.setenv("OPTIONBEACON_SSE_WATCH_SECONDS", "0")
+    monkeypatch.setenv("OPTIONBEACON_SSE_HEARTBEAT_SECONDS", "nope")
+    assert watch_seconds() == 1.0
+    assert heartbeat_seconds() == 15.0

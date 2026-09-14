@@ -57,6 +57,11 @@ export function useLiveEvents() {
 
     const connect = () => {
       if (cancelled) return;
+      if (reconnect) {
+        clearTimeout(reconnect);
+        reconnect = undefined;
+      }
+      source?.close();
       try {
         source = new EventSource(liveEventsUrl());
       } catch {

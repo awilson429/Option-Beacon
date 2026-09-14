@@ -149,6 +149,36 @@ def test_openapi_and_safe_cors_configuration():
     assert "/api/trade-desk/{symbol}" in schema["paths"]
     assert cors_origins({}) == ["http://localhost:3000"]
     assert cors_origins({"OPTIONBEACON_CORS_ORIGINS": "*, https://example.com"}) == ["https://example.com"]
+    assert cors_origins({"OPTIONBEACON_CORS_ORIGINS": "*"}) == []
+    preflight = client().options("/api/health", headers={
+        "Origin": "http://localhost:3000",
+        "Access-Control-Request-Method": "GET",
+        "Access-Control-Request-Headers": "last-event-id",
+    })
+    assert preflight.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    assert "last-event-id" in (preflight.headers.get("access-control-allow-headers") or "").lower()
+    assert preflight.headers.get("access-control-allow-credentials") != "true"
+
+
+def test_health_is_liveness_not_market_or_scanner_freshness():
+    class StaleMarket(FakeService):
+        def system_status(self):
+            body = super().system_status()
+            body["market_status"] = "closed"
+            body["data_freshness"] = "stale"
+            body["worker_status"] = "unavailable"
+            return body
+
+    body = client(StaleMarket()).get("/api/health").json()
+    assert body["api"] == "online"
+    assert body["database"] == "connected"
+    assert body["status"] == "ok"
+    assert "market" not in body and "freshness" not in body
+    assert client(StaleMarket()).get("/api/system/status").json()["data_freshness"] == "stale"
+    degraded = client(FakeService(False)).get("/api/health").json()
+    assert degraded["api"] == "online"
+    assert degraded["database"] == "unavailable"
+    assert degraded["status"] == "degraded"
 
 
 def test_api_import_has_no_streamlit_dependency_and_repository_is_read_only():

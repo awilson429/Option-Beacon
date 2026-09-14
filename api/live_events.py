@@ -185,6 +185,7 @@ async def run_identity_watcher(
 ) -> None:
     last_id: str | None = None
     delay = interval if interval is not None else watch_seconds()
+    logger.info("sse.watch.loop interval=%s", delay)
     while not stop.is_set():
         try:
             cursor = read_snapshot_cursor(service)
