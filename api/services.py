@@ -1317,3 +1317,12 @@ class OptionBeaconReadService:
                 "observation_count": observation_count,
                 "schema": "canonical_decision_observations"},
         }
+
+    def live_snapshot_cursor(self):
+        """Persisted identity only. Used by SSE to detect committed snapshot changes."""
+        snapshot = self.live_snapshot()
+        return {
+            "snapshot_id": snapshot["snapshot_id"],
+            "cycle_id": snapshot["scanner"]["cycle_id"],
+            "occurred_at": snapshot["generated_at"],
+        }

@@ -24,6 +24,7 @@ export const endpoints = {
   recentTrades: "/api/trades/recent?limit=12",
   scanner: "/api/scanner",
   liveSnapshot: "/api/live/snapshot",
+  liveEvents: "/api/live/events",
   journal: (query:string) => `/api/trades/history?${query}`,
   managementHistory: (tradeId:string,lane:string) => `/api/trades/${encodeURIComponent(tradeId)}/management?lane=${encodeURIComponent(lane)}`,
 } as const;

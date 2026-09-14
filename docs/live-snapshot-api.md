@@ -43,7 +43,7 @@ The serialization boundary converts `datetime`, `date`, `Decimal`, pandas timest
 
 The temporary internal page is `/diagnostics/live-snapshot`. It polls the snapshot every 15 seconds through the shared typed client and displays connection state, SPY/QQQ coverage, the latest scanner cycle, decisions, active/recent trade counts, and stale/missing health. It is a contract-validation view, not the production trading terminal.
 
-The client contract is `LiveSnapshot` in `frontend/src/lib/types.ts`; `api.liveSnapshot()` and `useLiveSnapshot()` are the direct client and SWR hook.
+The client contract is `LiveSnapshot` in `frontend/src/lib/types.ts`; `api.liveSnapshot()` and `useLiveSnapshot()` are the direct client and SWR hook. Prompt updates use `GET /api/live/events` as described in `docs/live-events-api.md`; the REST snapshot remains canonical.
 
 ## Performance shape
 

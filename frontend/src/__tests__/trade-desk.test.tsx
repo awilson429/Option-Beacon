@@ -54,7 +54,7 @@ describe("primary trading terminal",()=>{
   expect(within(qqq).queryByText("$0.00")).not.toBeInTheDocument();
  });
 
- it("demotes a stale TAKE without changing it into WAIT or REJECTED",async()=>{
+ it("demotes a stale TAKE without changing it into WAIT or REJECTED and SSE does not override that",async()=>{
   renderHome([Response.json(staleSnapshot)]);
   const alert=await screen.findByRole("alert");
   expect(alert).toHaveTextContent("scanner_stale_or_unavailable");

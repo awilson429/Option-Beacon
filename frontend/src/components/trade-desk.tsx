@@ -220,7 +220,7 @@ function RecentTrades({trades}:{trades:TradeRow[]}){
   </section>;
 }
 
-function Health({data}:{data:LiveSnapshot}){
+function Health({data,sse}:{data:LiveSnapshot;sse:string}){
   const s=data.system.state;
   return <section className="surface-tight px-3.5 py-2" aria-labelledby="health-heading">
     <div className="flex flex-wrap items-center gap-2">
@@ -246,6 +246,7 @@ function Health({data}:{data:LiveSnapshot}){
         <div><dt className="metric-label">Market</dt><dd>{label(data.market.session_state)}</dd></div>
         <div><dt className="metric-label">Worker last success</dt><dd>{clock(s.worker_last_success)}</dd></div>
         <div><dt className="metric-label">Provider</dt><dd>{label(s.provider_status)}</dd></div>
+        <div><dt className="metric-label">SSE</dt><dd data-testid="sse-status">{sse==="open"?"Open":sse==="connecting"?"Connecting":sse==="closed"?"Closed":"Unavailable"}</dd></div>
       </dl>
     </details>
   </section>;
@@ -263,7 +264,7 @@ export function TradeDesk(){
     <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2"><SetupCard item={data.symbols.SPY} stale={stale} data={data}/><SetupCard item={data.symbols.QQQ} stale={stale} data={data}/></div>
     <div className="mt-3 min-w-0"><Positions trades={data.active_trades}/></div>
     <div className="mt-3 grid min-w-0 items-start gap-3 xl:grid-cols-2"><DecisionFeed data={data} stale={stale}/><RecentTrades trades={data.recent_trades}/></div>
-    <div className="mt-3"><Health data={data}/></div>
+    <div className="mt-3"><Health data={data} sse={snapshot.liveEventsStatus}/></div>
     <footer className="mt-3 flex items-center gap-2 text-[10px] text-slate-600"><Database size={12} aria-hidden/>Presentation only. No provider calls, strategy evaluation, or trading actions occur in this interface.</footer>
   </div>;
 }

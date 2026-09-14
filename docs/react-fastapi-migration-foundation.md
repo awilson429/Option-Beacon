@@ -52,11 +52,12 @@ Navigation and form state belong in React. Scanner, trade, lifecycle, provenance
 
 ### Existing API, worker, and asynchronous boundaries
 
-- `api/main.py` creates the FastAPI application and applies explicit-origin CORS.
-- `api/routes/` exposes health, system, market, scanner, trade desk, options desk, trades, capital, and provenance reads.
+- `api/main.py` creates the FastAPI application, applies explicit-origin CORS, and starts one process-local live-snapshot identity watcher for SSE.
+- `api/routes/` exposes health, system, market, scanner, trade desk, options desk, trades, capital, provenance, the canonical live snapshot, and read-only live events.
 - `api/services.py` is the read-only projection/service boundary and uses read-only database transactions.
+- `api/live_events.py` fans out committed `snapshot_id` changes. It does not run strategy logic or write trade state.
 - `optionbeacon/worker/run.py` owns the long-running scan/persistence loop; `lock_lease.py` uses a background heartbeat thread for lease ownership.
-- No WebSocket or SSE transport is present yet. Adding one should publish persisted worker events/snapshots and must not run strategy logic inside the API process.
+- SSE publishes process-local `snapshot.changed` / `resync.required` envelopes. Replay is not durable; REST `GET /api/live/snapshot` remains the resynchronization source. See `docs/live-events-api.md`.
 
 ## UI-shaped return values requiring care
 
@@ -132,6 +133,6 @@ Run the retained Streamlit reference from the repository root:
 python -m streamlit run app.py
 ```
 
-## Recommended Task 2
+## Recommended next live-transport work
 
-Define an additive live-update contract for canonical scanner and trade lifecycle snapshots. Start with an event envelope (`event_id`, `event_type`, `occurred_at`, `entity_id`, `version`, and typed payload), expose a REST snapshot/cursor endpoint, then add SSE for one-way updates with reconnect and replay from the last event ID. The worker or an outbox table should publish committed events; FastAPI should relay them without evaluating strategies or writing trade state. Keep polling as a fallback until parity, ordering, reconnect, and provenance tests pass.
+Keep REST snapshots canonical. A later durable outbox could add granular `decision.committed` / `trade.*` events with true replay. Until then, `snapshot.changed` plus `resync.required` is the honest contract; do not invent event types from frontend diffs.

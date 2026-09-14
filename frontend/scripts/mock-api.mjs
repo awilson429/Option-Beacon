@@ -42,4 +42,87 @@ const routes={
   },
 };
 
-http.createServer((request,response)=>{let body=routes[request.url];if(request.url?.startsWith("/api/trades/history?"))body=journalPayload;if(request.url?.startsWith("/api/trades/OB%3Ajournal-1/management?"))body=journalManagement;response.setHeader("Access-Control-Allow-Origin","http://localhost:3000");response.setHeader("Content-Type","application/json");response.writeHead(body?200:404);response.end(JSON.stringify(body||{detail:"Not found"}))}).listen(8000,()=>console.log("OptionBeacon mock API on http://localhost:8000"));
+let snapshotSeq=1;
+let eventSeq=0;
+let sseEnabled=true;
+const sseClients=new Set();
+const cors=(response,request)=>{
+  const origin=request?.headers?.origin;
+  response.setHeader("Access-Control-Allow-Origin",origin==="http://localhost:3001"?origin:"http://localhost:3000");
+  response.setHeader("Access-Control-Allow-Credentials","true");
+  response.setHeader("Access-Control-Allow-Methods","GET, OPTIONS");
+  response.setHeader("Access-Control-Allow-Headers","Accept, Content-Type, Last-Event-ID, Cache-Control");
+};
+const liveSnapshot=()=>routes["/api/live/snapshot"];
+const envelope=(eventType,snapshotId,entityId=snapshotId)=>({
+  event_id:`${snapshotId||"none"}:${++eventSeq}`,
+  event_type:eventType,
+  occurred_at:new Date().toISOString(),
+  snapshot_id:snapshotId,
+  cycle_id:liveSnapshot().scanner.cycle_id,
+  entity_id:entityId,
+  schema_version:"1",
+});
+const writeSse=(response,event)=>{
+  response.write(`id: ${event.event_id}\n`);
+  response.write(`event: ${event.event_type}\n`);
+  response.write(`data: ${JSON.stringify(event)}\n\n`);
+};
+const bumpSnapshot=()=>{
+  snapshotSeq+=1;
+  const payload=liveSnapshot();
+  payload.snapshot_id=`mock-snapshot-${String(snapshotSeq).padStart(3,"0")}`;
+  payload.generated_at=new Date().toISOString();
+  payload.market.last_authoritative_data_at=payload.generated_at;
+  payload.symbols.SPY.scanner.score=83+snapshotSeq;
+  if(payload.symbols.SPY.observation) payload.symbols.SPY.observation.total_score=83+snapshotSeq;
+  const event=envelope("snapshot.changed",payload.snapshot_id);
+  for(const client of sseClients) writeSse(client,event);
+  return payload;
+};
+http.createServer((request,response)=>{
+  cors(response,request);
+  const url=new URL(request.url||"/","http://localhost:8000");
+  if(request.method==="OPTIONS"){response.writeHead(204);response.end();return;}
+  if(url.pathname==="/dev/snapshot-bump"){
+    response.setHeader("Content-Type","application/json");
+    response.writeHead(200);
+    response.end(JSON.stringify({ok:true,snapshot_id:bumpSnapshot().snapshot_id}));
+    return;
+  }
+  if(url.pathname==="/dev/sse"){
+    sseEnabled=url.searchParams.get("enabled")!=="0";
+    if(!sseEnabled){
+      for(const client of sseClients) client.end();
+      sseClients.clear();
+    }
+    response.setHeader("Content-Type","application/json");
+    response.writeHead(200);
+    response.end(JSON.stringify({ok:true,sse_enabled:sseEnabled}));
+    return;
+  }
+  if(url.pathname==="/api/live/events"){
+    if(!sseEnabled){response.writeHead(503);response.end();return;}
+    response.writeHead(200,{
+      "Content-Type":"text/event-stream",
+      "Cache-Control":"no-cache, no-transform",
+      Connection:"keep-alive",
+      "X-Accel-Buffering":"no",
+    });
+    const snapshotId=liveSnapshot().snapshot_id;
+    const lastEventId=request.headers["last-event-id"];
+    writeSse(response,envelope(lastEventId?"resync.required":"snapshot.changed",snapshotId,lastEventId||snapshotId));
+    sseClients.add(response);
+    request.on("close",()=>sseClients.delete(response));
+    return;
+  }
+  let body=routes[request.url];
+  if(request.url?.startsWith("/api/trades/history?")) body=journalPayload;
+  if(request.url?.startsWith("/api/trades/OB%3Ajournal-1/management?")) body=journalManagement;
+  response.setHeader("Content-Type","application/json");
+  response.writeHead(body?200:404);
+  response.end(JSON.stringify(body||{detail:"Not found"}));
+}).listen(8000,()=>{
+  setInterval(()=>{for(const client of sseClients) client.write(": heartbeat\n\n")},15_000).unref();
+  console.log("OptionBeacon mock API on http://localhost:8000");
+});

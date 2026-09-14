@@ -4,11 +4,11 @@ The primary OptionBeacon application is the snapshot-driven Market Command termi
 
 ## Primary terminal state
 
-The root dashboard polls only `GET /api/live/snapshot` for trading state. The default interval is 15 seconds and can be configured with `NEXT_PUBLIC_OPTIONBEACON_SNAPSHOT_POLL_MS` (minimum 1000 ms). SWR prevents full-page reloads, retains the prior valid snapshot during revalidation, and reports a transient connection failure separately from the authoritative freshness and health carried by that snapshot.
+The root dashboard loads trading state from `GET /api/live/snapshot`. `GET /api/live/events` is a same-envelope SSE change signal: when the connection is open, snapshot revalidation is event-driven with a slower safety poll (`NEXT_PUBLIC_OPTIONBEACON_SNAPSHOT_SAFETY_POLL_MS`, default 60 seconds). If EventSource is missing, the stream errors, or SSE is disabled, the existing REST poll (`NEXT_PUBLIC_OPTIONBEACON_SNAPSHOT_POLL_MS`, default 15 seconds) remains the safety net. SWR prevents full-page reloads, retains the prior valid snapshot during revalidation, and reports a transient connection failure separately from the authoritative freshness and health carried by that snapshot. SSE transport state is not snapshot freshness.
 
 Missing numeric values render as `Unavailable`, never zero. Stale, missing, unavailable, rejected, blocked, and disconnected states have separate visual treatments. Indicator values are displayed only from the persisted canonical observation; the browser performs no strategy calculations.
 
-Future SSE delivery should invalidate or replace this same versioned snapshot cache. REST remains the bootstrap, reconnect, and resynchronization source, keyed by deterministic `snapshot_id` and authoritative cycle metadata.
+Future durable event logs can add granular lifecycle types. REST remains the bootstrap, reconnect, and resynchronization source, keyed by deterministic `snapshot_id` and authoritative cycle metadata. See `docs/live-events-api.md`.
 
 ## Local development
 
@@ -29,7 +29,7 @@ pnpm dev
 
 Open `http://localhost:3000/` for the Trade Desk or `http://localhost:3000/options` for the Options Desk. Configure another API using `NEXT_PUBLIC_OPTIONBEACON_API_URL`.
 
-For isolated visual development without FastAPI, run `pnpm dev:mock-api` in place of the Python command. The mock server is development-only and never participates in production builds.
+For isolated visual development without FastAPI, run `pnpm dev:mock-api` in place of the Python command. The mock server is development-only and never participates in production builds. `GET http://localhost:8000/dev/snapshot-bump` changes the mock snapshot identity; `GET http://localhost:8000/dev/sse?enabled=0` disables SSE so polling fallback can be checked.
 
 ## Refresh policy
 

@@ -215,6 +215,13 @@ export interface LiveSymbolSnapshot {
   latest_decisions:ScannerLaneDecision[];
 }
 
+export interface LiveEventEnvelope {
+  event_id:string; event_type:string; occurred_at:string;
+  snapshot_id:string|null; cycle_id:string|null; entity_id:string|null; schema_version:"1"|string;
+}
+
+export type LiveEventStatus = "connecting"|"open"|"closed"|"unavailable";
+
 export interface LiveSnapshot {
   schema_version:"1"; snapshot_id:string; generated_at:string; data_status:string;
   market:{session_date:string;session_state:string;last_authoritative_data_at:string|null;freshness:string};
