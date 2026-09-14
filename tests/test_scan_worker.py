@@ -56,13 +56,32 @@ def test_scan_worker_failure_records_error_and_returns_nonzero(tmp_path):
     assert "secret" not in health["last_error_message"]
 
 
-def test_overlapping_scan_is_rejected(tmp_path):
+def test_overlapping_scan_is_rejected(tmp_path, caplog):
+    import logging
+    import json
+
     repo = TradeRepository(tmp_path / "state.db", database_url="")
     owner = repo.acquire_scan_lock()
-    result = run_scan_once(repository=repo)
+    with caplog.at_level(logging.INFO):
+        result = run_scan_once(repository=repo, run_number=3)
     repo.release_scan_lock("optionbeacon-scanner", owner)
 
     assert result == 2
+    events = []
+    for record in caplog.records:
+        message = record.getMessage()
+        if message.startswith("{"):
+            payload = json.loads(message)
+            if payload.get("event"):
+                events.append(payload)
+    names = [row["event"] for row in events]
+    assert "scanner_lock_contention" in names
+    skipped = next(row for row in events if row["event"] == "scanner_cycle_skipped")
+    assert skipped["reason"] == "lock_unavailable"
+    assert skipped["run_number"] == 3
+    assert skipped["lock_owner_id"] == owner
+    assert "scanner_cycle_started" not in names
+    assert repo.get_scan_health() is None or repo.get_scan_health().get("last_success_at") is None
 
 
 def test_worker_owns_paper_execution_cycle(tmp_path):

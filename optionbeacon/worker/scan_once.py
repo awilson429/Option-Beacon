@@ -274,6 +274,17 @@ def run_scan_once(
             "lock_acquired_at": lock.get("acquired_at"),
             "lock_expires_at": lock.get("expires_at"),
         }, sort_keys=True))
+        _cycle_event(
+            "scanner_cycle_skipped",
+            level=logging.WARNING,
+            scanner_id=scanner_id,
+            run_number=run_number,
+            reason="lock_unavailable",
+            requested_owner_id=lock_owner_id,
+            lock_owner_id=lock.get("owner_id"),
+            lock_acquired_at=lock.get("acquired_at"),
+            lock_expires_at=lock.get("expires_at"),
+        )
         return 2
     run_timing_token = activate_run_timing(performance)
     LOGGER.info(json.dumps({

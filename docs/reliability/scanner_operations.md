@@ -121,11 +121,14 @@ Logs contain symbol and exception type, not tokens or provider payloads.
 `scanner_symbol_timing` with `success=true` is one symbol, not a completed cycle.
 Whole-cycle persistence is `scanner_health.last_success_at` via `finish_scan_run`.
 Search Railway logs for `scanner_cycle_started`, `scanner_cycle_finalizing`,
-`scanner_cycle_persisted`, `scanner_cycle_completed`, and `scanner_cycle_failed`.
-There is no `scan_completed` or `scan_failed` event. `scan_complete` (no `d`) is
-emitted by `optionbeacon.worker.run` after `run_scan_once` returns, including lock
-contention. `scanner_lock_renewed` means the lease is alive, not that the cycle
-finished.
+`scanner_cycle_persisted`, `scanner_cycle_completed`, `scanner_cycle_failed`,
+and `scanner_cycle_skipped`. `scanner_cycle_skipped` with
+`reason="lock_unavailable"` means `run_scan_once` returned exit code 2 before
+the authoritative cycle started because another owner holds the unexpired
+`scanner_locks` row. There is no `scan_completed` or `scan_failed` event.
+`scan_complete` (no `d`) is emitted by `optionbeacon.worker.run` after
+`run_scan_once` returns, including lock contention. `scanner_lock_renewed`
+means the lease is alive, not that the cycle finished.
 Useful checks:
 
 ```sql

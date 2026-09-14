@@ -142,3 +142,28 @@ def test_cycle_lifecycle_logs_distinguish_symbols_from_completion(tmp_path, capl
     completed = next(row for row in _json_events(caplog) if row["event"] == "scanner_cycle_completed")
     assert completed["cycle_id"]
     assert completed["completed_symbol_count"] == 1
+
+
+def test_lock_contention_skips_before_cycle_start_and_does_not_advance_last_success(tmp_path, caplog):
+    repository = TradeRepository(tmp_path / "skip.db", database_url="")
+    _seed_prior_success(repository)
+    owner = repository.acquire_scan_lock(DEFAULT_SCANNER_ID, owner_id="existing-owner", ttl_seconds=1200)
+    with caplog.at_level(logging.INFO):
+        result = run_scan_once(
+            repository=repository, scanner_id=DEFAULT_SCANNER_ID, run_number=2,
+            lock_owner_id="new-worker",
+            symbol_groups_loader=lambda: ({"Core": ["SPY"]}, "test", ""),
+            signal_generator=lambda symbol: {"symbol": symbol, "signal": "WAIT", "price": 500},
+            snapshot_writer=lambda results: None,
+        )
+    assert result == 2
+    names = [row["event"] for row in _json_events(caplog)]
+    skipped = next(row for row in _json_events(caplog) if row["event"] == "scanner_cycle_skipped")
+    assert skipped["reason"] == "lock_unavailable"
+    assert skipped["lock_owner_id"] == owner
+    assert skipped["run_number"] == 2
+    assert "scanner_cycle_started" not in names
+    assert "scanner_cycle_completed" not in names
+    health = repository.get_scan_health(DEFAULT_SCANNER_ID)
+    assert parse_utc(health["last_success_at"]) == PRIOR_SUCCESS
+

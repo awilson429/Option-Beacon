@@ -302,6 +302,22 @@ def test_worker_remains_alive_without_busy_loop_and_uses_backoff(tmp_path):
     assert worker.failure_backoff_seconds(6, 60) <= 900
 
 
+def test_lock_contention_exit_code_two_keeps_configured_interval(tmp_path):
+    repo = TradeRepository(tmp_path / "state.db", database_url="")
+    event = ImmediateWaitEvent()
+    completed = worker.run(
+        repository=repo,
+        interval_seconds=60,
+        scanner_id="test-worker",
+        max_runs=3,
+        scan_once=lambda **_kwargs: 2,
+        stop_event=event,
+    )
+    assert completed == 3
+    assert event.delays == [60, 60]
+    assert worker.failure_backoff_seconds(0, 60) == 60
+
+
 def test_worker_startup_record_is_sanitized(monkeypatch, tmp_path):
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql://user:secret@database.example/db"
