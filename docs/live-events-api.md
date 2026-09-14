@@ -89,7 +89,7 @@ Manual Refresh still calls `mutate()` on the snapshot cache. A dropped SSE conne
 
 The current API has no access-token middleware; `fetchJson` sends only `Accept: application/json`. Native `EventSource` therefore uses the same unauthenticated GET as the snapshot client. CORS is an allow-list from `OPTIONBEACON_CORS_ORIGINS` (default `http://localhost:3000`). Wildcards are rejected. Credentials are disabled because the client does not use cookies. `Last-Event-ID` is an allowed request header so browser reconnect can preflight.
 
-Production should prefer a same-origin Next rewrite (`OPTIONBEACON_API_ORIGIN` + empty `NEXT_PUBLIC_OPTIONBEACON_API_URL`) so EventSource does not depend on cross-origin CORS. Native `EventSource` cannot set `Authorization`. If `OPTIONBEACON_ACCESS_TOKEN` is introduced later, keep the same-origin proxy or cookie-compatible transport rather than weakening auth. See `docs/react-fastapi-production-cutover.md`.
+Production browsers call same-origin `/api/live/events` on Next.js. `frontend/src/app/api/[...path]/route.ts` streams FastAPI bytes, including heartbeats and `Last-Event-ID`, without buffering the body. FastAPI stays on Railway private HTTP; the client bundle must not contain `OPTIONBEACON_API_ORIGIN`. See `docs/react-fastapi-railway-pilot.md`.
 
 ## Configuration
 
@@ -97,6 +97,7 @@ Production should prefer a same-origin Next rewrite (`OPTIONBEACON_API_ORIGIN` +
 | --- | --- | --- |
 | `OPTIONBEACON_SSE_WATCH_SECONDS` | `1` | Process-local identity watch interval |
 | `OPTIONBEACON_SSE_HEARTBEAT_SECONDS` | `15` | SSE comment interval |
+| `OPTIONBEACON_API_ORIGIN` | (runtime, server-only) | Next.js upstream FastAPI origin |
 | `NEXT_PUBLIC_OPTIONBEACON_SNAPSHOT_POLL_MS` | `15000` | REST poll when SSE is not healthy |
 | `NEXT_PUBLIC_OPTIONBEACON_SNAPSHOT_SAFETY_POLL_MS` | `60000` | REST safety poll while SSE is open |
 

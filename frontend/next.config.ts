@@ -1,12 +1,8 @@
 import type { NextConfig } from "next";
 
-const apiOrigin = process.env.OPTIONBEACON_API_ORIGIN?.replace(/\/$/, "");
-
 const nextConfig: NextConfig = {
-  async rewrites() {
-    if (!apiOrigin) return [];
-    return [{ source: "/api/:path*", destination: `${apiOrigin}/api/:path*` }];
-  },
+  // Browser /api/* is handled by app/api/[...path]/route.ts so SSE streams
+  // through a Node proxy instead of next.config rewrites, which can buffer.
 };
 
 export default nextConfig;

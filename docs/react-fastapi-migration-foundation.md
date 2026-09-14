@@ -80,7 +80,7 @@ API schemas should expose typed domain values, explicit unavailable/null states,
 4. pandas/numpy values, datetimes, NaN, and UI-formatted strings require explicit schema normalization.
 5. Local SQLite/JSON/CSV and production PostgreSQL can yield different freshness or completeness; the API must label source and unavailable state rather than infer data.
 6. Live transport can reorder, duplicate, or drop messages. Events need stable IDs, timestamps, reconnect behavior, and a REST snapshot fallback.
-7. CORS must remain an allow-list. Production origins should be supplied with `OPTIONBEACON_CORS_ORIGINS`; wildcards are rejected.
+7. CORS is an allow-list for local direct-to-FastAPI development. Production browsers use same-origin Next.js `/api`; FastAPI must stay private. Wildcards are rejected.
 8. The current frontend is Next.js, not Vite. Framework conversion is a separate product decision and should not be bundled into an API-boundary task.
 
 ## Recommended structure
@@ -125,7 +125,7 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:3000`. The frontend reads the API URL from `NEXT_PUBLIC_OPTIONBEACON_API_URL` and defaults to the local FastAPI service documented in `frontend/.env.example`. Production topology, CORS, health, and cutover checklist live in `docs/react-fastapi-production-cutover.md`.
+Open `http://localhost:3000`. The frontend reads the API URL from `NEXT_PUBLIC_OPTIONBEACON_API_URL` in development and defaults to the local FastAPI service. Production uses same-origin `/api` through Next.js; see `docs/react-fastapi-railway-pilot.md`.
 
 Run the retained Streamlit reference from the repository root:
 

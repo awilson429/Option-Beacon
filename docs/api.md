@@ -16,7 +16,7 @@ The API requires `DATABASE_URL` for authoritative production reads. It never rea
 OPTIONBEACON_CORS_ORIGINS=http://localhost:3000,https://app.example.com
 ```
 
-The default is only `http://localhost:3000`; wildcard origins are rejected. Credentials are disabled. Phase 2 has no mutation, execution, authentication, or provider endpoints. See `docs/react-fastapi-production-cutover.md`.
+The default is only `http://localhost:3000`; wildcard origins are rejected. Credentials are disabled. Production browsers should not call FastAPI; Next.js proxies same-origin `/api` as documented in `docs/react-fastapi-railway-pilot.md`. Phase 2 has no mutation, execution, authentication, or provider endpoints.
 
 The canonical React bootstrap contract is `GET /api/live/snapshot`. See
 [`docs/live-snapshot-api.md`](live-snapshot-api.md) for its versioned sections,

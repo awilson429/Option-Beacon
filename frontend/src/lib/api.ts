@@ -1,9 +1,13 @@
 import type { ActiveTrade, ComparisonResponse, JournalResponse, LiveSnapshot, PerformanceResponse, ScalpState, ScannerResponse, StrategyState, SymbolCode, SystemStatus, TradeDeskHome, TradeManagementSnapshot, TradeRow } from "./types";
 
-export function resolveApiBaseUrl(raw: string | undefined = process.env.NEXT_PUBLIC_OPTIONBEACON_API_URL) {
+export function resolveApiBaseUrl(
+  raw: string | undefined = process.env.NEXT_PUBLIC_OPTIONBEACON_API_URL,
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+) {
   if (raw === "") return "";
-  if (raw == null) return "http://localhost:8000";
-  return raw.replace(/\/$/, "");
+  if (raw != null) return raw.replace(/\/$/, "");
+  if (nodeEnv === "production") return "";
+  return "http://localhost:8000";
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();

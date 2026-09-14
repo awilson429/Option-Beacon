@@ -68,7 +68,8 @@ describe("live event helpers",()=>{
   });
 
   it("resolves production, same-origin, and development API bases",()=>{
-    expect(resolveApiBaseUrl(undefined)).toBe("http://localhost:8000");
+    expect(resolveApiBaseUrl(undefined, "development")).toBe("http://localhost:8000");
+    expect(resolveApiBaseUrl(undefined, "production")).toBe("");
     expect(resolveApiBaseUrl("")).toBe("");
     expect(resolveApiBaseUrl("https://api.example.com/")).toBe("https://api.example.com");
   });

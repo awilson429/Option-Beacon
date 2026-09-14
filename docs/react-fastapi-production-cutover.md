@@ -15,16 +15,16 @@ Railway worker (railway.toml)
 Optional: Railway intraday worker (railway.intraday.toml)
 ```
 
-React + FastAPI are **not** started by `railway.toml`. They are the intended next primary interface once dedicated services exist:
+React + FastAPI are **not** started by `railway.toml`. The production-pilot topology is documented in `docs/react-fastapi-railway-pilot.md`:
 
 ```text
 market-data providers
   -> Railway worker (authoritative scans / persistence)
   -> PostgreSQL (DATABASE_URL)
-  -> FastAPI read-only API (railway.api.toml)
+  -> FastAPI read-only API (railway.api.toml, Railway private network only)
        GET /api/live/snapshot   canonical
        GET /api/live/events     change notification only
-  -> Next.js Market Command (browser)
+  -> Next.js Market Command (public; same-origin /api proxy)
 Streamlit app.py remains the rollback UI
 ```
 
@@ -37,13 +37,13 @@ Replicas are not configured in this repository. FastAPI should run **one Uvicorn
 | Worker | `railway.toml` `python -m optionbeacon.worker.run` | Keep |
 | Database | `DATABASE_URL` PostgreSQL | Keep; `OPTIONBEACON_REQUIRE_DURABLE_STORAGE=true` |
 | Streamlit | Community Cloud `streamlit run app.py` | Keep as fallback |
-| FastAPI | Local `uvicorn api.main:app` only | Deploy `railway.api.toml` (or equivalent) |
-| Next.js | Local `pnpm dev` / `next start` only | Deploy with API origin/rewrite configured |
+| FastAPI | Local `uvicorn api.main:app` only | Deploy `railway.api.toml` **without** a public domain |
+| Next.js | Local `pnpm dev` / `next start` only | Deploy `railway.frontend.toml` with public domain + `OPTIONBEACON_API_ORIGIN` |
 
 FastAPI start command:
 
 ```bash
-python -m uvicorn api.main:app --host 0.0.0.0 --port $PORT
+python -m uvicorn api.main:app --host :: --port $PORT
 ```
 
 Do not add `--workers N`. One process keeps SSE fan-out in-process and avoids N watchers against PostgreSQL.
@@ -70,45 +70,47 @@ Health check path: `GET /api/health`. It reports API liveness and database reach
 | Variable | Required in production | Notes |
 | --- | --- | --- |
 | `DATABASE_URL` | yes | Same database as the worker |
-| `OPTIONBEACON_CORS_ORIGINS` | yes if the browser talks to FastAPI directly | Comma-separated explicit origins. `*` is rejected. Default is `http://localhost:3000` (dev only). |
+| `OPTIONBEACON_CORS_ORIGINS` | no in the private topology | Browser traffic is same-origin through Next. Default `http://localhost:3000` remains for local direct-to-API development. `*` is rejected. CORS is not authentication. |
 | `OPTIONBEACON_SSE_WATCH_SECONDS` | optional | Identity watch interval, default `1`. Production may use `2`–`5` to reduce DB load. |
 | `OPTIONBEACON_SSE_HEARTBEAT_SECONDS` | optional | SSE comment interval, default `15` |
 
-There is **no** `OPTIONBEACON_ACCESS_TOKEN` and no FastAPI auth middleware.
+There is **no** `OPTIONBEACON_ACCESS_TOKEN` and no FastAPI auth middleware. Private Railway networking is the production security boundary for FastAPI.
 
 ### Next.js
 
 | Variable | Required in production | Notes |
 | --- | --- | --- |
-| `NEXT_PUBLIC_OPTIONBEACON_API_URL` | yes unless using same-origin rewrite | Inlined at **build** time. Unset defaults to `http://localhost:8000`. Empty string (`""`) means same-origin `/api`. |
-| `OPTIONBEACON_API_ORIGIN` | yes for same-origin rewrite | Server-only FastAPI origin. Next rewrites `/api/:path*` to this origin. |
+| `OPTIONBEACON_API_ORIGIN` | **yes at runtime** | Server-only FastAPI origin, e.g. `http://${{api.RAILWAY_PRIVATE_DOMAIN}}:${{api.PORT}}`. Never `NEXT_PUBLIC_`. |
+| `NEXT_PUBLIC_OPTIONBEACON_API_URL` | **omit in production** | Unset production builds use same-origin `/api`. Setting this bakes a hostname into client JS. Development may set `http://localhost:8000`. |
 | `NEXT_PUBLIC_OPTIONBEACON_SNAPSHOT_POLL_MS` | optional | REST poll when SSE is down. Default `15000`. Minimum `1000`. |
 | `NEXT_PUBLIC_OPTIONBEACON_SNAPSHOT_SAFETY_POLL_MS` | optional | REST safety poll when SSE is open. Default `60000`. |
 
-Recommended production browser path: same-origin rewrite.
+Production browser path: same-origin Next proxy. See `docs/react-fastapi-railway-pilot.md`.
 
 ```text
-OPTIONBEACON_API_ORIGIN=https://<fastapi-host>
-NEXT_PUBLIC_OPTIONBEACON_API_URL=
-OPTIONBEACON_CORS_ORIGINS=https://<next-host>
+OPTIONBEACON_API_ORIGIN=http://${{api.RAILWAY_PRIVATE_DOMAIN}}:${{api.PORT}}
+# do not set NEXT_PUBLIC_OPTIONBEACON_API_URL
 ```
-
-If the browser calls FastAPI directly, set `NEXT_PUBLIC_OPTIONBEACON_API_URL` to that public API origin and put the Next origin in `OPTIONBEACON_CORS_ORIGINS`.
 
 ## CORS
 
+Production browsers do not call FastAPI. Next.js proxies same-origin `/api` server-side, so CORS is not on the pilot browser path.
+
+Local development may still call FastAPI from `http://localhost:3000`:
+
 - Allow-list only. Wildcards are stripped.
 - `Last-Event-ID` is allowed so EventSource reconnect can preflight.
-- Credentials are **disabled**. `fetchJson` and native `EventSource` do not send cookies.
+- Credentials are **disabled**.
 - SSE `Content-Type` is `text/event-stream` with `Cache-Control: no-cache, no-transform`, `Connection: keep-alive`, and `X-Accel-Buffering: no`.
 
 ## Auth / exposure
 
-The FastAPI surface is read-only over persisted state and is **unauthenticated**. Anyone who can reach the API can read snapshots, trades, and scanner projections.
+The FastAPI surface is read-only over persisted state and is **unauthenticated**. The production pilot keeps FastAPI on Railway private networking so the browser cannot reach it. Anyone who can reach a **public** FastAPI origin can still read snapshots, trades, and scanner projections.
 
 - Do not treat CORS as access control.
 - Do not add `Authorization` to native `EventSource`; it cannot set custom headers.
-- Future token auth should use a same-origin Next rewrite or cookie/session transport, then FastAPI middleware. Do not weaken auth to keep cross-origin EventSource.
+- Do not attach a public domain to FastAPI to make EventSource "easier".
+- Future token auth should stay behind the same-origin Next proxy or cookie/session transport.
 
 `TRADIER_ACCESS_TOKEN` is a market-data provider secret for the worker, not an API login.
 
@@ -148,13 +150,12 @@ React currently covers Market Command, SPY/QQQ Options, Scanner, Active Trades, 
 
 - [ ] PostgreSQL `DATABASE_URL` on worker, FastAPI, and Streamlit
 - [ ] Worker running (`railway.toml`) with durable storage required
-- [ ] FastAPI service deployed (`railway.api.toml`), one Uvicorn process, `/api/health` as liveness
-- [ ] Next.js deployed with `OPTIONBEACON_API_ORIGIN` + empty `NEXT_PUBLIC_OPTIONBEACON_API_URL` **or** explicit public API URL + CORS origin
-- [ ] `GET /api/live/snapshot` succeeds from the browser
-- [ ] `GET /api/live/events` connects; fallback poll still configured
-- [ ] CORS allow-list is the production Next origin; no `*`
-- [ ] Operators know the API is unauthenticated if publicly reachable
-- [ ] Health checks use `/api/health`, not market/scanner freshness
+- [ ] FastAPI service deployed (`railway.api.toml`), one Uvicorn process, `/api/health` as liveness, **no public domain**
+- [ ] Next.js deployed (`railway.frontend.toml`) with runtime `OPTIONBEACON_API_ORIGIN` and **no** `NEXT_PUBLIC_OPTIONBEACON_API_URL`
+- [ ] `GET /api/live/snapshot` succeeds same-origin from the Next public host
+- [ ] `GET /api/live/events` connects through the Next proxy; fallback poll still configured
+- [ ] Operators know FastAPI is unauthenticated if it is ever given a public domain
+- [ ] Health checks use `/api/health` on FastAPI and `/` on Next; market/scanner freshness is not liveness
 - [ ] Worker/API logs exclude secrets
 - [ ] Streamlit still reachable as rollback
 - [ ] Rollback: point operators at Streamlit; leave the worker running; FastAPI/Next can be stopped independently
