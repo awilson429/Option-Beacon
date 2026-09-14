@@ -15,16 +15,22 @@ function renderHome(responses:(Response|Promise<Response>)[]=[Response.json(snap
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.useRealTimers()});
 
 const staleSnapshot={...snapshot,market:{...snapshot.market,freshness:"stale"},scanner:{...snapshot.scanner,status:"STALE"},system:{...snapshot.system,state:{...system,worker_status:"degraded"},stale_or_missing:["scanner_stale_or_unavailable"]}};
-const inProgressStaleSnapshot={
+const inProgressRefreshingSnapshot={
   ...snapshot,
-  market:{...snapshot.market,freshness:"stale"},
+  market:{...snapshot.market,freshness:"refreshing"},
   scanner:{
     ...snapshot.scanner,
     status:"SCANNING",
     cycle_completion_state:"SCANNING",
     last_successful_completed_cycle:"2026-09-14T17:15:00Z",
+    health:{...snapshot.scanner.health,state:"SCANNING",worker_status:"running",data_freshness:"refreshing",last_success_at:"2026-09-14T17:15:00Z"},
   },
-  system:{...snapshot.system,state:{...system,worker_status:"degraded",data_freshness:"stale"},stale_or_missing:["scanner_stale_or_unavailable"]},
+  symbols:{
+    ...snapshot.symbols,
+    SPY:{...snapshot.symbols.SPY,scanner:{...snapshot.symbols.SPY.scanner,freshness:"refreshing"}},
+    QQQ:{...snapshot.symbols.QQQ,scanner:{...snapshot.symbols.QQQ.scanner,freshness:"refreshing"}},
+  },
+  system:{...snapshot.system,state:{...system,worker_status:"running",data_freshness:"refreshing"},stale_or_missing:[]},
 };
 
 describe("primary trading terminal",()=>{
@@ -66,13 +72,18 @@ describe("primary trading terminal",()=>{
   expect(within(qqq).queryByText("$0.00")).not.toBeInTheDocument();
  });
 
- it("does not show Current for an in-progress cycle whose last completed scan is stale",async()=>{
-  expect(isAuthoritativeStale(inProgressStaleSnapshot)).toBe(true);
-  renderHome([Response.json(inProgressStaleSnapshot)]);
+ it("shows refreshing, not Current or STALE DATA, for a healthy long-running scan",async()=>{
+  expect(isAuthoritativeStale(inProgressRefreshingSnapshot)).toBe(false);
+  renderHome([Response.json(inProgressRefreshingSnapshot)]);
   const status=await screen.findByLabelText("Terminal status");
-  expect(status).toHaveTextContent("Stale");
+  expect(status).toHaveTextContent("Refreshing");
+  expect(status).toHaveTextContent("Scanning");
   expect(status).not.toHaveTextContent("Current");
-  expect(within(screen.getByTestId("setup-SPY")).getByText("STALE DATA")).toBeInTheDocument();
+  expect(status).not.toHaveTextContent("Stale");
+  expect(screen.getByRole("status")).toHaveTextContent(/actively refreshing/i);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(within(screen.getByTestId("setup-SPY")).queryByText("STALE DATA")).not.toBeInTheDocument();
+  expect(within(screen.getByTestId("setup-SPY")).getByText(/Refreshing/)).toBeInTheDocument();
  });
 
  it("demotes a stale TAKE without changing it into WAIT or REJECTED and SSE does not override that",async()=>{

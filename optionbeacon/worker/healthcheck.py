@@ -30,8 +30,10 @@ def check_health(
     try:
         repository = repository or repository_for_runtime()
         health = repository.get_scan_health(scanner_id)
+        lock = repository.get_scan_lock(scanner_id)
         state = scanner_health_state(
             health,
+            scan_lock=lock,
             stale_minutes=stale_minutes,
         )
         opportunities = repository.list_opportunities(limit=1)
@@ -56,7 +58,7 @@ def check_health(
                 else None
             ),
         }
-        code = 0 if state["state"] == "CURRENT" else 1
+        code = 0 if state["state"] in {"CURRENT", "SCANNING"} else 1
         return code, result
     except RepositoryUnavailable as exc:
         LOGGER.exception("Worker healthcheck repository initialization failed: %s", exc)

@@ -22,12 +22,13 @@ function actionState(item:LiveSymbolSnapshot){
 }
 
 export function isAuthoritativeStale(data:LiveSnapshot){
-  return lc(data.market.freshness)==="stale"||lc(data.scanner.status)==="stale"||data.system.stale_or_missing.length>0;
+  return lc(data.market.freshness)==="stale"||lc(data.scanner.status)==="stale"||data.system.stale_or_missing.includes("scanner_stale_or_unavailable");
 }
 
-function dataState(data:LiveSnapshot):"Current"|"Stale"|"Unavailable"{
+function dataState(data:LiveSnapshot):"Current"|"Refreshing"|"Stale"|"Unavailable"{
   if(isAuthoritativeStale(data)) return "Stale";
   const freshness=lc(data.market.freshness);
+  if(freshness==="refreshing") return "Refreshing";
   if(!freshness||freshness==="unavailable") return "Unavailable";
   if(freshness==="fresh"||freshness==="current") return "Current";
   return "Unavailable";
@@ -40,10 +41,11 @@ function sessionState(data:LiveSnapshot):"Open"|"Closed"|"Unknown"{
   return "Unknown";
 }
 
-function scannerState(data:LiveSnapshot):"Healthy"|"Stale"|"Degraded"{
+function scannerState(data:LiveSnapshot):"Healthy"|"Scanning"|"Stale"|"Degraded"{
   const status=lc(data.scanner.status);
+  if(status==="scanning") return "Scanning";
   if(status==="stale") return "Stale";
-  if(status==="degraded") return "Degraded";
+  if(status==="error"||status==="degraded") return "Degraded";
   return "Healthy";
 }
 
@@ -55,12 +57,13 @@ function coverageLabel(value?:string|null){
   return label(value);
 }
 
-function symbolFreshness(data:LiveSnapshot,item:LiveSymbolSnapshot):"Current"|"Stale"|"Unavailable"{
+function symbolFreshness(data:LiveSnapshot,item:LiveSymbolSnapshot):"Current"|"Refreshing"|"Stale"|"Unavailable"{
   if(isAuthoritativeStale(data)) return "Stale";
   if(lc(item.data_status)==="unavailable"||lc(item.scanner.freshness)==="unavailable") return "Unavailable";
   const freshness=lc(item.scanner.freshness||data.market.freshness);
   if(!freshness) return "Unavailable";
   if(freshness==="stale") return "Stale";
+  if(freshness==="refreshing") return "Refreshing";
   if(freshness==="fresh"||freshness==="current") return "Current";
   return "Unavailable";
 }
@@ -68,7 +71,7 @@ function symbolFreshness(data:LiveSnapshot,item:LiveSymbolSnapshot):"Current"|"S
 function toneOf(value:string){
   const v=value.toLowerCase();
   if(["connected","current","open","healthy","covered","ready"].includes(v)) return "ok" as const;
-  if(["stale","degraded","unknown","wait"].includes(v)) return "warn" as const;
+  if(["stale","degraded","unknown","wait","refreshing","scanning"].includes(v)) return "warn" as const;
   return "bad" as const;
 }
 
@@ -87,10 +90,11 @@ function TerminalHeader({data,disconnected,refreshing,refresh}:{data:LiveSnapsho
   const authoritative=dataState(data);
   const scanner=scannerState(data);
   const stale=authoritative==="Stale";
+  const dataRefreshing=authoritative==="Refreshing";
   const problems:[string,string][]=[];
   if(disconnected) problems.push(["Connection","Disconnected"]);
   if(stale) problems.push(["Data","Stale"]);
-  if(scanner!=="Healthy") problems.push(["Scanner",scanner]);
+  if(scanner==="Stale"||scanner==="Degraded") problems.push(["Scanner",scanner]);
   if(lc(data.system.state.worker_status)==="degraded") problems.push(["Worker","Degraded"]);
   if(!["connected","ok"].includes(lc(data.system.state.database))) problems.push(["Database",label(data.system.state.database)]);
   if(coverageLabel(data.system.coverage.SPY)!=="Covered") problems.push(["SPY",coverageLabel(data.system.coverage.SPY)]);
@@ -114,6 +118,7 @@ function TerminalHeader({data,disconnected,refreshing,refresh}:{data:LiveSnapsho
     </section>
     {disconnected&&<div role="alert" className="mt-2 flex items-center gap-2 rounded-md border border-rose-400/25 bg-rose-400/[.08] px-3 py-2 text-xs text-rose-100"><WifiOff size={14} aria-hidden/>Backend disconnected. Showing the last valid authoritative snapshot.</div>}
     {stale&&<div role="alert" className="mt-2 flex items-center gap-2 rounded-md border border-amber-400/25 bg-amber-400/[.08] px-3 py-2 text-xs text-amber-100"><Clock3 size={14} aria-hidden/>Authoritative data is stale{data.system.stale_or_missing.length?`: ${data.system.stale_or_missing.join(", ")}`:"."} Last decision remains historical, not a live signal.</div>}
+    {dataRefreshing&&<div role="status" className="mt-2 flex items-center gap-2 rounded-md border border-cyan-400/20 bg-cyan-400/[.06] px-3 py-2 text-xs text-cyan-100"><ScanSearch size={14} aria-hidden/>Scanner is actively refreshing. Last completed cycle remains historical until finalization.</div>}
     {problems.filter(([name])=>!["Connection","Data","Scanner"].includes(name)).length>0&&<ul className="mt-2 flex flex-wrap gap-2">{problems.filter(([name])=>!["Connection","Data","Scanner"].includes(name)).map(([name,value])=><li key={name} className="rounded border border-amber-400/20 px-2 py-1 text-[10px] font-semibold uppercase tracking-[.12em] text-amber-100">{name} {value}</li>)}</ul>}
   </>;
 }

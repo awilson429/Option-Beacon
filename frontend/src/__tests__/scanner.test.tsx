@@ -79,4 +79,12 @@ describe("Scanner page",()=>{
     expect(screen.getAllByText("STALE").length).toBeGreaterThan(0);
     expect(screen.getByText(/Review the last-success time before acting/i)).toBeInTheDocument();
   });
+
+  it("does not treat a healthy in-progress refresh as stale scanner data",async()=>{
+    renderScanner({...scanner,health:{...scanner.health,state:"SCANNING",worker_status:"running",data_freshness:"refreshing",message:"Scanner is actively processing the authoritative universe."}});
+    expect(await screen.findByRole("status")).toHaveTextContent(/Scanner is refreshing/i);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("SCANNING")).toBeInTheDocument();
+    expect(screen.getByText("REFRESHING")).toBeInTheDocument();
+  });
 });

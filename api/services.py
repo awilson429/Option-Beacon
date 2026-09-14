@@ -12,7 +12,13 @@ import pandas_market_calendars as market_calendars
 
 from trade_repository import RepositoryUnavailable, TradeRepository, parse_utc
 from capital_readiness import LaneCapitalConfig
-from trade_state_service import scanner_health_state
+from trade_state_service import (
+    DEFAULT_STALE_MINUTES,
+    observation_snapshot_freshness,
+    scanner_health_state,
+    scanner_snapshot_freshness,
+    scanner_worker_status,
+)
 
 UTC = timezone.utc
 EASTERN = ZoneInfo("America/New_York")
@@ -945,23 +951,32 @@ class OptionBeaconReadService:
     def system_status(self):
         now = self._now(); database = "connected" if self.database_available() else "unavailable"
         health = None
+        lock = None
         if database == "connected":
-            try: health = self.repository().get_latest_scan_health()
-            except Exception: health = None
-        success = parse_utc((health or {}).get("last_success_at")); age = (now - success).total_seconds() if success else None
-        freshness = "fresh" if age is not None and age <= 900 else "stale" if success else "unavailable"
-        worker = "healthy" if health and not health.get("last_error_message") and freshness == "fresh" else "degraded" if health else "unavailable"
+            try:
+                repository = self.repository()
+                health = repository.get_latest_scan_health()
+                if health:
+                    lock = repository.get_scan_lock(health.get("scanner_id"))
+            except Exception:
+                health = None
+                lock = None
+        state = scanner_health_state(health, scan_lock=lock, now=now)
+        state_name = str(state.get("state") or "WAITING").upper()
+        success = state.get("last_success_at")
+        freshness = scanner_snapshot_freshness(state_name, success, now)
+        worker = scanner_worker_status(state_name) if database == "connected" else "unavailable"
+        if database != "connected":
+            freshness = "unavailable"
         return {"status": "ok" if database == "connected" else "degraded", "market_status": "open" if market_is_open(now) else "closed",
             "database": database, "data_freshness": freshness, "worker_status": worker, "worker_last_success": success,
             "provider_status": "not_queried", "timestamp": now}
 
     @staticmethod
-    def _scanner_freshness(observed_at, now):
-        timestamp = parse_utc(observed_at)
-        if timestamp is None:
-            return "unavailable", None
-        age = max(0, int((now - timestamp).total_seconds()))
-        return ("fresh" if age <= 900 else "stale"), age
+    def _scanner_freshness(observed_at, now, *, scanning=False):
+        return observation_snapshot_freshness(
+            observed_at, now, scanning=scanning, stale_minutes=DEFAULT_STALE_MINUTES,
+        )
 
     @staticmethod
     def _scanner_lane_decision(lane, decision=None):
@@ -998,15 +1013,9 @@ class OptionBeaconReadService:
         if interval is not None and completed is not None and state.get("state") != "SCANNING":
             next_expected = completed + timedelta(seconds=interval)
         state_name = str(state.get("state") or "WAITING").upper()
-        worker = {"SCANNING": "running", "CURRENT": "healthy",
-                  "STALE": "degraded", "ERROR": "degraded"}.get(state_name, "unavailable")
+        worker = scanner_worker_status(state_name)
         success_at = parse_utc((raw or {}).get("last_success_at"))
-        success_age = (now - success_at).total_seconds() if success_at else None
-        freshness = "fresh" if (
-            state_name != "ERROR"
-            and success_age is not None
-            and success_age <= 900
-        ) else ("stale" if success_at else "unavailable")
+        freshness = scanner_snapshot_freshness(state_name, success_at, now)
         return {"state": state_name, "message": state.get("message") or "Scanner state is unavailable.",
                 "market_data_state": str(state.get("market_data_state") or "UNKNOWN"),
                 "worker_status": worker, "provider_status": "not_queried",
@@ -1123,12 +1132,13 @@ class OptionBeaconReadService:
                 event_by_symbol.setdefault(symbol, event)
 
         opportunities = []
+        scanning = str(health.get("state") or "").upper() == "SCANNING"
         for row in opportunity_rows[:20]:
             opportunity_id = str(row.get("id"))
             observed_at = parse_utc(row.get("signal_timestamp"))
             if observed_at is None:
                 continue
-            freshness, _ = self._scanner_freshness(observed_at, now)
+            freshness, _ = self._scanner_freshness(observed_at, now, scanning=scanning)
             state = str(row.get("state") or "UNAVAILABLE").upper()
             event = event_by_opportunity.get(opportunity_id) or {}
             lane_decisions = [self._scanner_lane_decision(
@@ -1161,7 +1171,7 @@ class OptionBeaconReadService:
                     "context": {}, "canonical_observation": provenance_observations.get(symbol)})
                 continue
             observed_at = parse_utc(current.get("signal_timestamp"))
-            freshness, age = self._scanner_freshness(observed_at, now)
+            freshness, age = self._scanner_freshness(observed_at, now, scanning=scanning)
             state = str(current.get("state") or "UNAVAILABLE").upper()
             event = event_by_opportunity.get(str(current.get("id"))) or event_by_symbol.get(symbol) or {}
             instruments.append({"symbol": symbol, "data_status": "persisted",
@@ -1278,7 +1288,7 @@ class OptionBeaconReadService:
         last_data = max((value for value in timestamps if value), default=None)
         missing = [symbol for symbol, value in symbols.items()
                    if value["data_status"] != "persisted"]
-        if health.get("data_freshness") != "fresh":
+        if health.get("data_freshness") not in {"fresh", "refreshing"}:
             missing.append("scanner_stale_or_unavailable")
         if provenance_health.get("data_status") != "persisted":
             missing.append("provenance_unavailable")

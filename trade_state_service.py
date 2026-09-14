@@ -38,6 +38,7 @@ from trade_repository import (
 )
 LOGGER = logging.getLogger(__name__)
 DEFAULT_STALE_MINUTES = 15
+DEFAULT_STALE_SECONDS = DEFAULT_STALE_MINUTES * 60
 SCANNER_PROGRESS_STALE_MINUTES = 5
 
 
@@ -532,6 +533,60 @@ def scanner_health_state(
         "age_minutes": age,
         "message": message,
     }
+
+
+def scanner_snapshot_freshness(
+    state,
+    last_success_at,
+    now,
+    *,
+    stale_minutes=DEFAULT_STALE_MINUTES,
+):
+    """Freshness of the last *completed* cycle, not worker liveness.
+
+    SCANNING with an aged completed snapshot is ``refreshing``, never ``fresh``.
+    ``fresh`` requires a completed ``last_success_at`` inside the stale window.
+    """
+    state_name = str(state or "").upper()
+    success = (
+        last_success_at
+        if isinstance(last_success_at, datetime)
+        else parse_utc(last_success_at)
+    )
+    if state_name == "ERROR":
+        return "stale" if success else "unavailable"
+    if success is None:
+        return "unavailable"
+    checked = (now or utc_now()).astimezone(timezone.utc)
+    age = max(0.0, (checked - success.astimezone(timezone.utc)).total_seconds())
+    if age <= stale_minutes * 60:
+        return "fresh"
+    if state_name == "SCANNING":
+        return "refreshing"
+    return "stale"
+
+
+def scanner_worker_status(state):
+    return {
+        "SCANNING": "running",
+        "CURRENT": "healthy",
+        "STALE": "degraded",
+        "ERROR": "degraded",
+    }.get(str(state or "").upper(), "unavailable")
+
+
+def observation_snapshot_freshness(observed_at, now, *, scanning=False,
+                                  stale_minutes=DEFAULT_STALE_MINUTES):
+    timestamp = parse_utc(observed_at)
+    if timestamp is None:
+        return "unavailable", None
+    checked = now.astimezone(timezone.utc)
+    age = max(0, int((checked - timestamp.astimezone(timezone.utc)).total_seconds()))
+    if age <= stale_minutes * 60:
+        return "fresh", age
+    if scanning:
+        return "refreshing", age
+    return "stale", age
 
 
 def _outcome_state(record):

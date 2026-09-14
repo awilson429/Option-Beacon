@@ -97,11 +97,21 @@ database uniqueness, so a retry cannot open the same opportunity/trade twice.
 
 ## Health interpretation
 
-- `CURRENT`: latest successful scan is within the freshness window.
-- `STALE`: latest success is older than the window.
+- `CURRENT`: latest successful **completed** cycle is within the 15-minute
+  freshness window (`DEFAULT_STALE_MINUTES`).
+- `SCANNING`: the worker holds a live lock and has recent progress. This is
+  worker liveness, not a completed-cycle heartbeat. After 15 minutes the last
+  completed snapshot is `refreshing`, not `fresh` and not `stale`.
+- `STALE`: latest success is older than the window **and** the worker is not
+  actively progressing.
 - `ERROR`: an error occurred after the latest success.
-- `NEVER RUN`: no successful heartbeat exists.
+- `NEVER RUN` / `WAITING`: no successful heartbeat exists.
 - market data `AVAILABLE`, `PARTIAL`, or `UNAVAILABLE` is stored separately.
+
+`last_success_at` advances only when a whole cycle finalizes successfully.
+Lock renewals, `scanner_progress`, and `scanner_symbol_timing` never update it.
+A healthy sequential 69-symbol cycle can take ~17 minutes, so the 15-minute
+window can expire **during** the next scan; that condition is `refreshing`.
 
 Health command:
 
@@ -111,7 +121,8 @@ python -m optionbeacon.worker.healthcheck
 
 Exit codes:
 
-- `0`: database/schema reachable and heartbeat current;
+- `0`: database/schema reachable and heartbeat current, **or** the worker is
+  actively scanning with a live lock and fresh progress;
 - `1`: reachable but degraded, stale, errored, or never successfully scanned;
 - `2`: configuration or storage unavailable.
 

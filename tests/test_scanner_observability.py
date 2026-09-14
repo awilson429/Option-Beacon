@@ -3,7 +3,12 @@ from datetime import datetime, timedelta, timezone
 
 from trade_desk_compact import status_strip_markup, status_strip_model
 from trade_repository import TradeRepository
-from trade_state_service import authoritative_trade_state, scanner_health_state
+from trade_state_service import (
+    authoritative_trade_state,
+    scanner_health_state,
+    scanner_snapshot_freshness,
+    scanner_worker_status,
+)
 
 
 NOW = datetime(2026, 8, 5, 18, tzinfo=timezone.utc)
@@ -127,6 +132,19 @@ def test_stale_progress_is_not_presented_as_active_even_with_live_lease():
         "owner_id": "worker", "expires_at": (NOW + timedelta(minutes=1)).isoformat(),
     }
     assert scanner_health_state(health, scan_lock=lock, now=NOW)["state"] == "STALE"
+
+
+def test_snapshot_freshness_keeps_completed_cycle_authoritative():
+    success = NOW - timedelta(minutes=18)
+    assert scanner_snapshot_freshness("CURRENT", NOW - timedelta(minutes=2), NOW) == "fresh"
+    assert scanner_snapshot_freshness("STALE", success, NOW) == "stale"
+    assert scanner_snapshot_freshness("SCANNING", success, NOW) == "refreshing"
+    assert scanner_snapshot_freshness("SCANNING", NOW - timedelta(minutes=5), NOW) == "fresh"
+    assert scanner_snapshot_freshness("SCANNING", None, NOW) == "unavailable"
+    assert scanner_snapshot_freshness("ERROR", success, NOW) == "stale"
+    assert scanner_worker_status("SCANNING") == "running"
+    assert scanner_worker_status("STALE") == "degraded"
+    assert scanner_worker_status("ERROR") == "degraded"
 
 
 def test_authoritative_state_propagates_completed_and_current_counts(tmp_path):

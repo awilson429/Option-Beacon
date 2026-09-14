@@ -28,6 +28,7 @@ const tone: Record<string, string> = {
   DATA_UNSAFE: "border-amber-400/30 bg-amber-400/10 text-amber-200",
   CURRENT: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
   SCANNING: "border-cyan-400/25 bg-cyan-400/10 text-cyan-200",
+  REFRESHING: "border-cyan-400/25 bg-cyan-400/10 text-cyan-200",
 };
 
 export function StatusBadge({ value, dot = false, muted = false }: { value?: string | null; dot?: boolean; muted?: boolean }) {

@@ -94,10 +94,53 @@ def test_in_progress_run_does_not_treat_lease_or_symbol_progress_as_completed(tm
     snapshot = OptionBeaconReadService(repository=repository, now=lambda: NOW).live_snapshot()
     assert snapshot["scanner"]["status"] == "SCANNING"
     assert snapshot["scanner"]["last_successful_completed_cycle"] == PRIOR_SUCCESS
+    assert snapshot["market"]["freshness"] == "refreshing"
+    assert snapshot["scanner"]["health"]["data_freshness"] == "refreshing"
+    assert snapshot["scanner"]["health"]["worker_status"] == "running"
+    assert "scanner_stale_or_unavailable" not in snapshot["system"]["stale_or_missing"]
+    assert snapshot["system"]["state"]["worker_status"] == "running"
+    assert snapshot["system"]["state"]["data_freshness"] == "refreshing"
+    assert snapshot["system"]["state"]["worker_last_success"] == PRIOR_SUCCESS
+
+
+def test_dead_worker_with_old_completed_cycle_is_stale(tmp_path, monkeypatch):
+    import trade_repository
+    monkeypatch.setattr(trade_repository, "utc_now", lambda: NOW)
+    repository = TradeRepository(tmp_path / "dead.db", database_url="")
+    scanner_id = "railway-primary"
+    _seed_prior_success(repository, scanner_id)
+    snapshot = OptionBeaconReadService(repository=repository, now=lambda: NOW).live_snapshot()
+    assert snapshot["scanner"]["status"] == "STALE"
+    assert snapshot["scanner"]["last_successful_completed_cycle"] == PRIOR_SUCCESS
     assert snapshot["market"]["freshness"] == "stale"
     assert "scanner_stale_or_unavailable" in snapshot["system"]["stale_or_missing"]
     assert snapshot["system"]["state"]["worker_status"] == "degraded"
-    assert snapshot["system"]["state"]["worker_last_success"] == PRIOR_SUCCESS
+
+
+def test_error_after_success_is_not_treated_as_refreshing(tmp_path, monkeypatch):
+    import trade_repository
+    monkeypatch.setattr(trade_repository, "utc_now", lambda: NOW)
+    repository = TradeRepository(tmp_path / "error.db", database_url="")
+    scanner_id = "railway-primary"
+    _seed_prior_success(repository, scanner_id)
+    owner = repository.acquire_scan_lock(scanner_id, owner_id="worker-err", ttl_seconds=1200)
+    repository.start_scan_run(
+        scanner_id, run_number=111, owner_id=owner, started_at=NOW - timedelta(minutes=2),
+        symbol_count=68, code_version="test",
+    )
+    assert repository.finish_scan_run(
+        scanner_id, run_number=111, owner_id=owner, completed_at=NOW,
+        symbols_attempted=10, symbol_count=68, results=0, failures=10,
+        scan_duration=120, market_data_state="ERROR",
+        error_message="RuntimeError: scanner failed",
+    )
+    snapshot = OptionBeaconReadService(repository=repository, now=lambda: NOW).live_snapshot()
+    assert snapshot["scanner"]["status"] == "ERROR"
+    assert snapshot["scanner"]["last_successful_completed_cycle"] == PRIOR_SUCCESS
+    assert snapshot["market"]["freshness"] == "stale"
+    assert snapshot["scanner"]["health"]["data_freshness"] == "stale"
+    assert "scanner_stale_or_unavailable" in snapshot["system"]["stale_or_missing"]
+    assert snapshot["system"]["state"]["worker_status"] == "degraded"
 
 
 def test_owner_mismatch_does_not_persist_cycle_completion(tmp_path):
