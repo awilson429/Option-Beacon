@@ -78,7 +78,7 @@ Heartbeats (`: heartbeat`) are FastAPI comments and pass through unchanged. Reco
 
 Do not change the worker start command. Do not add `--workers` to Uvicorn. Keep replica count at 1 for FastAPI.
 
-FastAPI binds `--host ::` so Railway private DNS (IPv6 and dual-stack) can reach it. Local development still uses `--host 0.0.0.0` / `--reload` as documented in `frontend/README.md`.
+FastAPI starts with `python -m api.serve`, which listens on `0.0.0.0` and `::` for the same `$PORT`. That covers Railway IPv4 healthchecks and IPv6-only private DNS without a public domain. Newer Railway environments may resolve `*.railway.internal` to both families; do not migrate environments solely for this. Local development still uses `--host 0.0.0.0` / `--reload` as documented in `frontend/README.md`.
 
 ## Required variables
 
@@ -135,7 +135,7 @@ CORS is not access control. FastAPI is unauthenticated. **Private networking is 
 ## Step-by-step pilot
 
 1. Confirm worker remains healthy (scans persist, Streamlit Trade Desk still truthful).
-2. Deploy FastAPI service from `railway.api.toml` (one Uvicorn process).
+2. Deploy FastAPI service from `railway.api.toml` with start command `python -m api.serve` (IPv4+IPv6, one process). If the Railway service Settings override the start command, set it to that same value.
 3. Connect `DATABASE_URL` (same database as the worker).
 4. Set `OPTIONBEACON_SSE_WATCH_SECONDS` (start at `2`).
 5. Keep FastAPI private-only. Verify it has no public domain.

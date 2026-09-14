@@ -43,10 +43,12 @@ Replicas are not configured in this repository. FastAPI should run **one Uvicorn
 FastAPI start command:
 
 ```bash
-python -m uvicorn api.main:app --host :: --port $PORT
+python -m api.serve
 ```
 
-Do not add `--workers N`. One process keeps SSE fan-out in-process and avoids N watchers against PostgreSQL.
+That entrypoint binds **both** `0.0.0.0` and `::` on `$PORT` in one Uvicorn process so Railway IPv4 healthchecks and legacy IPv6-only private DNS both succeed. Do not add `--workers N`. Do not attach a public domain.
+
+Local development still uses `--host 0.0.0.0` / `--reload` as documented in `frontend/README.md`.
 
 Health check path: `GET /api/health`. It reports API liveness and database reachability. It does **not** depend on market hours or scanner freshness.
 

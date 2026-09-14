@@ -1,12 +1,12 @@
 # FastAPI read-only API. Keep this service PRIVATE: do not attach a public
 # Railway domain. Healthchecks use PORT internally and do not require one.
-# One Uvicorn process only — do not set replica count above 1.
+# One process listening on IPv4 (healthcheck) and IPv6 (private DNS).
 
 [build]
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python -m uvicorn api.main:app --host :: --port $PORT"
+startCommand = "python -m api.serve"
 healthcheckPath = "/api/health"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10

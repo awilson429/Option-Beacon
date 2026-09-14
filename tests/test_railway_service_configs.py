@@ -23,10 +23,11 @@ def test_intraday_railway_service_has_dedicated_worker_entrypoint():
 def test_api_railway_template_is_fastapi_and_does_not_replace_the_worker():
     api = Path("railway.api.toml").read_text(encoding="utf-8")
     worker = Path("railway.toml").read_text(encoding="utf-8")
-    assert "uvicorn api.main:app" in api
-    assert "--host ::" in api
+    assert 'startCommand = "python -m api.serve"' in api
     assert "healthcheckPath = \"/api/health\"" in api
     assert "--workers" not in api
+    assert "--host 0.0.0.0" not in api
+    assert "--host ::" not in api
     assert "--workers" not in Path("railway.frontend.toml").read_text(encoding="utf-8").split("[deploy]")[-1]
     assert "RAILWAY_PUBLIC_DOMAIN" not in api
     assert 'startCommand = "python -m optionbeacon.worker.run"' in worker
