@@ -117,6 +117,29 @@ def test_owner_mismatch_does_not_persist_cycle_completion(tmp_path):
     assert health["current_owner_id"] == owner
 
 
+EXPECTED_STAGE_ORDER = [
+    "paper_pre_scan",
+    "universe_loading",
+    "symbol_scan",
+    "authoritative_entry_funnel",
+    "paper_execution",
+    "mirror_execution",
+    "finalization",
+]
+
+
+def _stage_pairs(caplog):
+    return [
+        (row["event"], row["stage"])
+        for row in _json_events(caplog)
+        if row["event"] in {
+            "scanner_stage_started",
+            "scanner_stage_completed",
+            "scanner_stage_failed",
+        }
+    ]
+
+
 def test_cycle_lifecycle_logs_distinguish_symbols_from_completion(tmp_path, caplog):
     repository = TradeRepository(tmp_path / "logs.db", database_url="")
     with caplog.at_level(logging.INFO):
@@ -142,6 +165,49 @@ def test_cycle_lifecycle_logs_distinguish_symbols_from_completion(tmp_path, capl
     completed = next(row for row in _json_events(caplog) if row["event"] == "scanner_cycle_completed")
     assert completed["cycle_id"]
     assert completed["completed_symbol_count"] == 1
+    expected_pairs = []
+    for stage in EXPECTED_STAGE_ORDER:
+        expected_pairs.append(("scanner_stage_started", stage))
+        expected_pairs.append(("scanner_stage_completed", stage))
+    assert _stage_pairs(caplog) == expected_pairs
+    symbol_scan = next(
+        row for row in _json_events(caplog)
+        if row["event"] == "scanner_stage_completed" and row["stage"] == "symbol_scan"
+    )
+    assert symbol_scan["completed_symbol_count"] == 1
+    assert "elapsed_ms" in symbol_scan
+
+
+def test_universe_failure_emits_stage_failed_then_continues_post_symbol_stages(tmp_path, caplog):
+    repository = TradeRepository(tmp_path / "universe-fail.db", database_url="")
+    with caplog.at_level(logging.INFO):
+        result = run_scan_once(
+            repository=repository, scanner_id=DEFAULT_SCANNER_ID, run_number=110,
+            symbol_groups_loader=lambda: (_ for _ in ()).throw(RuntimeError("provider unavailable")),
+            snapshot_writer=lambda results: None,
+            paper_executor=lambda *args, **kwargs: None,
+        )
+    assert result == 1
+    pairs = _stage_pairs(caplog)
+    assert ("scanner_stage_started", "paper_pre_scan") in pairs
+    assert ("scanner_stage_completed", "paper_pre_scan") in pairs
+    assert ("scanner_stage_started", "universe_loading") in pairs
+    assert ("scanner_stage_failed", "universe_loading") in pairs
+    assert ("scanner_stage_completed", "universe_loading") not in pairs
+    assert ("scanner_stage_started", "symbol_scan") not in pairs
+    assert ("scanner_stage_started", "authoritative_entry_funnel") in pairs
+    assert ("scanner_stage_completed", "authoritative_entry_funnel") in pairs
+    assert ("scanner_stage_started", "paper_execution") in pairs
+    assert ("scanner_stage_completed", "paper_execution") in pairs
+    assert ("scanner_stage_started", "mirror_execution") in pairs
+    assert ("scanner_stage_completed", "mirror_execution") in pairs
+    assert ("scanner_stage_started", "finalization") in pairs
+    failed = next(
+        row for row in _json_events(caplog)
+        if row["event"] == "scanner_stage_failed"
+    )
+    assert failed["stage"] == "universe_loading"
+    assert "elapsed_ms" in failed
 
 
 def test_lock_contention_skips_before_cycle_start_and_does_not_advance_last_success(tmp_path, caplog):

@@ -120,7 +120,11 @@ Exit codes:
 Logs contain symbol and exception type, not tokens or provider payloads.
 `scanner_symbol_timing` with `success=true` is one symbol, not a completed cycle.
 Whole-cycle persistence is `scanner_health.last_success_at` via `finish_scan_run`.
-Search Railway logs for `scanner_cycle_started`, `scanner_cycle_finalizing`,
+Search Railway logs for `scanner_cycle_started`, `scanner_stage_started`,
+`scanner_stage_completed`, `scanner_stage_failed`, `scanner_progress`,
+`scanner_symbol_timing`, `scanner_universe_ready`,
+`authoritative_entry_funnel_started`, `paper_cycle_started`,
+`mirror_cycle_started`, `scanner_cycle_finalizing`,
 `scanner_cycle_persisted`, `scanner_cycle_completed`, `scanner_cycle_failed`,
 and `scanner_cycle_skipped`. `scanner_cycle_skipped` with
 `reason="lock_unavailable"` means `run_scan_once` returned exit code 2 before
@@ -129,6 +133,12 @@ the authoritative cycle started because another owner holds the unexpired
 `scan_complete` (no `d`) is emitted by `optionbeacon.worker.run` after
 `run_scan_once` returns, including lock contention. `scanner_lock_renewed`
 means the lease is alive, not that the cycle finished.
+Stage names on `scanner_stage_*` are `paper_pre_scan`, `universe_loading`,
+`symbol_scan`, `authoritative_entry_funnel`, `paper_execution`,
+`mirror_execution`, and `finalization`. The symbol loop is sequential and has
+no whole-cycle timeout; `FULL_SCAN_SLOW` only warns after the run ends when
+duration exceeds 5 minutes. A 74-symbol cycle at 10–17 seconds per symbol can
+legitimately take 12–21+ minutes before `scanner_cycle_finalizing`.
 Useful checks:
 
 ```sql

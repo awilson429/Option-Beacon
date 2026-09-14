@@ -107,11 +107,22 @@ def _cycle_event(event, *, level=logging.INFO, **fields):
     LOGGER.log(level, json.dumps(payload, sort_keys=True))
 
 
+def _elapsed_ms(started):
+    return round((time.perf_counter() - started) * 1000, 3)
+
+
 def _finalize_scan_cycle(
     repository, *, scanner_id, run_number, owner_id, cycle_id, completed_at,
     symbols_attempted, symbol_count, results, failures, started_at, code_version,
     market_data_state, error_message=None,
 ):
+    finalization_started = time.perf_counter()
+    _cycle_event(
+        "scanner_stage_started",
+        stage="finalization",
+        scanner_id=scanner_id, run_number=run_number, cycle_id=cycle_id,
+        symbol_count=symbol_count, completed_symbol_count=symbols_attempted,
+    )
     _cycle_event(
         "scanner_cycle_finalizing",
         scanner_id=scanner_id, run_number=run_number, cycle_id=cycle_id,
@@ -148,6 +159,14 @@ def _finalize_scan_cycle(
             stage="health_completion", error="health_row_not_updated",
             exception_type="HealthRowNotUpdated",
         )
+    _cycle_event(
+        "scanner_stage_completed",
+        stage="finalization",
+        elapsed_ms=_elapsed_ms(finalization_started),
+        scanner_id=scanner_id, run_number=run_number, cycle_id=cycle_id,
+        symbol_count=symbol_count, completed_symbol_count=symbols_attempted,
+        health_row_updated=bool(persisted),
+    )
     return persisted
 
 
@@ -345,8 +364,50 @@ def run_scan_once(
         scanner_id=scanner_id, run_number=run_number, cycle_id=provenance_cycle_id,
         started_at=started, owner_id=owner,
     )
+    cycle_fields = {
+        "scanner_id": scanner_id,
+        "run_number": run_number,
+        "cycle_id": provenance_cycle_id,
+    }
+    open_stage = {"name": None, "started": None}
+
+    def begin_stage(name, **extra):
+        open_stage["name"] = name
+        open_stage["started"] = time.perf_counter()
+        _cycle_event("scanner_stage_started", stage=name, **cycle_fields, **extra)
+
+    def complete_stage(**extra):
+        name = open_stage["name"]
+        started = open_stage["started"]
+        if name is None:
+            return
+        _cycle_event(
+            "scanner_stage_completed",
+            stage=name,
+            elapsed_ms=_elapsed_ms(started),
+            **cycle_fields,
+            **extra,
+        )
+        open_stage["name"] = None
+
+    def fail_open_stage(**extra):
+        name = open_stage["name"]
+        started = open_stage["started"]
+        if name is None:
+            return
+        _cycle_event(
+            "scanner_stage_failed",
+            level=logging.ERROR,
+            stage=name,
+            elapsed_ms=_elapsed_ms(started),
+            **cycle_fields,
+            **extra,
+        )
+        open_stage["name"] = None
+
     try:
         stage = "market_data_cycle_start"
+        begin_stage("paper_pre_scan")
         with performance.measure("market_data_cycle_start"):
             begin_market_data_scan_cycle()
         stage = "paper_repository_initialization"
@@ -398,8 +459,10 @@ def run_scan_once(
             "event": "paper_handoff_waiting_for_scan", "scanner_id": scanner_id,
             "run_number": run_number, "open_positions": len(refreshed_paper_positions),
         }, sort_keys=True))
+        complete_stage()
         try:
             stage = "universe_loading"
+            begin_stage("universe_loading")
             with performance.measure("universe_loading"):
                 groups, source, universe_error = symbol_groups_loader()
             stage = "authoritative_open_trade_loading"
@@ -430,9 +493,11 @@ def run_scan_once(
                 "event": "scanner_universe_ready", "scanner_id": scanner_id,
                 "run_number": run_number, "symbol_count": len(symbols), "source": source,
             }, sort_keys=True))
+            complete_stage(symbol_count=symbol_count)
             if universe_error:
                 LOGGER.warning("Scanner universe warning: %s", universe_error)
             stage = "symbol_scan"
+            begin_stage("symbol_scan", symbol_count=symbol_count)
 
             def log_scan_progress(symbol_index):
                 if symbol_index % 10 == 0 or symbol_index == len(symbols):
@@ -538,6 +603,10 @@ def run_scan_once(
                            if key not in {"completed_wall_time", "started_wall_time"}},
                     }, sort_keys=True))
                     log_scan_progress(symbol_index)
+            complete_stage(
+                symbol_count=symbol_count,
+                completed_symbol_count=symbols_attempted,
+            )
             stage = "provider_summary"
             with performance.measure("provider_summary"):
                 provider_summary = end_market_data_scan_cycle()
@@ -555,6 +624,7 @@ def run_scan_once(
                 snapshot_writer(results)
         except Exception as exc:
             scan_phase_error = exc
+            fail_open_stage(completed_symbol_count=symbols_attempted)
             LOGGER.exception(json.dumps({
                 "event": "scanner_phase_failed", "scanner_id": scanner_id,
                 "run_number": run_number, "stage": stage,
@@ -575,6 +645,7 @@ def run_scan_once(
                     }, sort_keys=True))
 
         stage = "authoritative_entry_funnel"
+        begin_stage("authoritative_entry_funnel")
         funnel_completed_at = clock()
         with performance.measure("authoritative_entry_funnel"):
             record_authoritative_entry_funnel(
@@ -583,8 +654,10 @@ def run_scan_once(
                 completed_at=funnel_completed_at, symbols=funnel_symbols,
                 monotonic=monotonic, candidate_records=cycle_outcomes,
             )
+        complete_stage()
 
         stage = "authoritative_entry_query"
+        begin_stage("paper_execution")
         lease.ensure_owned()
         with performance.measure("paper_handoff_query"):
             shared_entry_events = repository.list_trade_event_summaries(
@@ -622,7 +695,9 @@ def run_scan_once(
                 refreshed_positions=refreshed_paper_positions,
                 capital_repository=capital_repository,
             )
+        complete_stage()
         stage = "mirror_execution"
+        begin_stage("mirror_execution")
         lease.ensure_owned()
         shared_chain_provider = CachedChainProvider() if (mirror_is_enabled or mirror_v2_is_enabled) else None
         with performance.measure("mirror_handoff_query"):
@@ -660,6 +735,7 @@ def run_scan_once(
                 shared_entry_events, enabled=filtered_is_enabled,
                 scanner_id=scanner_id, now=clock(),
             )
+        complete_stage()
         if scan_phase_error is not None:
             completed = clock()
             phase_error = f"{type(scan_phase_error).__name__}: scanner phase failed"
@@ -709,6 +785,7 @@ def run_scan_once(
         )
         return 0 if results else 1
     except Exception as exc:
+        fail_open_stage(completed_symbol_count=symbols_attempted)
         if stage in {
             "paper_repository_initialization", "paper_runtime_config_persistence",
             "paper_state_refresh",

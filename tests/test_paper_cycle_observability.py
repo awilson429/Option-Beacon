@@ -98,6 +98,8 @@ def test_pending_entry_database_failure_is_explicit_and_releases_lock(
     assert result == 1
     assert '"event": "paper_cycle_failed"' in output
     assert '"stage": "authoritative_entry_query"' in output
+    assert '"event": "scanner_stage_failed"' in output
+    assert '"stage": "paper_execution"' in output
     assert '"event": "scanner_lock_released"' in output
 
 
