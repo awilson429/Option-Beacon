@@ -18,7 +18,6 @@ from datetime import date, datetime, timezone
 
 from option_trade_engine import (
     TradierOptionChainProvider,
-    preferred_expiration,
     select_contract,
 )
 from trade_repository import utc_iso
@@ -36,6 +35,12 @@ RESULT_CHAIN_EMPTY = "CHAIN_EMPTY"
 RESULT_NO_ELIGIBLE_CONTRACT = "NO_ELIGIBLE_CONTRACT"
 RESULT_PROVIDER_FAILURE = "PROVIDER_FAILURE"
 RESULT_CAPTURE_FAILURE = "CAPTURE_FAILURE"
+RESULT_CAPTURE_UNAVAILABLE = "CAPTURE_UNAVAILABLE"
+RESULT_NOT_REQUESTED_BY_PRODUCTION = "NOT_REQUESTED_BY_PRODUCTION"
+
+OBSERVATION_SAME_CAPTURE = "SAME_CAPTURE"
+OBSERVATION_DISTINCT_CAPTURE = "DISTINCT_CAPTURE"
+OBSERVATION_NOT_REQUESTED = "NOT_REQUESTED"
 
 
 def translation_research_enabled(environ=None):
@@ -61,47 +66,54 @@ class ResearchCachedChainProvider:
 
     def expirations(self, ticker):
         key = str(ticker or "").upper()
-        requested_at = datetime.now(timezone.utc)
-        self.last_requested_at = requested_at
         if key not in self._expirations:
+            requested_at = datetime.now(timezone.utc)
             self._expirations[key] = self.provider.expirations(ticker)
+            responded_at = datetime.now(timezone.utc)
+            error = (self._expirations[key] or (None, None))[1]
+            self._observed[key] = {
+                **(self._observed.get(key) or {}),
+                "requested_at": requested_at,
+                "responded_at": responded_at,
+                "expirations": self._expirations[key],
+                "error": error,
+            }
         self.last_expirations = self._expirations[key]
-        self.last_responded_at = datetime.now(timezone.utc)
+        observed = self._observed.get(key) or {}
+        self.last_requested_at = observed.get("requested_at")
+        self.last_responded_at = observed.get("responded_at")
         self.last_ticker = key
         error = (self.last_expirations or (None, None))[1]
         if error:
             self.last_error = error
-        state = self._observed.setdefault(key, {})
-        state.update({
-            "requested_at": requested_at,
-            "responded_at": self.last_responded_at,
-            "expirations": self.last_expirations,
-            "error": error,
-        })
         return self.last_expirations
 
     def chain(self, ticker, expiration):
         key = (str(ticker or "").upper(), str(expiration))
-        requested_at = self.last_requested_at or datetime.now(timezone.utc)
-        if self.last_requested_at is None:
-            self.last_requested_at = requested_at
+        ticker_key = key[0]
         if key not in self._chains:
+            requested_at = datetime.now(timezone.utc)
             self._chains[key] = self.provider.chain(ticker, expiration)
+            responded_at = datetime.now(timezone.utc)
+            error = (self._chains[key] or (None, None))[1]
+            prior = self._observed.get(ticker_key) or {}
+            self._observed[ticker_key] = {
+                **prior,
+                "requested_at": prior.get("requested_at") or requested_at,
+                "responded_at": responded_at,
+                "expiration": str(expiration),
+                "chain": self._chains[key],
+                "error": error or prior.get("error"),
+            }
         self.last_chain = self._chains[key]
         self.last_expiration = str(expiration)
-        self.last_ticker = str(ticker or "").upper()
-        self.last_responded_at = datetime.now(timezone.utc)
+        self.last_ticker = ticker_key
+        observed = self._observed.get(ticker_key) or {}
+        self.last_requested_at = observed.get("requested_at")
+        self.last_responded_at = observed.get("responded_at")
         error = (self.last_chain or (None, None))[1]
         if error:
             self.last_error = error
-        self._observed[self.last_ticker] = {
-            **(self._observed.get(self.last_ticker) or {}),
-            "requested_at": requested_at,
-            "responded_at": self.last_responded_at,
-            "expiration": self.last_expiration,
-            "chain": self.last_chain,
-            "error": error or (self._observed.get(self.last_ticker) or {}).get("error"),
-        }
         return self.last_chain
 
     def observed_for(self, ticker):
@@ -161,69 +173,82 @@ def trade_entered_at(result):
     return stamp.replace(tzinfo=timezone.utc) if stamp.tzinfo is None else stamp
 
 
-def load_selector_chain(provider, ticker, *, as_of, option_type):
-    """Load the exact expiration/chain universe production `select_contract` would see."""
-    requested_at = datetime.now(timezone.utc)
-    try:
-        expirations, error = provider.expirations(ticker)
-    except Exception as exc:
+def payload_identity_for(ticker, expiration, contracts):
+    if contracts is None:
+        return None
+    raw = json.dumps(
+        {"ticker": str(ticker or "").upper(), "expiration": expiration, "contracts": contracts},
+        sort_keys=True, default=str,
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def production_chain_observation(provider, ticker):
+    """Read the chain production already requested. Never calls the provider."""
+    ticker = str(ticker or "").upper()
+    observed = {}
+    if provider is not None and callable(getattr(provider, "observed_for", None)):
+        observed = provider.observed_for(ticker) or {}
+    last_chain = observed.get("chain")
+    last_error = observed.get("error")
+    expiration = observed.get("expiration")
+    requested_at = observed.get("requested_at")
+    responded_at = observed.get("responded_at")
+    expirations = observed.get("expirations")
+    if last_chain is None and getattr(provider, "last_ticker", None) == ticker:
+        last_chain = getattr(provider, "last_chain", None)
+        expiration = expiration or getattr(provider, "last_expiration", None)
+        requested_at = requested_at or getattr(provider, "last_requested_at", None)
+        responded_at = responded_at or getattr(provider, "last_responded_at", None)
+        last_error = last_error or getattr(provider, "last_error", None)
+        expirations = expirations or getattr(provider, "last_expirations", None)
+    requested = any([
+        last_chain is not None,
+        expirations is not None,
+        last_error,
+        requested_at is not None,
+    ])
+    if not requested:
         return {
-            "result": RESULT_PROVIDER_FAILURE,
-            "rejection_reason": _safe_reason(exc),
+            "result": RESULT_NOT_REQUESTED_BY_PRODUCTION,
+            "rejection_reason": "Production did not request option-chain data.",
             "expiration": None,
             "contracts": None,
-            "requested_at": requested_at,
-            "responded_at": datetime.now(timezone.utc),
+            "requested_at": None,
+            "responded_at": None,
+            "payload_identity": None,
+            "observation_relation": OBSERVATION_NOT_REQUESTED,
+            "provider_request_occurred": False,
         }
-    responded_at = datetime.now(timezone.utc)
-    if error:
+    contracts = None
+    if last_chain is not None:
+        contracts, chain_error = last_chain
+        if chain_error:
+            last_error = chain_error
+    if last_error:
         return {
             "result": RESULT_PROVIDER_FAILURE,
-            "rejection_reason": _safe_reason(error),
-            "expiration": None,
-            "contracts": None,
-            "requested_at": requested_at,
-            "responded_at": responded_at,
-        }
-    if not expirations:
-        return {
-            "result": RESULT_CHAIN_EMPTY,
-            "rejection_reason": "No listed expiration available.",
-            "expiration": None,
-            "contracts": [],
-            "requested_at": requested_at,
-            "responded_at": responded_at,
-        }
-    expiration = preferred_expiration(expirations, as_of)
-    if expiration is None:
-        return {
-            "result": RESULT_CHAIN_EMPTY,
-            "rejection_reason": "No listed expiration available.",
-            "expiration": None,
-            "contracts": [],
-            "requested_at": requested_at,
-            "responded_at": responded_at,
-        }
-    try:
-        contracts, error = provider.chain(ticker, expiration)
-    except Exception as exc:
-        return {
-            "result": RESULT_PROVIDER_FAILURE,
-            "rejection_reason": _safe_reason(exc),
+            "rejection_reason": _safe_reason(last_error),
             "expiration": expiration,
             "contracts": None,
             "requested_at": requested_at,
-            "responded_at": datetime.now(timezone.utc),
+            "responded_at": responded_at,
+            "payload_identity": None,
+            "observation_relation": OBSERVATION_SAME_CAPTURE,
+            "provider_request_occurred": True,
         }
-    responded_at = datetime.now(timezone.utc)
-    if error:
+    if contracts is None:
+        expiration_rows = expirations[0] if isinstance(expirations, tuple) else expirations
         return {
-            "result": RESULT_PROVIDER_FAILURE,
-            "rejection_reason": _safe_reason(error),
+            "result": RESULT_CHAIN_EMPTY,
+            "rejection_reason": "No listed expiration available.",
             "expiration": expiration,
-            "contracts": None,
+            "contracts": [] if expiration_rows == [] or expiration_rows is None else None,
             "requested_at": requested_at,
             "responded_at": responded_at,
+            "payload_identity": None,
+            "observation_relation": OBSERVATION_SAME_CAPTURE,
+            "provider_request_occurred": True,
         }
     if not contracts:
         return {
@@ -233,15 +258,9 @@ def load_selector_chain(provider, ticker, *, as_of, option_type):
             "contracts": [],
             "requested_at": requested_at,
             "responded_at": responded_at,
-        }
-    if not option_type:
-        return {
-            "result": RESULT_NO_ELIGIBLE_CONTRACT,
-            "rejection_reason": "Direction is not actionable.",
-            "expiration": expiration,
-            "contracts": contracts,
-            "requested_at": requested_at,
-            "responded_at": responded_at,
+            "payload_identity": payload_identity_for(ticker, expiration, []),
+            "observation_relation": OBSERVATION_SAME_CAPTURE,
+            "provider_request_occurred": True,
         }
     return {
         "result": RESULT_CAPTURED,
@@ -250,7 +269,25 @@ def load_selector_chain(provider, ticker, *, as_of, option_type):
         "contracts": contracts,
         "requested_at": requested_at,
         "responded_at": responded_at,
+        "payload_identity": payload_identity_for(ticker, expiration, contracts),
+        "observation_relation": OBSERVATION_SAME_CAPTURE,
+        "provider_request_occurred": True,
     }
+
+
+def capture_unavailable_from_trade(trade):
+    if trade is None:
+        return RESULT_CAPTURE_UNAVAILABLE, "Production chain payload was not observable."
+    reason = getattr(trade, "data_unavailable_reason", None) or "Production chain payload was not observable."
+    status = getattr(trade, "status", None)
+    if status == "QUALIFIED" and getattr(trade, "option_symbol", None):
+        return RESULT_CAPTURE_UNAVAILABLE, reason
+    lowered = str(reason).lower()
+    if "no listed expiration" in lowered or "empty option chain" in lowered:
+        return RESULT_CHAIN_EMPTY, reason
+    if any(token in lowered for token in ("unavailable", "provider", "failed", "credentials")):
+        return RESULT_PROVIDER_FAILURE, reason
+    return RESULT_NO_ELIGIBLE_CONTRACT, reason
 
 
 def research_candidates(contracts, *, option_type, underlying_price, as_of, expiration=None):
@@ -435,7 +472,7 @@ def build_mark_record(
     }
 
 
-def record_trade_entered_capture(repository, result, provider, *, now=None, scan_cycle_id=None):
+def record_trade_entered_capture(repository, result, provider, *, now=None, scan_cycle_id=None, trade=None):
     """Persist T0 evidence. Must never raise into the authoritative path."""
     try:
         if repository is None or not translation_research_enabled():
@@ -454,12 +491,14 @@ def record_trade_entered_capture(repository, result, provider, *, now=None, scan
         ticker = str((result or {}).get("symbol") or "").upper()
         option_type = option_type_for(result)
         as_of = (now or datetime.now(timezone.utc)).date()
-        loaded = load_selector_chain(provider, ticker, as_of=as_of, option_type=option_type)
+        loaded = production_chain_observation(provider, ticker)
         candidates = None
         selected = None
         result_code = loaded["result"]
         reason = loaded["rejection_reason"]
-        if loaded["contracts"] is not None and result_code != RESULT_PROVIDER_FAILURE:
+        if result_code == RESULT_NOT_REQUESTED_BY_PRODUCTION and trade is not None:
+            result_code, reason = capture_unavailable_from_trade(trade)
+        if loaded["contracts"] is not None and loaded["result"] != RESULT_PROVIDER_FAILURE:
             underlying = _optional_float((result or {}).get("price"))
             candidates, annotated, annotated_reason, selected = research_candidates(
                 loaded["contracts"],
@@ -468,7 +507,7 @@ def record_trade_entered_capture(repository, result, provider, *, now=None, scan
                 as_of=as_of,
                 expiration=loaded["expiration"],
             )
-            if result_code == RESULT_CAPTURED:
+            if loaded["result"] == RESULT_CAPTURED:
                 result_code = annotated
                 reason = annotated_reason
         record = build_capture_record(
@@ -488,7 +527,13 @@ def record_trade_entered_capture(repository, result, provider, *, now=None, scan
             scan_cycle_id=scan_cycle_id,
             authoritative_trade_id=opportunity_id,
             authoritative_event_id=(result or {}).get("_authoritative_event_id"),
-            metadata={"expiration": loaded["expiration"]},
+            metadata={
+                "expiration": loaded["expiration"],
+                "observation_relation": loaded["observation_relation"],
+                "payload_identity": loaded["payload_identity"],
+                "market_data_source": "PRODUCTION_CAPTURE",
+                "provider_request_occurred": loaded["provider_request_occurred"],
+            },
             now=now,
         )
         stored = repository.record_capture(record)
@@ -542,27 +587,19 @@ def record_production_fill_capture(
         ticker = str((result or {}).get("symbol") or getattr(trade, "ticker", "") or "").upper()
         option_type = option_type_for(result) or getattr(trade, "option_type", None)
         as_of = (now or datetime.now(timezone.utc)).date()
-        observed = {}
-        if provider is not None and hasattr(provider, "observed_for"):
-            observed = provider.observed_for(ticker) or {}
-        observed_contracts = None
-        expiration = observed.get("expiration") or getattr(provider, "last_expiration", None)
-        requested_at = observed.get("requested_at") or getattr(provider, "last_requested_at", None)
-        responded_at = observed.get("responded_at") or getattr(provider, "last_responded_at", None)
-        last_chain = observed.get("chain")
-        last_error = observed.get("error") or getattr(provider, "last_error", None)
-        if last_chain is None and getattr(provider, "last_ticker", None) == ticker:
-            last_chain = getattr(provider, "last_chain", None)
-        if last_chain is not None:
-            observed_contracts, chain_error = last_chain
-            if chain_error:
-                last_error = chain_error
+        loaded = production_chain_observation(provider, ticker)
+        observed_contracts = loaded["contracts"]
+        expiration = loaded["expiration"]
+        requested_at = loaded["requested_at"]
+        responded_at = loaded["responded_at"]
         candidates = None
         selected = getattr(trade, "option_symbol", None)
-        result_code = RESULT_CAPTURED
-        reason = None
-        if observed_contracts is not None:
-            candidates, result_code, reason, selector_choice = research_candidates(
+        result_code = loaded["result"]
+        reason = loaded["rejection_reason"]
+        if result_code == RESULT_NOT_REQUESTED_BY_PRODUCTION and trade is not None:
+            result_code, reason = capture_unavailable_from_trade(trade)
+        if observed_contracts is not None and loaded["result"] != RESULT_PROVIDER_FAILURE:
+            candidates, annotated, annotated_reason, selector_choice = research_candidates(
                 observed_contracts,
                 option_type=option_type,
                 underlying_price=_optional_float((result or {}).get("price")),
@@ -570,28 +607,9 @@ def record_production_fill_capture(
                 expiration=expiration,
             )
             selected = selector_choice or selected
-            if last_error:
-                result_code = RESULT_PROVIDER_FAILURE
-                reason = _safe_reason(last_error)
-                candidates = None
-        elif last_error:
-            result_code = RESULT_PROVIDER_FAILURE
-            reason = _safe_reason(last_error)
-        elif trade is None:
-            result_code = RESULT_CAPTURE_FAILURE
-            reason = "Production capture returned no trade."
-        elif getattr(trade, "status", None) != "QUALIFIED":
-            result_code = (
-                RESULT_PROVIDER_FAILURE
-                if "unavailable" in str(getattr(trade, "data_unavailable_reason", "") or "").lower()
-                or "provider" in str(getattr(trade, "data_unavailable_reason", "") or "").lower()
-                else RESULT_NO_ELIGIBLE_CONTRACT
-            )
-            reason = getattr(trade, "data_unavailable_reason", None) or "No valid option contract available."
-            if "No listed expiration" in str(reason) or "Empty option chain" in str(reason):
-                result_code = RESULT_CHAIN_EMPTY
-            if "failed" in str(reason).lower() or "credentials" in str(reason).lower():
-                result_code = RESULT_PROVIDER_FAILURE
+            if loaded["result"] == RESULT_CAPTURED:
+                result_code = annotated
+                reason = annotated_reason
         if decision is not None and not getattr(decision, "eligible", False):
             reason = reason or getattr(decision, "reason", None)
         production_symbol = getattr(trade, "option_symbol", None)
@@ -615,7 +633,7 @@ def record_production_fill_capture(
             production_realistic_entry=fill,
             underlying_price=(result or {}).get("price") or getattr(trade, "underlying_entry_price", None),
             underlying_timestamp=now,
-            requested_at=requested_at or now,
+            requested_at=requested_at,
             provider_responded_at=responded_at,
             trade_entered_at_value=trade_entered_at(result),
             scan_cycle_id=scan_cycle_id,
@@ -626,7 +644,10 @@ def record_production_fill_capture(
                 "production_eligible": getattr(decision, "eligible", None),
                 "production_reason": getattr(decision, "reason", None),
                 "trade_status": getattr(trade, "status", None),
-                "chain_reobserved": observed_contracts is not None,
+                "observation_relation": loaded["observation_relation"],
+                "payload_identity": loaded["payload_identity"],
+                "market_data_source": "PRODUCTION_CAPTURE",
+                "provider_request_occurred": loaded["provider_request_occurred"],
             },
             now=now,
         )

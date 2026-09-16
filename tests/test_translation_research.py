@@ -1,4 +1,5 @@
 import inspect
+import json
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
@@ -17,9 +18,11 @@ from trade_state_service import process_scanner_result, sync_trade_outcome
 from translation_research import (
     CAPTURE_PRODUCTION_FILL,
     CAPTURE_TRADE_ENTERED,
+    OBSERVATION_SAME_CAPTURE,
     RESEARCH_VERSION,
     RESULT_CHAIN_EMPTY,
     RESULT_NO_ELIGIBLE_CONTRACT,
+    RESULT_NOT_REQUESTED_BY_PRODUCTION,
     RESULT_PROVIDER_FAILURE,
     _optional_float,
     build_mark_record,
@@ -89,6 +92,7 @@ class CountingProvider:
         self.listed = ["2026-08-14"] if expirations is None else expirations
         self.expiration_calls = 0
         self.chain_calls = 0
+        self.underlying_calls = 0
 
     def expirations(self, ticker):
         self.expiration_calls += 1
@@ -111,6 +115,7 @@ class Quotes:
         }
         self.error = error
         self.calls = 0
+        self.underlying_calls = 0
 
     def quote(self, option_symbol):
         self.calls += 1
@@ -223,6 +228,12 @@ def test_research_success_leaves_authoritative_result_unchanged(tmp_path):
     assert candidates[0]["dte"] == 10
     assert candidates[0]["is_selector_choice"] == 1
     assert fill["elapsed_from_trade_entered_seconds"] == 360.0
+    t0_meta = json.loads(capture["metadata_json"])
+    fill_meta = json.loads(fill["metadata_json"])
+    assert t0_meta["observation_relation"] == OBSERVATION_SAME_CAPTURE
+    assert fill_meta["observation_relation"] == OBSERVATION_SAME_CAPTURE
+    assert t0_meta["payload_identity"] and t0_meta["payload_identity"] == fill_meta["payload_identity"]
+    assert t0_meta["market_data_source"] == fill_meta["market_data_source"] == "PRODUCTION_CAPTURE"
 
 
 def test_research_throw_leaves_authoritative_result_unchanged(tmp_path):
@@ -246,20 +257,12 @@ def test_research_database_unavailable_does_not_block_paper(tmp_path):
     assert paper.journal_rows()[0]["accepted"] == 1
 
 
-def test_research_empty_chain_does_not_replace_production_selection(tmp_path, monkeypatch):
-    monkeypatch.setattr(translation_research, "load_selector_chain", lambda *args, **kwargs: {
-        "result": RESULT_CHAIN_EMPTY,
-        "rejection_reason": "Empty option chain.",
-        "expiration": None,
-        "contracts": [],
-        "requested_at": NOW,
-        "responded_at": NOW,
-    })
+def test_research_cannot_replace_production_contract_selection(tmp_path):
     repository, paper, research, result, _ = run_entered(tmp_path, research=True)
     assert result["opened"][0].option_symbol == "ABNB260814P00100000"
     t0 = research.get_capture("entry-1", CAPTURE_TRADE_ENTERED)
-    assert t0["capture_result"] == RESULT_CHAIN_EMPTY
-    assert t0["candidate_count"] == 0
+    fill = research.get_capture("entry-1", CAPTURE_PRODUCTION_FILL)
+    assert t0["selected_option_symbol"] == fill["production_option_symbol"] == "ABNB260814P00100000"
     assert paper.load()[0].option_symbol == "ABNB260814P00100000"
 
 
@@ -449,7 +452,7 @@ def test_query_api_filters_by_reason_session_and_symbol(tmp_path):
     assert research.candidates_for_opportunity("entry-1")
 
 
-def test_duplicate_t0_helper_does_not_refetch(tmp_path):
+def test_t0_helper_does_not_request_provider_data(tmp_path):
     repository, _, research = paper_bundle(tmp_path)
     provider = CountingProvider()
     result = {
@@ -462,5 +465,128 @@ def test_duplicate_t0_helper_does_not_refetch(tmp_path):
     first = record_trade_entered_capture(research, result, provider, now=NOW)
     second = record_trade_entered_capture(research, result, provider, now=NOW)
     assert first["capture_id"] == second["capture_id"]
-    assert provider.expiration_calls == 1 and provider.chain_calls == 1
+    assert first["capture_result"] == RESULT_NOT_REQUESTED_BY_PRODUCTION
+    assert first["candidate_count"] is None
+    assert provider.expiration_calls == 0 and provider.chain_calls == 0
     assert len(research.captures(opportunity_id="entry-1", capture_reason=CAPTURE_TRADE_ENTERED)) == 1
+
+
+def _provider_counts(chain, quotes=None):
+    return {
+        "expirations": getattr(chain, "expiration_calls", 0),
+        "chain": getattr(chain, "chain_calls", 0),
+        "option_quote": getattr(quotes, "calls", 0) if quotes is not None else 0,
+        "underlying_quote": (
+            getattr(chain, "underlying_calls", 0)
+            + (getattr(quotes, "underlying_calls", 0) if quotes is not None else 0)
+        ),
+    }
+
+
+def _authoritative_snapshot(result, paper):
+    opened = result["opened"]
+    decisions = result["decisions"]
+    positions = paper.load() if hasattr(paper, "load") else []
+    return {
+        "opened": [
+            (row.option_symbol, row.paper_fill_price, row.quantity, row.status)
+            for row in opened
+        ],
+        "decisions": [(row.eligible, row.reason, row.paper_fill_price, row.position_size) for row in decisions],
+        "positions": [
+            (row.option_symbol, row.status, row.paper_fill_price, row.current_mid, row.exit_reason)
+            for row in positions
+        ],
+        "journal": [
+            (row.get("accepted"), row.get("reason_code"), row.get("option_symbol"))
+            for row in (paper.journal_rows() if hasattr(paper, "journal_rows") else [])
+        ],
+    }
+
+
+def _run_parity(tmp_path, *, research, provider, quotes=None, config=None, refresh=False, score=95):
+    repository = entered_repository(tmp_path, score=score)
+    paper = PaperExecutionRepository(repository)
+    default_research = TranslationResearchRepository(repository)
+    repo = default_research if research is True else research
+    candidates = pending_authoritative_entries(repository, {"ABNB": scan_result(score=score)}, paper)
+    result = run_paper_execution(
+        candidates,
+        config=config or enabled_config(min_beacon_score=40),
+        now=NOW,
+        chain_provider=provider,
+        quote_provider=quotes,
+        trade_ledger=paper,
+        position_store=paper,
+        journal=paper,
+        refreshed_positions=[],
+        research_repository=repo,
+    )
+    refreshed = None
+    if refresh:
+        refreshed = refresh_paper_positions(
+            config=enabled_config(), now=NOW + timedelta(minutes=5),
+            quote_provider=quotes, trade_ledger=paper, position_store=paper,
+            research_repository=repo,
+        )
+    return result, paper, _provider_counts(provider, quotes), refreshed
+
+
+@pytest.mark.parametrize("label,provider_factory,config,refresh,score", [
+    ("successful_fill", lambda: CountingProvider(), enabled_config(min_beacon_score=40), False, 95),
+    ("no_eligible_contract", lambda: CountingProvider(contracts=[{
+        "option_type": "put", "expiration_date": "2026-08-14", "strike": 100,
+        "symbol": "ABNB260814P00100000", "bid": None, "ask": None, "delta": None,
+        "open_interest": 500, "volume": None,
+    }]), enabled_config(min_beacon_score=40), False, 95),
+    ("provider_failure", lambda: CountingProvider(error="upstream 500"), enabled_config(min_beacon_score=40), False, 95),
+    ("score_rejection", lambda: CountingProvider(), enabled_config(min_beacon_score=92), False, 44),
+    ("open_position_refresh", lambda: CountingProvider(), enabled_config(min_beacon_score=40), True, 95),
+])
+def test_provider_call_and_authoritative_parity_off_vs_on(
+    tmp_path, label, provider_factory, config, refresh, score,
+):
+    off_provider, on_provider = provider_factory(), provider_factory()
+    quotes_off = Quotes({"bid": 1.02, "ask": 1.04, "last": 1.03}) if refresh else None
+    quotes_on = Quotes({"bid": 1.02, "ask": 1.04, "last": 1.03}) if refresh else None
+    off_result, off_paper, off_counts, off_refreshed = _run_parity(
+        tmp_path / "off", research=None, provider=off_provider, quotes=quotes_off,
+        config=config, refresh=refresh, score=score,
+    )
+    on_result, on_paper, on_counts, on_refreshed = _run_parity(
+        tmp_path / "on", research=True, provider=on_provider, quotes=quotes_on,
+        config=config, refresh=refresh, score=score,
+    )
+    assert off_counts == on_counts, (label, off_counts, on_counts)
+    assert _authoritative_snapshot(off_result, off_paper) == _authoritative_snapshot(on_result, on_paper)
+    if refresh:
+        assert [(row.status, row.current_mid, row.exit_reason) for row in off_refreshed] == [
+            (row.status, row.current_mid, row.exit_reason) for row in on_refreshed
+        ]
+
+
+def test_research_persistence_throw_keeps_provider_and_authoritative_parity(tmp_path):
+    off_provider, on_provider = CountingProvider(), CountingProvider()
+    off_result, off_paper, off_counts, _ = _run_parity(
+        tmp_path / "off", research=None, provider=off_provider,
+    )
+    on_result, on_paper, on_counts, _ = _run_parity(
+        tmp_path / "on", research=ExplodingResearch(), provider=on_provider,
+    )
+    assert off_counts == on_counts
+    assert _authoritative_snapshot(off_result, off_paper) == _authoritative_snapshot(on_result, on_paper)
+
+
+def test_recorders_never_invoke_provider_methods():
+    for fn in (
+        translation_research.record_trade_entered_capture,
+        translation_research.record_production_fill_capture,
+        translation_research.record_open_position_marks,
+        translation_research.production_chain_observation,
+    ):
+        source = inspect.getsource(fn)
+        assert ".expirations(" not in source
+        assert ".chain(" not in source
+        assert ".quote(" not in source
+        assert "load_selector_chain" not in source
+

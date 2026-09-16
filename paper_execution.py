@@ -466,6 +466,7 @@ def _record_translation_research(
         )
         record_trade_entered_capture(
             research_repository, result, provider, now=now, scan_cycle_id=scan_cycle_id,
+            trade=trade,
         )
         record_production_fill_capture(
             research_repository, result, trade, decision, provider,

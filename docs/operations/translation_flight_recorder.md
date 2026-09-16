@@ -85,42 +85,52 @@ and dense marks on the same opportunity / paper trade id.
 Fired for every new authoritative `TRADE_ENTERED` that reaches the paper option
 path, including no-chain / provider / no-eligible outcomes.
 
-Identity: opportunity_id, authoritative_trade_id, scan_cycle_id, symbol,
-direction, research version, capture reason, requested_at, provider timestamp,
-persisted_at.
+T0 persists the production chain payload already requested by
+`capture_qualified_signal`. It does not make its own expiration, chain, quote, or
+underlying requests.
 
-Underlying: scanner/result price and timestamp when present.
+`requested_at` is the production provider-request start retained by the observing
+wrapper. Provider/quote timestamps are the provider timestamps when present.
+`persisted_at` may be later because research writes after authoritative work.
+Delaying persistence does not relabel a later chain fetch as TRADE_ENTERED data;
+there is no later research fetch.
 
-Candidates: the CALL/PUT universe actually passed into production
-`select_contract` for the preferred expiration (not the full listed surface of
-unrelated expirations). Bid/ask/mid, sizes, volume, OI, delta, IV, gamma, theta,
-DTE, quote timestamp, eligibility, rejection reason, selector rank/key, and the
-contract the current selector would choose from that exact set. Research never
-substitutes that choice for production.
+If production never requested a chain, T0 records `NOT_REQUESTED_BY_PRODUCTION`
+(or `CAPTURE_UNAVAILABLE` when a production trade exists but the payload was not
+observable). It does not fabricate `CHAIN_EMPTY`.
 
 ### Fill — `capture_reason=PRODUCTION_FILL`
 
-Same candidate class at the production capture/fill point, plus selected
-production contract, realistic entry, fill, bid/ask/mid, quote timestamp,
-underlying, elapsed seconds from the TRADE_ENTERED event, and eligibility /
-rejection information. The production fill is not altered.
+PRODUCTION_FILL is **not** a second independent point-in-time chain snapshot.
+It is the same production chain/quote payload used by production selection/fill
+(`observation_relation=SAME_CAPTURE`, shared `payload_identity`). Distinct
+fill-time chain observations (`DISTINCT_CAPTURE`) are not created by this
+recorder.
+
+The fill record adds production contract, realistic entry, fill, elapsed seconds
+from the TRADE_ENTERED event, and eligibility / rejection information. The
+production fill is not altered.
 
 ### Reject / no-contract
 
 Results are distinct where evidence permits:
 
-- `PROVIDER_FAILURE` — request failed; no fabricated empty chain
-- `CHAIN_EMPTY` — provider returned no usable expiration/chain
+- `PROVIDER_FAILURE` — production request failed; no fabricated empty chain
+- `CHAIN_EMPTY` — production requested and received no usable expiration/chain
 - `NO_ELIGIBLE_CONTRACT` — chain present but selector/rules accepted none
+- `NOT_REQUESTED_BY_PRODUCTION` — production never requested chain data
+- `CAPTURE_UNAVAILABLE` — production ran but the chain payload was not observable
 - `CAPTURE_FAILURE` — production capture returned nothing usable
 - `CAPTURED` — candidate evidence persisted
 
 ### Marks
 
 One observation per OPEN paper option position on the existing pre-scan refresh
-cadence. Bid/ask/mid/last, timestamps, quote age, volume/OI/greeks when the
-production quote payload supplies them, underlying, lifecycle state, production
-entry, and current production return. Marks never cause an exit.
+cadence. Marks consume only quotes already obtained by `refresh_option_positions`.
+No research-only polling, extra option quotes, extra underlying quotes, or extra
+Greeks requests. Bid/ask/mid/last, timestamps, quote age, volume/OI/greeks when
+the production quote payload supplies them, underlying, lifecycle state,
+production entry, and current production return. Marks never cause an exit.
 
 Production `option_quote` currently requests `greeks=false`. Mark greeks stay
 null unless that production quote later includes them. This recorder does not
@@ -128,15 +138,15 @@ change quote provider flags.
 
 ## Provider-call impact
 
-A. Existing production chain request at `capture_qualified_signal` is wrapped in a
-   one-cycle read-through cache and additionally persisted for T0/FILL. Quote
-   requests already made by `refresh_option_positions` are observed and persisted
-   as marks. No extra quote polling.
+Enabling or disabling the flight recorder must not change the number or type of
+market-data provider requests made by the authoritative production path.
 
-B. Genuinely new chain requests are bounded to at most one T0 load per logical
-   `TRADE_ENTERED` when production did not already populate the cache (for
-   example an exception before the production fetch). Duplicate T0/FILL rows are
-   ignored before a second provider walk.
+A. Existing production chain request at `capture_qualified_signal` is observed and
+   persisted for T0/FILL. Quote requests already made by `refresh_option_positions`
+   are observed and persisted as marks.
+
+B. Genuinely new research-only provider requests: none. If production did not
+   request a chain, research records unavailability and does not fetch one.
 
 Expected additional requests/day: ~0 on the normal path where T0 and fill share
 the production chain payload. Worst case is one extra expiration+chain pair per
@@ -168,8 +178,9 @@ or management exits.
 
 ## How later experiments consume this evidence
 
-- H1: compare T0 candidate quotes to PRODUCTION_FILL quotes and elapsed time;
-  do not invent fills in this phase.
+- H1: T0 and PRODUCTION_FILL currently share `SAME_CAPTURE` production chain
+  payload. Do not treat them as two independent delayed chain snapshots. Elapsed
+  seconds measure TRADE_ENTERED event time to persist/fill, not a second fetch.
 - H2: join dense marks + authoritative thesis events by opportunity_id;
   do not create hypothetical exits in this phase.
 - H3: replay persisted candidate sets under alternate rules;
