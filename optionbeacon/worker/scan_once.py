@@ -411,6 +411,7 @@ def run_scan_once(
         with performance.measure("market_data_cycle_start"):
             begin_market_data_scan_cycle()
         stage = "paper_repository_initialization"
+        research_repository = None
         with performance.measure("configuration_resolution"):
             paper_repository = PaperExecutionRepository(repository)
             paper_config = ExecutionConfig.from_environment()
@@ -421,6 +422,19 @@ def run_scan_once(
             mirror_v2_is_enabled = mirror_v2_enabled()
             filtered_repository = FilteredExecutionRepository(repository)
             filtered_is_enabled = filtered_enabled()
+            research_repository = None
+            try:
+                from translation_research import translation_research_enabled
+                from translation_research_repository import TranslationResearchRepository
+                if translation_research_enabled():
+                    research_repository = TranslationResearchRepository(repository)
+            except Exception:
+                LOGGER.exception(json.dumps({
+                    "event": "translation_research_initialize_failed",
+                    "scanner_id": scanner_id,
+                    "run_number": run_number,
+                }, sort_keys=True))
+                research_repository = None
             mirror_v2_start_date = mirror_v2_experiment_start()
             if mirror_v2_is_enabled and mirror_v2_start_date is None:
                 prior_v2_state = mirror_v2_repository.runtime_state()
@@ -454,6 +468,8 @@ def run_scan_once(
                 journal=paper_repository,
                 scanner_id=scanner_id,
                 run_number=run_number,
+                research_repository=research_repository,
+                scan_cycle_id=provenance_cycle_id,
             )
         LOGGER.info(json.dumps({
             "event": "paper_handoff_waiting_for_scan", "scanner_id": scanner_id,
@@ -694,6 +710,8 @@ def run_scan_once(
                 run_number=run_number,
                 refreshed_positions=refreshed_paper_positions,
                 capital_repository=capital_repository,
+                research_repository=research_repository,
+                scan_cycle_id=provenance_cycle_id,
             )
         complete_stage()
         stage = "mirror_execution"

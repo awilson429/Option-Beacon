@@ -144,6 +144,8 @@ def run_paper_execution(
     run_number=None,
     refreshed_positions=None,
     capital_repository=None,
+    research_repository=None,
+    scan_cycle_id=None,
 ):
     """Refresh exits first, then evaluate and persist new PAPER entries."""
     config = config or ExecutionConfig.from_environment()
@@ -158,12 +160,16 @@ def run_paper_execution(
         "event": "paper_cycle_started", "scanner_id": scanner_id,
         "run_number": run_number, "candidates_received": len(values),
     }, sort_keys=True))
+    research_chain_provider = _research_cached_chain_provider(
+        chain_provider, research_repository
+    )
     positions = refreshed_positions
     if positions is None:
         positions = refresh_paper_positions(
             config=config, now=checked_at, quote_provider=quote_provider,
             trade_ledger=trade_ledger, position_store=position_store,
             journal=journal, scanner_id=scanner_id, run_number=run_number,
+            research_repository=research_repository, scan_cycle_id=scan_cycle_id,
         )
     if capital_repository is not None:
         capital_repository.sync_paper_positions(positions, now=checked_at)
@@ -176,7 +182,7 @@ def run_paper_execution(
             trade = capture_qualified_signal(
                 result,
                 repository=trade_ledger,
-                provider=chain_provider,
+                provider=research_chain_provider,
                 now=checked_at,
             )
             if trade is None:
@@ -188,6 +194,10 @@ def run_paper_execution(
                     "disposition": "SKIPPED",
                     "reason": "NOT_AUTHORITATIVE_OR_NOT_QUALIFIED",
                 }, sort_keys=True))
+                _record_translation_research(
+                    research_repository, result, None, None, research_chain_provider,
+                    now=checked_at, scan_cycle_id=scan_cycle_id,
+                )
                 continue
             legacy_config = config
             if capital_repository is not None:
@@ -230,6 +240,10 @@ def run_paper_execution(
                     "option_symbol": trade.option_symbol, "disposition": "REJECTED",
                     "reason": decision.reason,
                 }, sort_keys=True))
+                _record_translation_research(
+                    research_repository, result, trade, decision, research_chain_provider,
+                    now=checked_at, scan_cycle_id=scan_cycle_id,
+                )
                 continue
             ob_capital_decision = broad_capital_decision = None
             if capital_repository is not None:
@@ -269,6 +283,10 @@ def run_paper_execution(
                         "run_number":run_number,"opportunity_id":result.get("_authoritative_entry_id"),
                         "disposition":"REJECTED","reason":decision.reason,
                     },sort_keys=True))
+                    _record_translation_research(
+                        research_repository, result, trade, decision, research_chain_provider,
+                        now=checked_at, scan_cycle_id=scan_cycle_id,
+                    )
                     continue
                 decision = replace(
                     decision, position_size=broad_capital_decision.proposed_quantity,
@@ -310,6 +328,10 @@ def run_paper_execution(
                     "opportunity_id": result.get("_authoritative_entry_id"),
                     "symbol": position.ticker, "option_symbol": position.option_symbol,
                 }, sort_keys=True))
+            _record_translation_research(
+                research_repository, result, trade, decision, research_chain_provider,
+                now=checked_at, scan_cycle_id=scan_cycle_id,
+            )
         except Exception as exc:
             LOGGER.exception(json.dumps({
                 "event": "broad_authoritative_handoff", "scanner_id": scanner_id,
@@ -318,6 +340,10 @@ def run_paper_execution(
                 "symbol": str((result or {}).get("symbol") or "").upper(),
                 "disposition": "FAILED", "reason": type(exc).__name__,
             }, sort_keys=True))
+            _record_translation_research(
+                research_repository, result, None, None, research_chain_provider,
+                now=checked_at, scan_cycle_id=scan_cycle_id,
+            )
     position_store.save(positions)
     if capital_repository is not None:
         capital_repository.sync_paper_positions(positions, now=checked_at)
@@ -397,9 +423,88 @@ def _legacy_capital_rejection(lane, result, trade, reason, checked_at):
     )
 
 
+def _research_cached_chain_provider(chain_provider, research_repository):
+    if research_repository is None:
+        return chain_provider
+    try:
+        from translation_research import cached_chain_provider
+        return cached_chain_provider(chain_provider)
+    except Exception:
+        LOGGER.exception(json.dumps({
+            "event": "translation_research_capture_failed",
+            "capture_reason": "PROVIDER_WRAP",
+        }, sort_keys=True))
+        return chain_provider
+
+
+def _research_quote_observer(quote_provider, research_repository):
+    if research_repository is None:
+        return None, quote_provider
+    try:
+        from option_position_tracker import TradierOptionQuoteProvider
+        from translation_research import ResearchObservingQuoteProvider
+        inner = quote_provider or TradierOptionQuoteProvider()
+        observer = ResearchObservingQuoteProvider(inner)
+        return observer, observer
+    except Exception:
+        LOGGER.exception(json.dumps({
+            "event": "translation_research_mark_failed",
+            "reason": "QUOTE_OBSERVER_WRAP",
+        }, sort_keys=True))
+        return None, quote_provider
+
+
+def _record_translation_research(
+    research_repository, result, trade, decision, provider, *, now, scan_cycle_id,
+):
+    if research_repository is None:
+        return
+    try:
+        from translation_research import (
+            record_production_fill_capture,
+            record_trade_entered_capture,
+        )
+        record_trade_entered_capture(
+            research_repository, result, provider, now=now, scan_cycle_id=scan_cycle_id,
+        )
+        record_production_fill_capture(
+            research_repository, result, trade, decision, provider,
+            now=now, scan_cycle_id=scan_cycle_id,
+        )
+    except Exception:
+        LOGGER.exception(json.dumps({
+            "event": "translation_research_capture_failed",
+            "opportunity_id": str((result or {}).get("_authoritative_entry_id") or ""),
+        }, sort_keys=True))
+
+
+def _record_translation_research_marks(
+    research_repository, positions, quote_observer, *, now, scan_cycle_id,
+):
+    if research_repository is None:
+        return
+    try:
+        from translation_research import record_open_position_marks
+        lookup = {}
+        try:
+            lookup = research_repository.opportunity_ids_for_paper_trades(
+                [position.trade_id for position in positions or []]
+            )
+        except Exception:
+            lookup = {}
+        record_open_position_marks(
+            research_repository, positions, quote_observer,
+            now=now, scan_cycle_id=scan_cycle_id, opportunity_lookup=lookup,
+        )
+    except Exception:
+        LOGGER.exception(json.dumps({
+            "event": "translation_research_mark_failed",
+        }, sort_keys=True))
+
+
 def refresh_paper_positions(
     *, config, now, quote_provider=None, trade_ledger=None, position_store, journal=None,
-    scanner_id=None, run_number=None,
+    scanner_id=None, run_number=None, research_repository=None, scan_cycle_id=None,
 ):
     """Restore and refresh durable positions before the underlying scan starts."""
     loader = getattr(position_store, "load_operational", None)
@@ -410,10 +515,13 @@ def refresh_paper_positions(
         "run_number": run_number,
         "open_positions": sum(p.status == "OPEN" for p in previous.values()),
     }, sort_keys=True))
+    quote_observer, observed_quote_provider = _research_quote_observer(
+        quote_provider, research_repository
+    )
     positions = refresh_option_positions(
         position_store=position_store,
         trade_ledger=trade_ledger,
-        provider=quote_provider,
+        provider=observed_quote_provider,
         current_time=now,
         profit_target_percent=config.profit_target_percent,
         stop_loss_percent=config.stop_loss_percent,
@@ -444,6 +552,10 @@ def refresh_paper_positions(
             }
             LOGGER.info(json.dumps({"event": "paper_exit_processed", **event}, sort_keys=True))
             LOGGER.info(json.dumps({"event": "paper_trade_closed", **event}, sort_keys=True))
+    _record_translation_research_marks(
+        research_repository, positions, quote_observer,
+        now=now, scan_cycle_id=scan_cycle_id,
+    )
     return positions
 
 

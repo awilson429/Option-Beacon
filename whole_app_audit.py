@@ -18,6 +18,7 @@ INVENTORY = (
     ("QQQ Winner DNA", "RESEARCH / ANALYTICS", "intraday_paper_trades", "updated_at", "Developer Tools", "Winner/loser and exit attribution", "On-demand queries", "RESEARCH"),
     ("Strategic SPY/QQQ Audit", "RESEARCH / ANALYTICS", None, None, "Developer Tools on demand", "Cross-lane strategy evidence", "Read-only multi-table query", "RESEARCH"),
     ("Post-run Forensic Audit", "RESEARCH / ANALYTICS", None, None, "Developer Tools on demand", "Reconciliation and leak diagnosis", "Read-only multi-table query", "RESEARCH"),
+    ("Translation Flight Recorder", "RESEARCH / ANALYTICS", "translation_research_captures", "persisted_at", "Research only", "Point-in-time option evidence for future H1/H2/H3", "T0/fill captures and open-position marks; never trades", "RESEARCH"),
     ("Opportunity Context", "RESEARCH / ANALYTICS", "opportunity_context", "captured_at", "Developer Tools + research", "Context captured at opportunity time", "One context row per opportunity", "EXPERIMENT"),
     ("Contextual Research Phase 2", "RESEARCH / ANALYTICS", "context_shadow_decisions", "created_at", "Developer Tools", "Shadow contextual decision evaluation", "Shadow decisions and mark writes", "EXPERIMENT"),
     ("Daily Experiment Scorecard", "RESEARCH / ANALYTICS", None, None, "Paper Trading", "Cross-lane daily governance", "Read-only aggregation", "RESEARCH"),
